@@ -35,3 +35,8 @@ Progress:
 Verification:
 - Confirmed this remains documentation/scaffolding only.
 - Confirmed no Sprint 1 implementation code was added.
+
+Completion:
+- Created commit `34ce9bc`: `docs: add planning docs and project scaffold`.
+- Pushed the commit to `origin/main`.
+- Remaining work: none for this documentation/scaffold task.
