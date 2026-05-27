@@ -26,3 +26,39 @@ Result after commit and push:
 - Created commit `34ce9bc` with message `docs: add planning docs and project scaffold`.
 - Pushed `main` to `origin/main`.
 - Follow-up task-tracking update recorded in this file and `docs/CURRENT-TASKS.md`.
+
+## 2026-05-27 - Sprint 1 Start
+
+Intent:
+- Implement Sprint 1 only: Django SaaS core foundation, PostgreSQL-ready settings, requirements, Sprint 1 apps, Sprint 1 models, and Django Admin registrations.
+
+Scope:
+- Project `scanner_platform`.
+- Apps: `accounts`, `servers`, `applications`, `plans`, `subscriptions`, `audit`, `core`.
+- Models: Account, custom User, Server, Application, Plan, Subscription, AuditLog.
+- No agent APIs, Scanner Runtime, Remote Bootstrap, Baseline Scan, Tool Registry, Policy Engine, Telegram, Diagnostic Agent, Celery, payment gateway, or remediation.
+
+Pre-start:
+- Read required planning and decision files.
+- Updated `docs/CURRENT-TASKS.md` before implementation.
+
+Result:
+- Added Django project `scanner_platform`.
+- Added PostgreSQL-ready settings with local `.env` loading and default PostgreSQL `DATABASE_URL`.
+- Added `requirements.txt` with Django and psycopg.
+- Added Sprint 1 apps and models only: Account, custom User, Server, Application, Plan, Subscription, AuditLog.
+- Added Django Admin registrations with list displays, filters, and search fields.
+- Added initial migrations for all Sprint 1 models.
+- Added minimal Sprint 1 model tests.
+- Updated README setup notes.
+
+Verification:
+- Installed requirements with network approval after the first sandboxed pip attempt could not reach package versions.
+- `python manage.py check` passed with no issues.
+- `python manage.py makemigrations --check --dry-run` reported no missing migrations. It emitted a PostgreSQL connection warning because no local PostgreSQL service is available at `localhost:5432`.
+- `python manage.py test tests.unit --noinput` discovered 4 tests but failed before running them because Django could not create a PostgreSQL test database without a running local PostgreSQL service.
+- Parsed 49 Python files successfully with an AST syntax check.
+- Confirmed no out-of-scope modules such as agent APIs, bootstrap, baseline, Tool Registry, Policy Engine, Telegram, Diagnostic Agent, Celery, payment gateway, or remediation were implemented.
+
+Remaining issue:
+- Run the Django tests again once PostgreSQL is running and `DATABASE_URL` points to a reachable database.

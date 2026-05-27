@@ -5,38 +5,50 @@ Track active work before and after every requested implementation, repository-ch
 ## Active Task
 
 Task:
-- Commit and push the Matrix Scanner SaaS planning, skills, helper docs, and scaffold structure.
+- Sprint 1 Django SaaS Core implementation.
 
 Scope:
-- Add task-tracking requirements to `AGENTS.md`.
-- Ensure `LOG.md` exists and records this work.
-- Ensure `docs/CURRENT-TASKS.md` exists and records this work.
-- Commit and push current repository changes.
+- Set up Django project `scanner_platform`.
+- Add PostgreSQL-ready settings, `requirements.txt`, and minimal setup notes.
+- Create Sprint 1 apps: `accounts`, `servers`, `applications`, `plans`, `subscriptions`, `audit`, `core`.
+- Implement Sprint 1 models only: Account, custom User, Server, Application, Plan, Subscription, AuditLog.
+- Configure Django Admin for Sprint 1 models.
+- Keep Matrix Admin as Django staff/superuser and customer roles as owner/operator/viewer.
 
 Out of scope:
-- Sprint 1 implementation.
-- Django code.
 - Agent APIs.
 - Remote Bootstrap.
 - Baseline Scan.
+- Scanner Runtime.
+- Tool Registry.
+- Policy Engine.
 - Telegram.
 - Diagnostic Agent.
+- Celery.
+- Payment gateway.
+- Remediation/action features.
 
 Immediate next steps:
-- Commit with a documentation/scaffold message.
-- Push to `origin/main`.
+- Inspect current scaffold and Python/Django availability.
+- Create Django project/app files within Sprint 1 scope.
+- Run Django checks and migration creation if dependencies are available.
 
 Progress:
-- Added required task-tracking guidance to `AGENTS.md`.
-- Created `LOG.md`.
-- Created this current task tracker.
-- Reviewed and staged the intended documentation and scaffold files.
+- Read AGENTS.md, PLANS.md, docs/CURRENT-TASKS.md, docs/DECISIONS.md, and execution plan as instructed.
+- Added Django project `scanner_platform`.
+- Added required Sprint 1 apps and models.
+- Added Django Admin registrations.
+- Added initial migrations.
+- Added minimal Sprint 1 model tests.
+- Updated README setup notes.
 
 Verification:
-- Confirmed this remains documentation/scaffolding only.
-- Confirmed no Sprint 1 implementation code was added.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no missing migrations, with a PostgreSQL connection warning because local PostgreSQL is not running.
+- `python manage.py test tests.unit --noinput` discovered 4 tests but failed before execution because no local PostgreSQL service was reachable to create a test database.
+- AST syntax parsing succeeded for 49 Python files.
+- No out-of-scope Sprint 2+ modules were implemented.
 
 Completion:
-- Created commit `34ce9bc`: `docs: add planning docs and project scaffold`.
-- Pushed the commit to `origin/main`.
-- Remaining work: none for this documentation/scaffold task.
+- Sprint 1 implementation is complete pending commit.
+- Remaining issue: rerun tests with PostgreSQL available.
