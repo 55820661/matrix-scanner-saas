@@ -68,3 +68,8 @@ Out of scope:
 
 Immediate next steps:
 - Push `main` to `origin/main`.
+
+Completion:
+- Pushed `main` to `origin/main`.
+- Included Sprint 1 commit `508a1e6` and tracking commit `f8726de`.
+- Remaining work: rerun tests when PostgreSQL is available.
