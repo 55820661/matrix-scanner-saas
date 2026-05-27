@@ -1,0 +1,366 @@
+from django.db import transaction
+from django.utils import timezone
+
+from apps.applications.models import Application
+from apps.audit.models import AuditLog
+from apps.core.redaction import redact_json, redact_secrets
+from apps.tools.models import PlanTool, ToolDefinition, ToolPolicy, ToolRun
+from apps.tools.services import ToolPolicyDenied, active_subscription_for, create_tool_run_job
+from apps.tools.setup import BASELINE_TOOL_KEYS, ensure_baseline_tools
+from apps.tools.validation import ToolParamValidationError, canonicalize_path, path_matches_prefix
+
+from .models import BaselineScan, BaselineScanStep, DiscoveredDomain, DiscoveredService, Finding, LogSource, ScannerAgent
+
+
+BASELINE_BLOCKED_PATH_PREFIXES = ("/etc/shadow", "/root", "/home/*/.ssh")
+LARAVEL_SAFE_ENV_KEYS = {
+    "APP_ENV",
+    "APP_DEBUG",
+    "APP_URL",
+    "LOG_CHANNEL",
+    "LOG_LEVEL",
+    "CACHE_DRIVER",
+    "QUEUE_CONNECTION",
+    "SESSION_DRIVER",
+    "MAIL_MAILER",
+    "DB_CONNECTION",
+}
+LARAVEL_FORBIDDEN_ENV_KEYS = {"APP_KEY", "DB_PASSWORD", "DB_USERNAME", "MAIL_PASSWORD"}
+
+
+class BaselineScanError(Exception):
+    pass
+
+
+def audit_baseline(scan, action, result=AuditLog.Result.INFO, metadata=None):
+    AuditLog.objects.create(
+        actor_user=scan.requested_by,
+        actor_type=AuditLog.ActorType.ADMIN if scan.requested_by and scan.requested_by.is_staff else AuditLog.ActorType.SYSTEM,
+        account=scan.account,
+        action=action,
+        target_type="BaselineScan",
+        target_id=str(scan.id),
+        result=result,
+        metadata=metadata or {},
+    )
+
+
+def fail_scan(scan, message):
+    scan.status = BaselineScan.Status.FAILED
+    scan.error_message = redact_secrets(message)[:4000]
+    scan.finished_at = timezone.now()
+    scan.save(update_fields=["status", "error_message", "finished_at", "updated_at"])
+    audit_baseline(scan, "baseline_scan.failed", result=AuditLog.Result.FAILURE, metadata={"scan_id": str(scan.id)})
+
+
+def clean_path(value):
+    if not value:
+        return ""
+    try:
+        path = canonicalize_path(str(value))
+    except ToolParamValidationError:
+        return ""
+    if path.startswith("/home/") and "/.ssh" in path:
+        return ""
+    for prefix in BASELINE_BLOCKED_PATH_PREFIXES:
+        if path_matches_prefix(path, prefix):
+            return ""
+    return path
+
+
+def safe_laravel_env(raw_env):
+    safe = {}
+    for key, value in (raw_env or {}).items():
+        normalized = str(key).upper()
+        if normalized in LARAVEL_FORBIDDEN_ENV_KEYS or normalized.startswith("AWS_"):
+            continue
+        if normalized.endswith("_SECRET") or normalized.endswith("_TOKEN"):
+            continue
+        if "PRIVATE KEY" in str(value).upper():
+            continue
+        if normalized in LARAVEL_SAFE_ENV_KEYS:
+            safe[normalized] = redact_secrets(value)
+    return safe
+
+
+def preflight_required_baseline_tools(scan):
+    if scan.server.account_id != scan.account_id:
+        raise BaselineScanError("Server does not belong to scan account.")
+
+    subscription = active_subscription_for(scan.account)
+    if subscription is None:
+        raise BaselineScanError("No active subscription with an active plan.")
+
+    try:
+        agent = ScannerAgent.objects.get(account=scan.account, server=scan.server)
+    except ScannerAgent.DoesNotExist as exc:
+        raise BaselineScanError("Server has no active scanner agent.") from exc
+    if not agent.is_active_for_api:
+        raise BaselineScanError("Scanner agent is not active.")
+
+    missing = []
+    for tool_key in BASELINE_TOOL_KEYS:
+        try:
+            tool = ToolDefinition.objects.select_related("template").get(key=tool_key)
+        except ToolDefinition.DoesNotExist:
+            missing.append(tool_key)
+            continue
+        if not tool.template.is_active or tool.status != ToolDefinition.Status.ENABLED:
+            missing.append(tool_key)
+            continue
+        if tool.risk_level != ToolDefinition.RiskLevel.READ_ONLY:
+            missing.append(tool_key)
+            continue
+        if not ToolPolicy.objects.filter(tool_definition=tool, is_active=True, allow_agent_run=True).exists():
+            missing.append(tool_key)
+            continue
+        if not PlanTool.objects.filter(plan=subscription.plan, tool_definition=tool, is_enabled=True).exists():
+            missing.append(tool_key)
+    if missing:
+        raise BaselineScanError(f"Baseline required tools are not allowed: {', '.join(missing)}")
+
+
+def start_baseline_scan(scan):
+    scan = BaselineScan.objects.select_related("account", "server", "requested_by").get(id=scan.id)
+    if scan.status not in {BaselineScan.Status.PENDING, BaselineScan.Status.FAILED}:
+        raise BaselineScanError("Baseline scan cannot be started from its current status.")
+
+    ensure_baseline_tools(connect_active_plans=False)
+    try:
+        preflight_required_baseline_tools(scan)
+    except BaselineScanError as exc:
+        fail_scan(scan, str(exc))
+        raise
+
+    scan.status = BaselineScan.Status.RUNNING
+    scan.started_at = timezone.now()
+    scan.finished_at = None
+    scan.error_message = ""
+    scan.current_step = "enqueue_baseline_tools"
+    scan.save(update_fields=["status", "started_at", "finished_at", "error_message", "current_step", "updated_at"])
+    audit_baseline(scan, "baseline_scan.started", result=AuditLog.Result.SUCCESS, metadata={"scan_id": str(scan.id)})
+    enqueue_next_baseline_tools(scan)
+    return scan
+
+
+def enqueue_next_baseline_tools(scan):
+    scan = BaselineScan.objects.select_related("account", "server", "requested_by").get(id=scan.id)
+    if scan.status != BaselineScan.Status.RUNNING:
+        raise BaselineScanError("Baseline scan is not running.")
+
+    try:
+        preflight_required_baseline_tools(scan)
+        with transaction.atomic():
+            locked_scan = BaselineScan.objects.select_for_update().get(id=scan.id)
+            for tool_key in BASELINE_TOOL_KEYS:
+                if BaselineScanStep.objects.filter(baseline_scan=locked_scan, step_key=tool_key).exists():
+                    continue
+                tool_run, _job = create_tool_run_job(
+                    account=scan.account,
+                    server=scan.server,
+                    tool_key=tool_key,
+                    requested_by=scan.requested_by,
+                    requested_by_type=ToolRun.RequestedByType.ADMIN,
+                )
+                BaselineScanStep.objects.create(
+                    baseline_scan=locked_scan,
+                    tool_run=tool_run,
+                    step_key=tool_key,
+                    status=BaselineScanStep.Status.QUEUED,
+                )
+    except (BaselineScanError, ToolPolicyDenied) as exc:
+        fail_scan(scan, str(exc))
+        raise BaselineScanError(str(exc)) from exc
+
+    scan.current_step = "waiting_for_agent_results"
+    scan.save(update_fields=["current_step", "updated_at"])
+    return scan
+
+
+def result_for_tool_run(tool_run):
+    result = tool_run.result_redacted or {}
+    return result if isinstance(result, dict) else {}
+
+
+def ingest_completed_tool_runs(scan):
+    scan = BaselineScan.objects.select_related("account", "server").get(id=scan.id)
+    steps = list(scan.steps.select_related("tool_run", "tool_run__tool_definition"))
+    if not steps:
+        return scan
+
+    for step in steps:
+        tool_run = step.tool_run
+        if tool_run is None or tool_run.status not in {
+            ToolRun.Status.SUCCEEDED,
+            ToolRun.Status.FAILED,
+            ToolRun.Status.REJECTED,
+            ToolRun.Status.TIMEOUT,
+            ToolRun.Status.CANCELLED,
+        }:
+            continue
+
+        step.structured_output = redact_json(result_for_tool_run(tool_run))
+        step.finished_at = tool_run.finished_at or timezone.now()
+        if tool_run.status == ToolRun.Status.SUCCEEDED:
+            step.status = BaselineScanStep.Status.SUCCEEDED
+            ingest_tool_result(scan, tool_run.tool_definition.key, step.structured_output)
+        else:
+            step.status = BaselineScanStep.Status.FAILED
+            step.error_message = redact_secrets(tool_run.error_message)[:4000]
+        step.save(update_fields=["status", "structured_output", "finished_at", "error_message", "updated_at"])
+
+    refreshed_steps = list(scan.steps.all())
+    if refreshed_steps and all(step.status == BaselineScanStep.Status.SUCCEEDED for step in refreshed_steps):
+        scan.status = BaselineScan.Status.SUCCEEDED
+        scan.current_step = "completed"
+        scan.finished_at = timezone.now()
+        scan.summary = summarize_scan(scan)
+        scan.save(update_fields=["status", "current_step", "finished_at", "summary", "updated_at"])
+        audit_baseline(scan, "baseline_scan.completed", result=AuditLog.Result.SUCCESS, metadata={"scan_id": str(scan.id)})
+    elif any(step.status == BaselineScanStep.Status.FAILED for step in refreshed_steps):
+        fail_scan(scan, "One or more baseline steps failed.")
+    return scan
+
+
+def ingest_tool_result(scan, tool_key, result):
+    if tool_key == "services_status":
+        ingest_services(scan, result.get("services", []))
+    elif tool_key == "cpanel_domain_scanner":
+        ingest_domains(scan, result.get("domains", []))
+    elif tool_key == "application_discovery":
+        ingest_applications(scan, result.get("applications", []))
+    elif tool_key == "laravel_discovery":
+        ingest_applications(scan, result.get("applications", []), framework_hint="laravel")
+    elif tool_key == "log_sources_discovery":
+        ingest_log_sources(scan, result.get("log_sources", []))
+    elif tool_key == "webroot_risk_checker":
+        ingest_findings(scan, result.get("findings", []))
+
+
+def ingest_services(scan, services):
+    for item in services or []:
+        name = str(item.get("name", "")).strip()[:160]
+        if not name:
+            continue
+        DiscoveredService.objects.update_or_create(
+            account=scan.account,
+            server=scan.server,
+            name=name,
+            defaults={
+                "baseline_scan": scan,
+                "status": str(item.get("status", ""))[:80],
+                "version": str(item.get("version", ""))[:160],
+                "metadata": redact_json(item.get("metadata", {})),
+            },
+        )
+
+
+def ingest_domains(scan, domains):
+    for item in domains or []:
+        domain = str(item.get("domain", "")).strip().lower()[:255]
+        if not domain:
+            continue
+        DiscoveredDomain.objects.update_or_create(
+            account=scan.account,
+            server=scan.server,
+            domain=domain,
+            defaults={
+                "baseline_scan": scan,
+                "document_root": clean_path(item.get("document_root", "")),
+                "owner": str(item.get("owner", ""))[:120],
+                "metadata": redact_json(item.get("metadata", {})),
+            },
+        )
+
+
+def ingest_applications(scan, applications, framework_hint=""):
+    for item in applications or []:
+        path = clean_path(item.get("path", ""))
+        if not path:
+            continue
+        domain = str(item.get("domain", "")).strip().lower()[:255]
+        framework = (framework_hint or str(item.get("framework", ""))).strip()[:100]
+        name = str(item.get("name") or domain or path).strip()[:255]
+        metadata = redact_json(item.get("metadata", {}))
+        safe_env = safe_laravel_env(item.get("env", {}))
+        if safe_env:
+            metadata["laravel_env"] = safe_env
+
+        app, created = Application.objects.get_or_create(
+            account=scan.account,
+            server=scan.server,
+            domain=domain,
+            path=path,
+            defaults={
+                "name": name,
+                "framework": framework,
+                "review_status": Application.ReviewStatus.PENDING_REVIEW,
+                "metadata": metadata,
+            },
+        )
+        if created:
+            continue
+        app.metadata = {**(app.metadata or {}), **metadata}
+        update_fields = ["metadata", "updated_at"]
+        if app.review_status != Application.ReviewStatus.APPROVED:
+            app.name = name
+            app.framework = framework
+            app.review_status = Application.ReviewStatus.PENDING_REVIEW
+            update_fields.extend(["name", "framework", "review_status"])
+        elif not app.framework and framework:
+            app.framework = framework
+            update_fields.append("framework")
+        app.save(update_fields=update_fields)
+
+
+def ingest_log_sources(scan, log_sources):
+    for item in log_sources or []:
+        path = clean_path(item.get("path", ""))
+        if not path:
+            continue
+        LogSource.objects.update_or_create(
+            account=scan.account,
+            server=scan.server,
+            path=path,
+            defaults={
+                "baseline_scan": scan,
+                "source_type": str(item.get("type", item.get("source_type", "")))[:120],
+                "exists": bool(item.get("exists", False)),
+                "size_bytes": item.get("size_bytes") if isinstance(item.get("size_bytes"), int) else None,
+                "metadata": redact_json(item.get("metadata", {})),
+            },
+        )
+
+
+def ingest_findings(scan, findings):
+    for item in findings or []:
+        path = clean_path(item.get("path", "")) if item.get("path") else ""
+        title = str(item.get("title", "")).strip()[:255]
+        if not title:
+            continue
+        severity = str(item.get("severity", "info")).strip()[:40] or "info"
+        fingerprint = str(item.get("fingerprint") or f"{scan.server_id}:{title}:{path}")[:255]
+        Finding.objects.update_or_create(
+            account=scan.account,
+            server=scan.server,
+            fingerprint=fingerprint,
+            defaults={
+                "baseline_scan": scan,
+                "status": Finding.Status.OPEN,
+                "severity": severity,
+                "title": title,
+                "description": redact_secrets(item.get("description", ""))[:4000],
+                "evidence_summary": redact_secrets(item.get("evidence_summary", ""))[:4000],
+                "metadata": redact_json({"path": path, **(item.get("metadata", {}) or {})}),
+            },
+        )
+
+
+def summarize_scan(scan):
+    return {
+        "services": DiscoveredService.objects.filter(account=scan.account, server=scan.server).count(),
+        "domains": DiscoveredDomain.objects.filter(account=scan.account, server=scan.server).count(),
+        "applications": Application.objects.filter(account=scan.account, server=scan.server).count(),
+        "log_sources": LogSource.objects.filter(account=scan.account, server=scan.server).count(),
+        "findings": Finding.objects.filter(account=scan.account, server=scan.server).count(),
+    }

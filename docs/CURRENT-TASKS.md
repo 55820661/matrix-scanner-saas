@@ -392,3 +392,57 @@ Completion:
 - Sprint 4 implementation is complete within the locked scope.
 - No full Baseline Scan, Baseline orchestration, Security Preflight, Diagnostic Agent, Telegram, Celery, remediation/actions, customer-created tools, Admin Tool Builder Agent, new diagnostic tools beyond `system_identity`, or external JSON Schema dependency were added.
 - Changes are not committed, per instruction.
+
+## Active Task - Sprint 5 Baseline Scan Implementation
+
+Task:
+- Implement Sprint 5 only: Baseline Scan Implementation using the Sprint 4 Tool Registry and Policy Engine.
+
+Scope:
+- Add baseline scan orchestration service functions.
+- Add `BaselineScanStep`, discovery models, and simple MVP `Finding`.
+- Seed required baseline tools as registry-backed read-only tools.
+- Add required read-only scanner runtime handlers only.
+- Add Admin-only baseline workflow/action.
+- Keep orchestration step-based and resumable through service functions.
+
+Out of scope:
+- Diagnostic Agent.
+- Telegram.
+- Celery.
+- Remediation/actions.
+- Portal UI.
+- Full Security Preflight.
+- Raw log ingestion.
+- Raw `.env` storage.
+- Free shell commands.
+- Customer-created tools.
+- Admin Tool Builder Agent.
+
+Immediate next steps:
+- Inspect current Sprint 2-4 models, tool policy service, runtime prototype, and admin registrations.
+- Implement Sprint 5 models, orchestration, tool seeding, runtime handlers, and focused tests.
+- Run Django checks, migration dry-run, tests, and diff check.
+
+Progress:
+- Expanded `BaselineScan` and added `BaselineScanStep`.
+- Added discovery models: `DiscoveredService`, `DiscoveredDomain`, `LogSource`.
+- Added simple MVP `Finding`.
+- Added Application metadata and a uniqueness constraint for discovered application locations.
+- Added baseline orchestration service functions: `start_baseline_scan`, `enqueue_next_baseline_tools`, and `ingest_completed_tool_runs`.
+- Seeded required baseline tools as registry-backed read-only tools.
+- Added read-only runtime handlers for required baseline tools.
+- Added Admin-only baseline actions from Server and BaselineScan admin.
+- Updated agent job polling to return the ToolRun timeout when a job is tied to a ToolRun.
+- Added focused Sprint 5 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 56 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 5 implementation is complete within the locked scope.
+- No Diagnostic Agent, Telegram, Celery, remediation/actions, Portal UI, full Security Preflight, raw log ingestion, raw `.env` storage, free shell commands, customer-created tools, or Admin Tool Builder Agent were added.
+- Changes are not committed, per instruction.

@@ -272,3 +272,45 @@ Verification:
 Remaining:
 - No known Sprint 4 implementation issues.
 - Changes are not committed yet, per instruction.
+
+## 2026-05-28 - Sprint 5 Start
+
+Intent:
+- Implement Sprint 5 Baseline Scan Implementation within the locked scope.
+
+Scope:
+- Add baseline orchestration that uses ToolDefinition, ToolPolicy, ToolRun, and AgentJob.
+- Add BaselineScanStep, DiscoveredService, DiscoveredDomain, LogSource, and simple MVP Finding.
+- Seed the required baseline tools as read-only registry-backed tools.
+- Add only the required read-only runtime handlers for baseline tools.
+- Add Admin-only baseline workflow/action and focused tests.
+
+Out of scope:
+- Diagnostic Agent, Telegram, Celery, remediation/actions, Portal UI, full Security Preflight, raw log ingestion, raw `.env` storage, free shell commands, customer-created tools, and Admin Tool Builder Agent.
+
+Pre-start:
+- Read the required agent, log, current task, decision, plan, security, structure, checklist, and test plan documents.
+- Updated `docs/CURRENT-TASKS.md` before implementation.
+
+Result:
+- Expanded `BaselineScan` with request/user, current step, summary, and error fields.
+- Added `BaselineScanStep`, `DiscoveredService`, `DiscoveredDomain`, `LogSource`, and simple MVP `Finding`.
+- Added Application metadata and unique discovered-location constraint.
+- Added step-based baseline orchestration services that fail fast before creating jobs if required tools are not allowed by the active plan.
+- Added ingestion for completed ToolRuns into services, domains, applications, Laravel safe env metadata, log source metadata, and finding evidence summaries.
+- Added idempotent baseline tool setup and a data migration for the required read-only tools.
+- Added read-only scanner runtime handlers for the required baseline tools.
+- Added Matrix Admin-only baseline actions in Django Admin.
+- Adjusted AgentJob result size enforcement to use each job's stored output cap.
+- Updated agent polling responses to return the linked ToolRun timeout where available.
+- Added Sprint 5 tests covering baseline seeding, policy failure, ToolRun/AgentJob creation, result ingestion, deduplication, Laravel env allowlist, blocked path handling, findings redaction, status transitions, tenant isolation, and out-of-scope side effects.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 56 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No known Sprint 5 implementation issues.
+- Changes are not committed, per instruction.

@@ -97,13 +97,19 @@ def next_job(request):
     if job is None:
         return JsonResponse({"job": None})
 
+    timeout_seconds = 30
+    try:
+        timeout_seconds = job.tool_run.timeout_seconds
+    except Exception:
+        pass
+
     return JsonResponse(
         {
             "job": {
                 "job_id": str(job.id),
                 "tool_key": job.tool_key,
                 "params": job.params,
-                "timeout_seconds": 30,
+                "timeout_seconds": timeout_seconds,
                 "max_output_bytes": job.max_output_bytes,
                 "claim_expires_at": job.claim_expires_at.isoformat() if job.claim_expires_at else None,
             }

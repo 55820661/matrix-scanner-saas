@@ -4,6 +4,7 @@ import socket
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .baseline_tools import BASELINE_TOOL_KEYS, execute_baseline_tool
 from .system_identity import SYSTEM_IDENTITY_TOOL_KEY, SystemIdentityError, collect_system_identity
 
 
@@ -67,13 +68,20 @@ def poll_one_job(base_url, agent_token):
 
 def execute_job(job):
     tool_key = job.get("tool_key")
-    if tool_key != SYSTEM_IDENTITY_TOOL_KEY:
-        return {"status": "rejected", "output": {}, "error": "Tool is not allowlisted by this runtime."}
+    if tool_key == SYSTEM_IDENTITY_TOOL_KEY:
+        try:
+            return {"status": "succeeded", "output": collect_system_identity(job.get("params") or {}), "error": ""}
+        except SystemIdentityError as exc:
+            return {"status": "rejected", "output": {}, "error": str(exc)}
 
-    try:
-        return {"status": "succeeded", "output": collect_system_identity(job.get("params") or {}), "error": ""}
-    except SystemIdentityError as exc:
-        return {"status": "rejected", "output": {}, "error": str(exc)}
+    if tool_key in BASELINE_TOOL_KEYS:
+        try:
+            return {"status": "succeeded", "output": execute_baseline_tool(tool_key, job.get("params") or {}), "error": ""}
+        except (OSError, ValueError) as exc:
+            return {"status": "failed", "output": {}, "error": str(exc)}
+
+    else:
+        return {"status": "rejected", "output": {}, "error": "Tool is not allowlisted by this runtime."}
 
 
 def submit_result(base_url, agent_token, job_id, result):
@@ -126,4 +134,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

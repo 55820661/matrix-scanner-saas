@@ -18,6 +18,7 @@ class Application(TimeStampedModel):
     domain = models.CharField(max_length=255, blank=True)
     path = models.CharField(max_length=1024, blank=True)
     framework = models.CharField(max_length=100, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
     review_status = models.CharField(
         max_length=20,
         choices=ReviewStatus.choices,
@@ -26,6 +27,9 @@ class Application(TimeStampedModel):
 
     class Meta:
         ordering = ["account__name", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["account", "server", "domain", "path"], name="unique_application_location"),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.server})"

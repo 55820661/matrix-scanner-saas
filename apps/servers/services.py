@@ -10,7 +10,7 @@ from apps.audit.models import AuditLog
 from apps.core.tokens import hash_token
 
 from .models import AgentJob, AgentRegistrationToken, ScannerAgent, Server
-from .tool_allowlist import MAX_SYSTEM_IDENTITY_OUTPUT_BYTES, is_allowed_tool
+from .tool_allowlist import is_allowed_tool
 
 
 DEFAULT_CLAIM_EXPIRY = timedelta(minutes=5)
@@ -231,8 +231,7 @@ def submit_job_result(agent, job_id, *, status, output=None, error=""):
                 raise AgentJobError("Invalid terminal result status.")
 
             output = output or {}
-            max_bytes = min(job.max_output_bytes, MAX_SYSTEM_IDENTITY_OUTPUT_BYTES)
-            if serialized_size(output) > max_bytes:
+            if serialized_size(output) > job.max_output_bytes:
                 raise AgentJobError("Job result output exceeds the allowed size.")
 
             job.status = status

@@ -174,7 +174,17 @@ class BaselineScan(TimeStampedModel):
 
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="baseline_scans")
     server = models.ForeignKey(Server, on_delete=models.PROTECT, related_name="baseline_scans")
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="requested_baseline_scans",
+        null=True,
+        blank=True,
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    current_step = models.CharField(max_length=120, blank=True)
+    summary = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
 
@@ -183,3 +193,156 @@ class BaselineScan(TimeStampedModel):
 
     def __str__(self):
         return f"Baseline scan for {self.server} ({self.status})"
+
+
+class BaselineScanStep(TimeStampedModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"
+        CANCELLED = "cancelled", "Cancelled"
+
+    baseline_scan = models.ForeignKey(BaselineScan, on_delete=models.CASCADE, related_name="steps")
+    tool_run = models.OneToOneField(
+        "tools.ToolRun",
+        on_delete=models.SET_NULL,
+        related_name="baseline_step",
+        null=True,
+        blank=True,
+    )
+    step_key = models.CharField(max_length=120)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    summary = models.TextField(blank=True)
+    error_message = models.TextField(blank=True)
+    structured_output = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["baseline_scan", "step_key"], name="unique_baseline_scan_step"),
+        ]
+
+    def __str__(self):
+        return f"{self.step_key} for {self.baseline_scan} ({self.status})"
+
+
+class DiscoveredService(TimeStampedModel):
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="discovered_services")
+    server = models.ForeignKey(Server, on_delete=models.PROTECT, related_name="discovered_services")
+    baseline_scan = models.ForeignKey(
+        BaselineScan,
+        on_delete=models.SET_NULL,
+        related_name="discovered_services",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=160)
+    status = models.CharField(max_length=80, blank=True)
+    version = models.CharField(max_length=160, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["server__name", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["account", "server", "name"], name="unique_discovered_service"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} on {self.server}"
+
+
+class DiscoveredDomain(TimeStampedModel):
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="discovered_domains")
+    server = models.ForeignKey(Server, on_delete=models.PROTECT, related_name="discovered_domains")
+    baseline_scan = models.ForeignKey(
+        BaselineScan,
+        on_delete=models.SET_NULL,
+        related_name="discovered_domains",
+        null=True,
+        blank=True,
+    )
+    domain = models.CharField(max_length=255)
+    document_root = models.CharField(max_length=1024, blank=True)
+    owner = models.CharField(max_length=120, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["server__name", "domain"]
+        constraints = [
+            models.UniqueConstraint(fields=["account", "server", "domain"], name="unique_discovered_domain"),
+        ]
+
+    def __str__(self):
+        return f"{self.domain} on {self.server}"
+
+
+class LogSource(TimeStampedModel):
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="log_sources")
+    server = models.ForeignKey(Server, on_delete=models.PROTECT, related_name="log_sources")
+    baseline_scan = models.ForeignKey(
+        BaselineScan,
+        on_delete=models.SET_NULL,
+        related_name="log_sources",
+        null=True,
+        blank=True,
+    )
+    path = models.CharField(max_length=1024)
+    source_type = models.CharField(max_length=120, blank=True)
+    exists = models.BooleanField(default=False)
+    size_bytes = models.PositiveBigIntegerField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["server__name", "path"]
+        constraints = [
+            models.UniqueConstraint(fields=["account", "server", "path"], name="unique_log_source"),
+        ]
+
+    def __str__(self):
+        return f"{self.source_type or 'log'}: {self.path}"
+
+
+class Finding(TimeStampedModel):
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        ACKNOWLEDGED = "acknowledged", "Acknowledged"
+        RESOLVED = "resolved", "Resolved"
+        IGNORED = "ignored", "Ignored"
+
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="findings")
+    server = models.ForeignKey(Server, on_delete=models.PROTECT, related_name="findings")
+    baseline_scan = models.ForeignKey(
+        BaselineScan,
+        on_delete=models.SET_NULL,
+        related_name="findings",
+        null=True,
+        blank=True,
+    )
+    application = models.ForeignKey(
+        "applications.Application",
+        on_delete=models.SET_NULL,
+        related_name="findings",
+        null=True,
+        blank=True,
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    severity = models.CharField(max_length=40, default="info")
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    evidence_summary = models.TextField(blank=True)
+    fingerprint = models.CharField(max_length=255)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["account", "server", "fingerprint"], name="unique_finding_fingerprint"),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.status})"

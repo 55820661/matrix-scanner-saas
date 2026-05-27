@@ -1,6 +1,19 @@
 from django.contrib import admin
+from django.contrib import messages
 
-from .models import AgentJob, AgentRegistrationToken, BaselineScan, ScannerAgent, Server
+from .baseline import BaselineScanError, start_baseline_scan
+from .models import (
+    AgentJob,
+    AgentRegistrationToken,
+    BaselineScan,
+    BaselineScanStep,
+    DiscoveredDomain,
+    DiscoveredService,
+    Finding,
+    LogSource,
+    ScannerAgent,
+    Server,
+)
 
 
 @admin.register(Server)
@@ -9,6 +22,23 @@ class ServerAdmin(admin.ModelAdmin):
     list_filter = ("status", "agent_status", "account")
     search_fields = ("name", "hostname", "public_ip", "account__name")
     readonly_fields = ("created_at", "updated_at")
+    actions = ("create_and_start_baseline_scans",)
+
+    @admin.action(description="Create and start baseline scan")
+    def create_and_start_baseline_scans(self, request, queryset):
+        if not request.user.is_staff:
+            self.message_user(request, "Only Matrix Admin staff users can start baseline scans.", level=messages.ERROR)
+            return
+        started = 0
+        failed = 0
+        for server in queryset:
+            scan = BaselineScan.objects.create(account=server.account, server=server, requested_by=request.user)
+            try:
+                start_baseline_scan(scan)
+                started += 1
+            except BaselineScanError:
+                failed += 1
+        self.message_user(request, f"Created and started {started} baseline scan(s); failed {failed}.")
 
 
 @admin.register(ScannerAgent)
@@ -37,7 +67,66 @@ class AgentJobAdmin(admin.ModelAdmin):
 
 @admin.register(BaselineScan)
 class BaselineScanAdmin(admin.ModelAdmin):
-    list_display = ("server", "account", "status", "started_at", "finished_at", "created_at")
+    list_display = ("server", "account", "status", "current_step", "started_at", "finished_at", "created_at")
     list_filter = ("status", "account", "created_at")
     search_fields = ("server__name", "server__hostname", "account__name")
+    readonly_fields = ("summary", "error_message", "created_at", "updated_at")
+    actions = ("start_selected_baseline_scans",)
+
+    @admin.action(description="Start selected baseline scans")
+    def start_selected_baseline_scans(self, request, queryset):
+        if not request.user.is_staff:
+            self.message_user(request, "Only Matrix Admin staff users can start baseline scans.", level=messages.ERROR)
+            return
+        started = 0
+        failed = 0
+        for scan in queryset:
+            if scan.requested_by_id is None:
+                scan.requested_by = request.user
+                scan.save(update_fields=["requested_by", "updated_at"])
+            try:
+                start_baseline_scan(scan)
+                started += 1
+            except BaselineScanError:
+                failed += 1
+        self.message_user(request, f"Started {started} baseline scan(s); failed {failed}.")
+
+
+@admin.register(BaselineScanStep)
+class BaselineScanStepAdmin(admin.ModelAdmin):
+    list_display = ("baseline_scan", "step_key", "status", "tool_run", "started_at", "finished_at")
+    list_filter = ("status", "step_key", "created_at")
+    search_fields = ("step_key", "baseline_scan__server__name", "baseline_scan__account__name")
+    readonly_fields = ("structured_output", "created_at", "updated_at")
+
+
+@admin.register(DiscoveredService)
+class DiscoveredServiceAdmin(admin.ModelAdmin):
+    list_display = ("name", "server", "account", "status", "version", "updated_at")
+    list_filter = ("status", "account", "created_at")
+    search_fields = ("name", "server__name", "account__name")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(DiscoveredDomain)
+class DiscoveredDomainAdmin(admin.ModelAdmin):
+    list_display = ("domain", "server", "account", "document_root", "owner", "updated_at")
+    list_filter = ("account", "created_at")
+    search_fields = ("domain", "document_root", "owner", "server__name", "account__name")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(LogSource)
+class LogSourceAdmin(admin.ModelAdmin):
+    list_display = ("path", "server", "account", "source_type", "exists", "size_bytes", "updated_at")
+    list_filter = ("source_type", "exists", "account", "created_at")
+    search_fields = ("path", "server__name", "account__name")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(Finding)
+class FindingAdmin(admin.ModelAdmin):
+    list_display = ("title", "server", "account", "severity", "status", "updated_at")
+    list_filter = ("status", "severity", "account", "created_at")
+    search_fields = ("title", "fingerprint", "server__name", "account__name")
     readonly_fields = ("created_at", "updated_at")
