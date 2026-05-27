@@ -330,3 +330,65 @@ Completion:
 - Sprint 3 implementation is complete within the locked scope.
 - No full Baseline Scan, Security Preflight, diagnostic tools, full Tool Registry, full Policy Engine, Telegram, Diagnostic Agent, Celery, remediation/actions, customer Portal bootstrap, self-install flow, install script, or free shell execution were added.
 - Changes are not committed, per instruction.
+
+## Active Task - Sprint 4 Tool Registry and Policy Engine MVP
+
+Task:
+- Implement Sprint 4 only: Tool Registry and Policy Engine MVP.
+
+Scope:
+- Create/use `apps/tools`.
+- Add `ToolTemplate`, `ToolDefinition`, `ToolPolicy`, `PlanTool`, and `ToolRun`.
+- Register Sprint 4 models in Django Admin.
+- Convert `system_identity` into the first registry-backed tool.
+- Enforce PlanTool and deny-by-default policy checks.
+- Create `ToolRun` after policy approval and before `AgentJob`.
+- Update Agent result ingestion to update linked `ToolRun`.
+- Keep Sprint 2 agent job flow working and keep Sprint 3 BootstrapPolicy separate/unaffected.
+
+Out of scope:
+- Full Baseline Scan.
+- Baseline orchestration.
+- Security Preflight.
+- Diagnostic Agent.
+- Telegram.
+- Celery.
+- Remediation/actions.
+- Customer-created tools.
+- Admin Tool Builder Agent.
+- New diagnostic tools beyond `system_identity`.
+- External JSON Schema dependency.
+
+Immediate next steps:
+- Inspect existing Plan/Subscription/AgentJob code paths.
+- Add tools app models, admin, setup helper, policy service, and migrations.
+- Add focused Sprint 4 tests.
+- Run Django checks, migration dry-run, tests, and diff check.
+
+Progress:
+- Added `apps/tools`.
+- Added Sprint 4 models: `ToolTemplate`, `ToolDefinition`, `ToolPolicy`, `PlanTool`, and `ToolRun`.
+- Added Django Admin registrations for all Sprint 4 models.
+- Added idempotent `system_identity` setup helper and safe data migration.
+- Added PlanTool enforcement and deny-by-default policy service.
+- Added internal params validator for required fields, allowed fields, primitive types, unknown param rejection, and path canonicalization.
+- Added blocked-path-before-allowed-path policy checks.
+- Added ToolRun creation after policy approval and before AgentJob creation.
+- Added AgentJob result ingestion update for linked ToolRun with redacted results.
+- Kept Sprint 2 hardcoded allowlist as temporary fallback while registry-backed tools are available.
+- Kept Sprint 3 BootstrapPolicy separate and unaffected.
+- Added structured JSON redaction helper.
+- Added focused Sprint 4 tests.
+
+Verification:
+- `python manage.py makemigrations tools` created `apps/tools/migrations/0001_initial.py`.
+- Added `apps/tools/migrations/0002_seed_system_identity.py` to seed `system_identity` idempotently.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `python manage.py test --noinput` passed: 42 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 4 implementation is complete within the locked scope.
+- No full Baseline Scan, Baseline orchestration, Security Preflight, Diagnostic Agent, Telegram, Celery, remediation/actions, customer-created tools, Admin Tool Builder Agent, new diagnostic tools beyond `system_identity`, or external JSON Schema dependency were added.
+- Changes are not committed, per instruction.

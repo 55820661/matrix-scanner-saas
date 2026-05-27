@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "apps.subscriptions",
     "apps.servers",
     "apps.bootstrap",
+    "apps.tools",
     "apps.applications",
     "apps.audit",
 ]

@@ -10,6 +10,18 @@ SECRET_PATTERNS = (
     re.compile(r"-----BEGIN [^-]+PRIVATE KEY-----.*?-----END [^-]+PRIVATE KEY-----", re.DOTALL),
 )
 
+SENSITIVE_KEY_PARTS = (
+    "password",
+    "secret",
+    "token",
+    "api_key",
+    "apikey",
+    "private_key",
+    "authorization",
+    "bearer",
+    "credential",
+)
+
 
 def redact_secrets(value):
     if value is None:
@@ -21,3 +33,20 @@ def redact_secrets(value):
         else:
             text = pattern.sub("[REDACTED]", text)
     return text
+
+
+def redact_json(value):
+    if isinstance(value, dict):
+        redacted = {}
+        for key, nested_value in value.items():
+            normalized = str(key).lower()
+            if any(part in normalized for part in SENSITIVE_KEY_PARTS):
+                redacted[key] = "[REDACTED]"
+            else:
+                redacted[key] = redact_json(nested_value)
+        return redacted
+    if isinstance(value, list):
+        return [redact_json(item) for item in value]
+    if isinstance(value, str):
+        return redact_secrets(value)
+    return value

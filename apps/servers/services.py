@@ -208,6 +208,9 @@ def submit_job_result(agent, job_id, *, status, output=None, error=""):
             job.finished_at = now
             job.error_message = "Job claim expired before result submission."
             job.save(update_fields=["status", "finished_at", "error_message", "updated_at"])
+            from apps.tools.services import update_tool_run_from_job
+
+            update_tool_run_from_job(job)
             audit_agent_event(
                 agent,
                 "agent_job.claim_expired",
@@ -237,6 +240,9 @@ def submit_job_result(agent, job_id, *, status, output=None, error=""):
             job.error_message = error[:4000]
             job.finished_at = now
             job.save(update_fields=["status", "result", "error_message", "finished_at", "updated_at"])
+            from apps.tools.services import update_tool_run_from_job
+
+            update_tool_run_from_job(job)
             audit_agent_event(
                 agent,
                 "agent_job.result_received",

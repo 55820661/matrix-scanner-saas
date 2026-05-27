@@ -232,3 +232,43 @@ Verification:
 Remaining:
 - No known Sprint 3 implementation issues.
 - Changes are not committed yet, per instruction.
+
+## 2026-05-28 - Sprint 4 Start
+
+Intent:
+- Implement Sprint 4 Tool Registry and Policy Engine MVP within the locked scope.
+
+Scope:
+- Add `apps/tools` with ToolTemplate, ToolDefinition, ToolPolicy, PlanTool, and ToolRun.
+- Register `system_identity` as the first registry-backed read-only tool.
+- Enforce ToolPolicy and PlanTool for new tool/job creation.
+- Create ToolRun after policy approval and before AgentJob.
+- Update AgentJob result ingestion to update linked ToolRun with redacted results.
+
+Out of scope:
+- Full Baseline Scan, Baseline orchestration, Security Preflight, Diagnostic Agent, Telegram, Celery, remediation/actions, customer-created tools, Admin Tool Builder Agent, new diagnostic tools beyond `system_identity`, and external JSON Schema dependencies.
+
+Result:
+- Added `apps/tools` with ToolTemplate, ToolDefinition, ToolPolicy, PlanTool, and ToolRun.
+- Added Admin registrations for all Sprint 4 models.
+- Added idempotent `system_identity` registry setup and safe data migration.
+- Added ToolPolicy/PlanTool deny-by-default service.
+- Added internal parameter validation and path policy checks.
+- Added ToolRun creation after policy approval and before AgentJob creation.
+- Updated AgentJob result ingestion to update linked ToolRun with redacted output.
+- Kept Sprint 2 hardcoded allowlist as a temporary fallback.
+- Kept Sprint 3 BootstrapPolicy separate and unaffected.
+- Added structured JSON redaction helper.
+- Added Sprint 4 tests covering registry, policy denials, PlanTool enforcement, params/path policy, ToolRun updates, Sprint 2 polling, and BootstrapPolicy separation.
+
+Verification:
+- `python manage.py makemigrations tools` created `apps/tools/migrations/0001_initial.py`.
+- Added `apps/tools/migrations/0002_seed_system_identity.py`.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `python manage.py test --noinput` passed: 42 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No known Sprint 4 implementation issues.
+- Changes are not committed yet, per instruction.
