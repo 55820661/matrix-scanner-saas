@@ -16,13 +16,20 @@ Read-only first. No free shell commands, no remediation, no file edits, no servi
 
 ## Sprint 1 Local Setup
 
-```bash
+Detailed Windows PowerShell setup is documented in [docs/operations/LOCAL-DEVELOPMENT.md](docs/operations/LOCAL-DEVELOPMENT.md).
+
+PostgreSQL is required. Provide it either with a local Windows PostgreSQL installation or, optionally, with Docker Compose. Docker is not mandatory.
+
+```powershell
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-copy .env.example .env
-python manage.py makemigrations
+Copy-Item .env.example .env
 python manage.py check
+python manage.py makemigrations --check --dry-run
+python manage.py migrate
+python manage.py createsuperuser
+python manage.py test
 ```
 
 Configure `DATABASE_URL` in `.env` for PostgreSQL before running migrations against a real database.

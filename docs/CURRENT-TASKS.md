@@ -73,3 +73,98 @@ Completion:
 - Pushed `main` to `origin/main`.
 - Included Sprint 1 commit `508a1e6` and tracking commit `f8726de`.
 - Remaining work: rerun tests when PostgreSQL is available.
+
+## Active Task - Local Development Environment
+
+Task:
+- Prepare and verify the local development/testing environment for the current Sprint 1 Django codebase.
+
+Scope:
+- Verify `requirements.txt`.
+- Add local development documentation with Windows PowerShell commands.
+- Add PostgreSQL development database option via Docker Compose.
+- Ensure `.env.example` covers required local variables.
+- Run or document the requested setup/check/test commands.
+
+Out of scope:
+- Sprint 2.
+- Agent APIs.
+- Scanner Runtime.
+- Remote Bootstrap.
+- Baseline Scan.
+- Tool Registry.
+- Policy Engine.
+- Telegram.
+- Diagnostic Agent.
+- Celery/Redis implementation.
+- Business features or remediation actions.
+
+Immediate next steps:
+- Inspect current requirements and environment files.
+- Add `docker-compose.dev.yml` and `docs/operations/LOCAL-DEVELOPMENT.md`.
+- Run available local verification commands and record results.
+
+Progress:
+- Verified current requirements are sufficient for Sprint 1 local Django execution.
+- Added Docker Compose PostgreSQL development service.
+- Added Windows PowerShell local development guide.
+- Updated `.env.example` for local PostgreSQL variables.
+- Updated README setup notes.
+
+Verification:
+- Docker CLI and Docker Compose are installed.
+- `docker compose -f docker-compose.dev.yml config` passed.
+- Docker PostgreSQL startup failed because Docker Desktop Linux engine is not running.
+- `python -m venv .venv` failed during `ensurepip`; partial `.venv` was removed.
+- Activation command could not run because the venv was not created.
+- `python -m pip install -r requirements.txt` succeeded in the user/global Python environment.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no missing migrations, with expected PostgreSQL connection warning.
+- `migrate`, `createsuperuser`, and `test` failed because PostgreSQL was unavailable.
+
+Completion:
+- Local setup documentation and Docker PostgreSQL option are in place.
+- Remaining setup: start Docker Desktop or configure manual PostgreSQL, then rerun database-dependent commands.
+
+## Active Task - Local Development Documentation Adjustment
+
+Task:
+- Adjust local development setup documentation so Docker is optional only and manual Windows PostgreSQL setup is the primary path.
+
+Scope:
+- Update `docs/operations/LOCAL-DEVELOPMENT.md`.
+- Update `README.md` if needed.
+- Update `.env.example` only if wording/variables need clarification.
+- Update `LOG.md` and `docs/CURRENT-TASKS.md`.
+
+Out of scope:
+- Product code changes.
+- Sprint 2.
+- Agent APIs.
+- Scanner Runtime.
+- Bootstrap.
+- Baseline.
+- Celery/Redis.
+- Removing PostgreSQL requirement.
+- Commit.
+
+Immediate next steps:
+- Revise local development docs.
+- Confirm Docker is documented as optional only.
+- Confirm manual PostgreSQL setup is documented clearly.
+
+Progress:
+- Updated `docs/operations/LOCAL-DEVELOPMENT.md` so primary setup is local Windows PostgreSQL.
+- Kept `docker-compose.dev.yml` as an optional PostgreSQL helper only.
+- Updated `README.md` to state PostgreSQL is required and Docker is not mandatory.
+- Left product code unchanged.
+
+Verification:
+- Confirmed docs include `Primary PostgreSQL Setup on Windows`.
+- Confirmed docs include `Optional PostgreSQL via Docker Desktop`.
+- Confirmed README says PostgreSQL can be local Windows PostgreSQL or optional Docker Compose.
+- `git diff --check` passed.
+
+Completion:
+- Documentation adjustment complete.
+- No commit was made, per instruction.

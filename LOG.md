@@ -76,3 +76,63 @@ Result:
 - Pushed `main` to `origin/main`.
 - Remote advanced from `cb3fcd0` to `f8726de`.
 - Sprint 1 implementation commit `508a1e6` is now on GitHub.
+
+## 2026-05-27 - Local Development Environment Preparation
+
+Intent:
+- Prepare and verify local development/testing setup for the existing Sprint 1 Django codebase only.
+
+Scope:
+- Requirements review.
+- Local setup documentation with Windows PowerShell commands.
+- PostgreSQL dev database option via Docker Compose.
+- `.env.example` review/update.
+- Run or document requested setup/check/test commands.
+
+Out of scope:
+- Sprint 2 work, agent APIs, Scanner Runtime, Bootstrap, Baseline, Tool Registry, Policy Engine, Telegram, Diagnostic Agent, Celery implementation, payment gateway, product features, or remediation.
+
+Result:
+- Verified `requirements.txt` remains sufficient for the current Sprint 1 Django codebase: Django and psycopg.
+- Added `docker-compose.dev.yml` with a PostgreSQL 16 development service.
+- Added `docs/operations/LOCAL-DEVELOPMENT.md` with Windows PowerShell setup commands, Docker PostgreSQL setup, manual PostgreSQL alternative, and troubleshooting.
+- Updated `.env.example` with local PostgreSQL variables and removed unused Celery/Redis variables from the current local setup.
+- Updated README to point to the local development guide and include the PowerShell setup flow.
+
+Verification:
+- `docker --version` and `docker compose version` are installed.
+- `docker compose -f docker-compose.dev.yml config` passed.
+- `docker compose -f docker-compose.dev.yml up -d postgres` failed because Docker Desktop Linux engine is not running.
+- `python -m venv .venv` failed during `ensurepip`; the partial `.venv` was removed.
+- `.\.venv\Scripts\Activate.ps1` could not run because the venv was not created successfully.
+- `python -m pip install -r requirements.txt` succeeded using the user/global Python environment; requirements were already satisfied.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no missing migrations, with the expected PostgreSQL connection warning because no database was reachable.
+- `python manage.py migrate --noinput`, `python manage.py createsuperuser --noinput --username admin --email admin@example.com`, and `python manage.py test --noinput` failed because PostgreSQL was unavailable.
+
+Remaining setup:
+- Start Docker Desktop or configure manual PostgreSQL, then rerun migrate, createsuperuser, and tests.
+
+## 2026-05-27 - Local Development Documentation Adjustment
+
+Intent:
+- Clarify local development setup so manual Windows PostgreSQL is the primary path and Docker Compose is optional only.
+
+Scope:
+- Documentation and environment setup text only.
+- No product code changes.
+- No Sprint 2 work.
+- No Celery/Redis additions.
+- PostgreSQL remains required.
+
+Result:
+- Updated local development docs to make Windows PostgreSQL the primary/manual path.
+- Kept Docker Compose as an optional PostgreSQL helper only.
+- Updated README to state PostgreSQL is required and Docker is not mandatory.
+- No product code changed.
+
+Verification:
+- Verified documentation contains manual Windows PostgreSQL setup steps: install PostgreSQL, create user/database, set `DATABASE_URL`, run migrations and tests.
+- Verified Docker section is titled optional and says Docker Desktop must be running with the Linux engine.
+- `git diff --check` passed.
+- No commit made.
