@@ -52,3 +52,19 @@ Verification:
 Completion:
 - Sprint 1 implementation is complete pending commit.
 - Remaining issue: rerun tests with PostgreSQL available.
+
+## Active Task - Push Sprint 1 Commit
+
+Task:
+- Push Sprint 1 commit `508a1e6` to `origin/main`.
+
+Scope:
+- Push existing local commit only.
+- Update `LOG.md` and `docs/CURRENT-TASKS.md` before and after the push.
+
+Out of scope:
+- Any code changes.
+- Any new Sprint 1 implementation.
+
+Immediate next steps:
+- Push `main` to `origin/main`.

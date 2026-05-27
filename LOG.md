@@ -62,3 +62,12 @@ Verification:
 
 Remaining issue:
 - Run the Django tests again once PostgreSQL is running and `DATABASE_URL` points to a reachable database.
+
+## 2026-05-27 - Push Sprint 1 Commit
+
+Intent:
+- Push existing Sprint 1 commit `508a1e6` to `origin/main`.
+
+Scope:
+- Git push only.
+- No code changes.
