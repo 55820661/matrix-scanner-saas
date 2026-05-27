@@ -156,3 +156,40 @@ Verification:
 - `python manage.py check` passed.
 - `python manage.py makemigrations --check --dry-run` passed with no changes detected.
 - `python manage.py test --noinput` passed: 4 tests ran successfully.
+
+## 2026-05-27 - Sprint 2 Start
+
+Intent:
+- Implement Sprint 2 agent registration and job foundation within the locked scope.
+
+Scope:
+- Add `ScannerAgent`, `AgentRegistrationToken`, `AgentJob`, and `BaselineScan` skeleton.
+- Add agent registration, heartbeat, one-job polling, and result submission endpoints.
+- Add bearer token authentication for agents.
+- Add temporary `system_identity` allowlist only.
+- Add minimal scanner runtime prototype for register, heartbeat, poll one job, execute `system_identity`, and submit result.
+
+Out of scope:
+- Systemd, install flow, Remote Bootstrap, full Baseline Scan, Finding, full Tool Registry, full Policy Engine, Telegram, Diagnostic Agent, Celery, and remediation/actions.
+
+Result:
+- Added Sprint 2 agent foundation models and admin registrations.
+- Added hashed registration and agent token helpers.
+- Added agent registration, heartbeat, one-job polling, and job result APIs.
+- Added atomic job claiming with `claimed_at`, `claim_expires_at`, and 5 minute default expiry.
+- Added result submission guards for terminal jobs, unclaimed jobs, expired claims, output size, and agent ownership.
+- Added temporary hardcoded allowlist with `system_identity` only.
+- Added `BaselineScan` as a model skeleton only.
+- Added a minimal scanner runtime prototype limited to register, heartbeat, poll one job, execute `system_identity`, and submit result.
+- Added Sprint 2 unit/integration tests for the new agent foundation, including claim expiry and output size checks.
+
+Verification:
+- `python manage.py makemigrations servers` created `apps/servers/migrations/0002_agentregistrationtoken_baselinescan_scanneragent_and_more.py`.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `python manage.py test --noinput` passed: 16 tests ran successfully.
+- `python manage.py migrate` applied the Sprint 2 migration successfully.
+
+Remaining:
+- No known Sprint 2 implementation issues.
+- Changes are not committed yet.

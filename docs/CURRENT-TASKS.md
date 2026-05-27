@@ -205,3 +205,62 @@ Verification:
 
 Completion:
 - Sprint 1 test fixture fix complete.
+
+## Active Task - Sprint 2 Agent Registration and Job Foundation
+
+Task:
+- Implement Sprint 2 only: server agent registration, heartbeat, job polling/result endpoints, `system_identity` allowlist, `BaselineScan` skeleton, and a minimal scanner runtime prototype.
+
+Scope:
+- `ScannerAgent` as `OneToOne(Server)`.
+- `AgentRegistrationToken`.
+- `AgentJob` with direct `account`, `server`, and `agent`.
+- `BaselineScan` model skeleton only.
+- Bearer token agent authentication.
+- One-time registration token with hashed storage.
+- Hashed agent token storage, raw returned once.
+- Atomic single-job claiming with `claimed_at` and `claim_expires_at`.
+- 5 minute default claim expiry.
+- Reject result submissions after terminal status.
+- Temporary hardcoded allowlist containing only `system_identity`.
+- 64KB structured output cap.
+- Minimal runtime prototype only for register, heartbeat, poll one job, execute `system_identity`, submit result.
+
+Out of scope:
+- Systemd service.
+- Install flow.
+- Remote Bootstrap.
+- Full Baseline Scan.
+- Finding.
+- Full Tool Registry.
+- Full Policy Engine.
+- Telegram.
+- Diagnostic Agent.
+- Celery.
+- Remediation/actions.
+
+Immediate next steps:
+- Add Sprint 2 models and migrations.
+- Add agent auth/services/views/URLs.
+- Add minimal `system_identity` handler and scanner runtime prototype.
+- Add focused tests for token, auth, job claiming/result behavior, allowlist, and endpoint basics.
+
+Progress:
+- Added Sprint 2 models: `ScannerAgent`, `AgentRegistrationToken`, `AgentJob`, and `BaselineScan`.
+- Added hashed token helpers for registration and agent bearer tokens.
+- Added agent registration, heartbeat, single-job polling, and job result endpoints under `/api/agent/`.
+- Added temporary Sprint 2 allowlist containing only `system_identity`.
+- Added minimal scanner runtime prototype for register, heartbeat, poll one job, execute `system_identity`, and submit result.
+- Added Django Admin coverage for Sprint 2 server/agent/job/baseline models.
+- Added Sprint 2 focused tests for registration tokens, bearer auth, one-job claiming, allowlist rejection, result submission, claim requirement/expiry, output size limits, cross-agent ownership, `system_identity` output, and audit token safety.
+
+Verification:
+- `python manage.py makemigrations servers` created the Sprint 2 migration.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `python manage.py test --noinput` passed: 16 tests ran successfully.
+- `python manage.py migrate` applied `servers.0002_agentregistrationtoken_baselinescan_scanneragent_and_more` successfully.
+
+Completion:
+- Sprint 2 implementation is complete within the locked scope.
+- No Remote Bootstrap, full Baseline Scan, Finding, full Tool Registry, full Policy Engine, Telegram, Diagnostic Agent, Celery, systemd/install flow, or remediation/actions were added.
