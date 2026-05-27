@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "apps.plans",
     "apps.subscriptions",
     "apps.servers",
+    "apps.bootstrap",
     "apps.applications",
     "apps.audit",
 ]
@@ -122,3 +123,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "admin:login"
+
+BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY = os.environ.get("BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY", "")
+BOOTSTRAP_HEARTBEAT_TIMEOUT_SECONDS = int(os.environ.get("BOOTSTRAP_HEARTBEAT_TIMEOUT_SECONDS", "60"))
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")

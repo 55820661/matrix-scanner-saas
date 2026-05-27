@@ -264,3 +264,69 @@ Verification:
 Completion:
 - Sprint 2 implementation is complete within the locked scope.
 - No Remote Bootstrap, full Baseline Scan, Finding, full Tool Registry, full Policy Engine, Telegram, Diagnostic Agent, Celery, systemd/install flow, or remediation/actions were added.
+
+## Active Task - Sprint 3 Remote Bootstrap MVP
+
+Task:
+- Implement Sprint 3 only: Admin-only Remote Bootstrap MVP to install/start Scanner Runtime and verify heartbeat.
+
+Scope:
+- Create/use `apps/bootstrap`.
+- Add `BootstrapSession`, `BootstrapStep`, `BootstrapCredential`, and `AgentInstallation`.
+- Add Django Admin registrations.
+- Add Admin-only synchronous bootstrap workflow with strict timeouts.
+- Use Paramiko for SSH.
+- Use fixed command templates, typed parameters, package allowlists, and no raw shell input.
+- Encrypt temporary credentials with `BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY`.
+- Use 30 minute credential TTL and cleanup on success, failure, cancellation, or expiry.
+- Deploy runtime files via SFTP/tarball-style generated upload, not git clone.
+- Install path `/opt/matrix_scanner`.
+- Runtime config format JSON.
+- systemd service `matrix-scanner-agent.service`.
+- Verify agent heartbeat within 60 seconds using the Sprint 2 agent foundation.
+
+Out of scope:
+- Full Baseline Scan.
+- Security Preflight.
+- Diagnostic tools.
+- Full Tool Registry.
+- Full Policy Engine.
+- Telegram.
+- Diagnostic Agent.
+- Celery.
+- Remediation/actions.
+- Customer Portal bootstrap.
+- Self-install flow or install script.
+- Free shell execution.
+
+Immediate next steps:
+- Add Bootstrap app models/admin/services/policy and migrations.
+- Add Admin workflow hooks.
+- Add focused mocked SSH/bootstrap tests.
+- Run Django checks, migrations dry-run, tests, and diff check.
+
+Progress:
+- Added `apps/bootstrap`.
+- Added Sprint 3 models: `BootstrapSession`, `BootstrapStep`, `BootstrapCredential`, and `AgentInstallation`.
+- Added Matrix Admin-only Django Admin registrations, non-stored credential entry on session creation, and an Admin action to run selected bootstrap sessions.
+- Added encrypted temporary bootstrap credential storage using `BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY`.
+- Added credential TTL/cleanup helpers.
+- Added fixed command template policy and package-manager allowlist handling.
+- Added Paramiko SSH adapter.
+- Added synchronous bootstrap workflow for SSH probe, privilege/systemd/package-manager checks, confirmed package install, runtime upload, JSON config install, systemd service install/start, and heartbeat verification.
+- Added generated runtime service payload and systemd unit for `matrix-scanner-agent.service`.
+- Added secret redaction helper for stored stdout/stderr/error text.
+- Added Sprint 3 tests with mocked SSH paths and security regression checks.
+
+Verification:
+- Installed new local dependencies from `requirements.txt`: `paramiko` and `cryptography`.
+- `python manage.py makemigrations bootstrap` created `apps/bootstrap/migrations/0001_initial.py`.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `python manage.py test --noinput` passed: 27 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 3 implementation is complete within the locked scope.
+- No full Baseline Scan, Security Preflight, diagnostic tools, full Tool Registry, full Policy Engine, Telegram, Diagnostic Agent, Celery, remediation/actions, customer Portal bootstrap, self-install flow, install script, or free shell execution were added.
+- Changes are not committed, per instruction.

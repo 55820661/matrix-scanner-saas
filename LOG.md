@@ -193,3 +193,42 @@ Verification:
 Remaining:
 - No known Sprint 2 implementation issues.
 - Changes are not committed yet.
+
+## 2026-05-27 - Sprint 3 Start
+
+Intent:
+- Implement Sprint 3 Remote Bootstrap MVP within the locked scope.
+
+Scope:
+- Admin-only Remote Bootstrap using Paramiko.
+- Add `apps/bootstrap` with BootstrapSession, BootstrapStep, BootstrapCredential, and AgentInstallation.
+- Use fixed command templates, typed parameters, package allowlists, encrypted temporary credentials, 30 minute TTL, and credential cleanup.
+- Install/start Scanner Runtime under `/opt/matrix_scanner` using JSON config and `matrix-scanner-agent.service`.
+- Verify heartbeat only.
+
+Out of scope:
+- Full Baseline Scan, Security Preflight, diagnostic tools, full Tool Registry, full Policy Engine, Telegram, Diagnostic Agent, Celery, remediation/actions, customer Portal bootstrap, self-install flow, install script, and free shell execution.
+
+Result:
+- Added `apps/bootstrap` with BootstrapSession, BootstrapStep, BootstrapCredential, and AgentInstallation.
+- Added Matrix Admin-only Admin registrations, non-stored credential entry on session creation, and a synchronous Admin action for running selected bootstrap sessions.
+- Added Paramiko SSH adapter.
+- Added BootstrapPolicy fixed command templates and package manager allowlist handling.
+- Added encrypted temporary credentials using `BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY`.
+- Added 30 minute credential TTL and cleanup behavior that clears encrypted payloads and sets `destroyed_at`.
+- Added generated runtime upload payload, JSON config handling, and systemd unit for `matrix-scanner-agent.service`.
+- Added heartbeat verification step using Sprint 2 ScannerAgent state.
+- Added secret redaction for stored command output and failure text.
+- Added Sprint 3 tests for Admin-only access, credential encryption/expiry/cleanup, policy rejection, package confirmation, step statuses, mocked SSH success/failure, out-of-scope record absence, and audit metadata safety.
+
+Verification:
+- Installed new dependencies from `requirements.txt`: `paramiko` and `cryptography`.
+- `python manage.py makemigrations bootstrap` created `apps/bootstrap/migrations/0001_initial.py`.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `python manage.py test --noinput` passed: 27 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No known Sprint 3 implementation issues.
+- Changes are not committed yet, per instruction.
