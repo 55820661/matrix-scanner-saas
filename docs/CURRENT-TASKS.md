@@ -168,3 +168,40 @@ Verification:
 Completion:
 - Documentation adjustment complete.
 - No commit was made, per instruction.
+
+## Active Task - Fix Sprint 1 Staff User Test Fixture
+
+Task:
+- Fix only the failing Sprint 1 test `test_staff_user_without_account_has_no_customer_role`.
+
+Scope:
+- Update the test fixture to set a valid or unusable password before calling `full_clean()`.
+- Run `python manage.py check`.
+- Run `python manage.py makemigrations --check --dry-run`.
+- Run `python manage.py test --noinput`.
+
+Out of scope:
+- Product behavior changes unless strictly necessary.
+- Sprint 2.
+- Agent APIs.
+- Scanner Runtime.
+- Bootstrap.
+- Baseline.
+- Tools/Policy.
+- Telegram.
+
+Immediate next steps:
+- Update the test fixture only.
+- Run the requested verification commands.
+
+Progress:
+- Updated only `tests/unit/test_sprint1_models.py`.
+- Added `set_unusable_password()` to the staff/superuser fixture before `full_clean()`.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `python manage.py test --noinput` passed: 4 tests ran successfully.
+
+Completion:
+- Sprint 1 test fixture fix complete.

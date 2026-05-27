@@ -22,6 +22,7 @@ class Sprint1ModelTests(TestCase):
 
     def test_staff_user_without_account_has_no_customer_role(self):
         user = User(username="admin", email="admin@example.com", is_staff=True, is_superuser=True)
+        user.set_unusable_password()
         user.full_clean()
 
     def test_approved_status_values_are_available(self):

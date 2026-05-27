@@ -136,3 +136,23 @@ Verification:
 - Verified Docker section is titled optional and says Docker Desktop must be running with the Linux engine.
 - `git diff --check` passed.
 - No commit made.
+
+## 2026-05-27 - Sprint 1 Test Fixture Fix
+
+Intent:
+- Fix the failing Sprint 1 staff-user test by giving the test user a valid/unusable password before `full_clean()`.
+
+Scope:
+- Test fixture only unless a product-code change is strictly necessary.
+- No Sprint 2 work.
+- No agent, Scanner Runtime, Bootstrap, Baseline, Tool Registry, Policy Engine, Telegram, or Diagnostic Agent work.
+
+Result:
+- Updated only the Sprint 1 test fixture.
+- The staff/superuser test now calls `set_unusable_password()` before `full_clean()`.
+- No product behavior changed.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `python manage.py test --noinput` passed: 4 tests ran successfully.
