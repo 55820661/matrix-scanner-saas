@@ -335,6 +335,28 @@ Pre-start:
 - Updated `docs/CURRENT-TASKS.md` before implementation.
 
 Result:
+- Added ToolBuildRequest, ToolBuildProposal, ToolBuildReview, and ToolTestResult models inside `apps/tools`.
+- Added deterministic builder services for proposal generation, validation, review, and conversion.
+- Added mock/sandbox validation only; no customer server execution path was added.
+- Added Django Admin registrations and actions for generating, validating, approving, rejecting, and converting proposals.
+- Conversion creates a ToolDefinition only as draft or pending_review and creates an inactive conservative ToolPolicy.
+- Kept PlanTool attachment manual only and did not add automatic enablement.
+- Redacted proposal text, review notes, validation output, and test result data before storage.
+- Added AuditLog entries for request submission, proposal generation, validation, approval/rejection, and conversion without raw prompts/logs/secrets.
+- Added focused Sprint 10 tests covering Admin-only access, safe storage, validation denials, safe conversion, no automatic enablement/PlanTool, no ToolRun/AgentJob, no customer server execution, and ToolPolicy source-of-truth behavior.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint10_tool_builder --noinput` passed: 14 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 132 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No known Sprint 10 implementation issues.
+- Changes are not committed, per instruction.
+
+Result:
 - Added `TelegramDiagnosticState` to manage private-chat Telegram guided diagnostic flow state separately from `TelegramChatLink`.
 - Added `DiagnosticSession.source` and nullable `source_chat_link` for Portal vs Telegram attribution.
 - Added Telegram guided diagnostic commands: `/diagnose`, `/cancel`, `/approve`, `/session`, and `/report`.
@@ -396,6 +418,25 @@ Scope:
 
 Out of scope:
 - Group diagnostics, remediation/actions, write tools, free shell commands, direct AgentJob creation from Telegram, ToolPolicy bypass, live LLM execution, and raw outputs/secrets in Telegram.
+
+Pre-start:
+- Read the required agent, log, current task, decision, plan, interface, security, structure, checklist, and test plan documents.
+- Updated `docs/CURRENT-TASKS.md` before implementation.
+
+## 2026-05-28 - Sprint 10 Start
+
+Intent:
+- Implement Sprint 10 Tool Definition Proposal Builder MVP inside `apps/tools`.
+
+Scope:
+- Add Matrix Admin-only ToolBuildRequest, ToolBuildProposal, ToolBuildReview, and ToolTestResult.
+- Add deterministic proposal generation and validation.
+- Add Admin review actions and conversion to draft/pending_review ToolDefinition only.
+- Add mock/sandbox validation only.
+- Keep Tool Registry and ToolPolicy as the source of truth.
+
+Out of scope:
+- New Django app, live LLM/provider calls, executable/runtime handler generation, shell/free command generation, remediation/actions, write/destructive tools, customer Portal tool builder, automatic enablement, automatic PlanTool attachment, ToolRun or AgentJob creation, and customer server execution.
 
 Pre-start:
 - Read the required agent, log, current task, decision, plan, interface, security, structure, checklist, and test plan documents.

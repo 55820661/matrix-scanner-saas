@@ -172,3 +172,111 @@ class ToolRun(TimeStampedModel):
             raise ValidationError({"server": "Server must belong to the ToolRun account."})
         if self.agent_id and self.agent.server_id != self.server_id:
             raise ValidationError({"agent": "Agent must belong to the ToolRun server."})
+
+
+class ToolBuildRequest(TimeStampedModel):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SUBMITTED = "submitted", "Submitted"
+        PROPOSED = "proposed", "Proposed"
+        FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="tool_build_requests",
+        null=True,
+        blank=True,
+    )
+    title = models.CharField(max_length=160)
+    description_redacted = models.TextField(blank=True)
+    desired_tool_key = models.CharField(max_length=120)
+    desired_handler_key = models.CharField(max_length=120)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    validation_summary = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.desired_tool_key
+
+
+class ToolBuildProposal(TimeStampedModel):
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        VALIDATION_FAILED = "validation_failed", "Validation failed"
+        PENDING_REVIEW = "pending_review", "Pending review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        CONVERTED = "converted", "Converted"
+
+    request = models.ForeignKey(ToolBuildRequest, on_delete=models.CASCADE, related_name="proposals")
+    proposed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="tool_build_proposals",
+        null=True,
+        blank=True,
+    )
+    status = models.CharField(max_length=30, choices=Status.choices, default=Status.DRAFT)
+    proposed_definition = models.JSONField(default=dict, blank=True)
+    proposed_policy = models.JSONField(default=dict, blank=True)
+    validation_errors = models.JSONField(default=list, blank=True)
+    validation_warnings = models.JSONField(default=list, blank=True)
+    converted_tool_definition = models.ForeignKey(
+        ToolDefinition,
+        on_delete=models.SET_NULL,
+        related_name="build_proposals",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Proposal for {self.request}"
+
+
+class ToolBuildReview(TimeStampedModel):
+    class Decision(models.TextChoices):
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        NEEDS_CHANGES = "needs_changes", "Needs changes"
+
+    proposal = models.ForeignKey(ToolBuildProposal, on_delete=models.CASCADE, related_name="reviews")
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="tool_build_reviews",
+        null=True,
+        blank=True,
+    )
+    decision = models.CharField(max_length=20, choices=Decision.choices)
+    notes_redacted = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.decision} for {self.proposal_id}"
+
+
+class ToolTestResult(TimeStampedModel):
+    class Status(models.TextChoices):
+        PASSED = "passed", "Passed"
+        FAILED = "failed", "Failed"
+
+    proposal = models.ForeignKey(ToolBuildProposal, on_delete=models.CASCADE, related_name="test_results")
+    status = models.CharField(max_length=20, choices=Status.choices)
+    test_type = models.CharField(max_length=80, default="mock_validation")
+    summary_redacted = models.TextField(blank=True)
+    result_redacted = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.test_type}: {self.status}"

@@ -672,3 +672,53 @@ Completion:
 - Sprint 9 implementation is complete within the locked scope.
 - No group diagnostics, remediation/actions, write tools, free shell commands, direct AgentJob creation from Telegram, ToolPolicy bypass, live LLM execution, or raw outputs/secrets in Telegram were added.
 - Changes are not committed, per instruction.
+
+## Active Task - Sprint 10 Tool Definition Proposal Builder
+
+Task:
+- Implement Sprint 10 only: Matrix Admin Tool Definition Proposal Builder MVP inside `apps/tools`.
+
+Scope:
+- Add ToolBuildRequest, ToolBuildProposal, ToolBuildReview, and ToolTestResult.
+- Add deterministic proposal generation and validation only.
+- Add Django Admin-only review actions.
+- Allow conversion of approved proposals to draft/pending_review ToolDefinition records only.
+- Keep Tool Registry and ToolPolicy as the source of truth.
+
+Out of scope:
+- New Django app.
+- Live LLM/provider calls.
+- Runtime handler/code generation.
+- Shell/free-command generation.
+- Remediation/actions, write tools, destructive tools, package installs, service restarts, or file edits.
+- Customer Portal tool builder.
+- Automatic enablement.
+- Automatic PlanTool attachment.
+- ToolRun or AgentJob creation.
+- Execution on customer servers.
+
+Immediate next steps:
+- Inspect current tools models, services, admin, migrations, and tests.
+- Add Sprint 10 models/services/Admin actions.
+- Add focused safety and Admin access tests.
+- Run Django checks, migration dry-run, full test suite, and diff check.
+
+Progress:
+- Added Sprint 10 Tool Definition Proposal Builder models inside `apps/tools`.
+- Added deterministic proposal generation and validation services.
+- Added Admin-only proposal generation, validation, approval, rejection, and conversion actions.
+- Added conversion from approved proposal to draft ToolDefinition with inactive conservative ToolPolicy.
+- Added mock validation ToolTestResult records only.
+- Added Sprint 10 safety and Admin access tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint10_tool_builder --noinput` passed: 14 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 132 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 10 implementation is complete within the locked scope.
+- No new app, live LLM, provider calls, runtime handler/code generation, shell/free commands, remediation/actions, write/destructive tools, automatic enablement, automatic PlanTool attachment, ToolRun creation, AgentJob creation, or customer server execution were added.
+- Changes are not committed, per instruction.
