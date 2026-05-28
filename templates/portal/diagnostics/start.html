@@ -1,0 +1,38 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Start Diagnostic{% endblock %}
+
+{% block content %}
+<h1>Start Diagnostic</h1>
+<section class="card">
+  <form method="post">
+    {% csrf_token %}
+    <label for="server_id">Server</label>
+    <select id="server_id" name="server_id" required>
+      {% for server in servers %}
+        <option value="{{ server.id }}">{{ server.name }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="application_id">Application</label>
+    <select id="application_id" name="application_id">
+      <option value="">No application</option>
+      {% for application in applications %}
+        <option value="{{ application.id }}">{{ application.name }} - {{ application.server.name }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="problem_type">Problem type</label>
+    <select id="problem_type" name="problem_type">
+      {% for value, label in problem_types %}
+        <option value="{{ value }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="user_prompt">Problem summary</label>
+    <textarea id="user_prompt" name="user_prompt" rows="5" style="width:100%; box-sizing:border-box;"></textarea>
+
+    <button type="submit">Start</button>
+  </form>
+</section>
+{% endblock %}

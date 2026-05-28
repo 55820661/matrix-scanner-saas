@@ -335,6 +335,28 @@ Pre-start:
 - Updated `docs/CURRENT-TASKS.md` before implementation.
 
 Result:
+- Added `apps.diagnostics` with DiagnosticSession, DiagnosticStep, and DiagnosticDecision models plus Admin registrations and initial migration.
+- Added deterministic diagnostic services that plan one approved read-only baseline tool step at a time.
+- Added user approval gating before any diagnostic ToolRun is created.
+- Integrated approved diagnostic steps through the existing ToolPolicy service via `create_tool_run_job`; diagnostics do not create AgentJob directly.
+- Added ToolRun status/result synchronization into DiagnosticStep summaries and final DiagnosticSession reports.
+- Added Portal diagnostics list, start, detail, and step approval views/templates under `/portal/diagnostics/`.
+- Enforced Portal tenant scoping and owner/operator action permissions; viewers remain read-only.
+- Strengthened shared redaction for `APP_KEY` and API key style strings before diagnostic context/report display.
+- Added Sprint 8 tests covering Portal access, staff blocking, owner/operator/viewer permissions, tenant and application ownership, deterministic planning, approval gating, ToolPolicy denial, max tool-run limits, ToolRun/AgentJob linkage through ToolRun, result ingestion, final report redaction, no Telegram side effects, and safe Portal display.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint8_diagnostics --noinput` passed: 17 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 102 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No known Sprint 8 implementation issues.
+- Changes are not committed, per instruction.
+
+Result:
 - Added `apps.telegram_integration` with `TelegramChatLink`, `TelegramLinkToken`, and `TelegramNotification` models, Admin registrations, and initial migration.
 - Added Telegram webhook foundation at `/telegram/webhook/<secret>/` with path/header secret validation.
 - Added global Telegram settings loaded from environment: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`; no bot token is stored in the database.
@@ -357,6 +379,27 @@ Verification:
 Remaining:
 - No known Sprint 7 implementation issues.
 - Changes are not committed, per instruction.
+
+## 2026-05-28 - Sprint 8 Start
+
+Intent:
+- Implement Sprint 8 Diagnostic Agent MVP within the locked scope.
+
+Scope:
+- Create/use `apps/diagnostics`.
+- Add DiagnosticSession, DiagnosticStep, and DiagnosticDecision models.
+- Add deterministic planning with read-only baseline tools only.
+- Add Portal-only diagnostic session start/detail/approval flow.
+- Require user approval before each diagnostic tool step creates a ToolRun.
+- Use Tool Registry and ToolPolicy for every diagnostic ToolRun.
+- Store concise redacted final reports on DiagnosticSession.
+
+Out of scope:
+- Telegram Guided Diagnostics, Telegram diagnostic commands/messages/approvals, live LLM execution, remediation/actions, write tools, shell/free commands, Celery, email alerts, PDF export, advanced reporting, IncidentReport, customer-created tools, and Admin Tool Builder Agent.
+
+Pre-start:
+- Read the required agent, log, current task, decision, plan, interface, security, structure, checklist, and test plan documents.
+- Updated `docs/CURRENT-TASKS.md` before implementation.
 
 Result:
 - Added `apps.portal` with app config, permissions, forms, services, views, and URLs.

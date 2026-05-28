@@ -558,3 +558,61 @@ Completion:
 - Sprint 7 implementation is complete within the locked scope.
 - No Diagnostic Agent, Telegram Guided Diagnostics, DiagnosticSession creation, ToolRun creation, AgentJob creation, remediation/actions, write tools, payments, Celery, polling infrastructure, per-account bot tokens, customer-created tools, or Admin Tool Builder Agent were added.
 - Changes are not committed, per instruction.
+
+## Active Task - Sprint 8 Diagnostic Agent MVP
+
+Task:
+- Implement Sprint 8 only: Diagnostic Agent MVP from Portal.
+
+Scope:
+- Create/use `apps/diagnostics`.
+- Add DiagnosticSession, DiagnosticStep, and DiagnosticDecision models.
+- Add deterministic diagnostic planning only, with no live LLM calls.
+- Add Portal-only diagnostic session list/start/detail/approval flow.
+- Require approval before each tool step creates a ToolRun.
+- Execute diagnostic tools only through Tool Registry and ToolPolicy.
+- Produce concise redacted diagnostic reports.
+
+Out of scope:
+- Telegram Guided Diagnostics.
+- Telegram diagnostic commands, messages, or approvals.
+- Live LLM execution.
+- Remediation/actions.
+- Write tools.
+- Shell/free commands.
+- Celery.
+- Email alerts.
+- PDF export.
+- Advanced reporting.
+- IncidentReport.
+- Customer-created tools.
+- Admin Tool Builder Agent.
+
+Immediate next steps:
+- Inspect existing Portal, ToolPolicy/ToolRun, baseline, and agent job flow.
+- Add diagnostics app models, services, Admin registration, Portal URLs/views/templates, and migrations.
+- Add focused tests for Portal permissions, tenant scoping, deterministic planning, approval gating, policy integration, redaction, and out-of-scope side effects.
+- Run Django checks, migration dry-run, full test suite, and diff check.
+
+Progress:
+- Added `apps.diagnostics` with DiagnosticSession, DiagnosticStep, and DiagnosticDecision models, Admin registrations, services, Portal views, and initial migration.
+- Wired diagnostics into the Portal under `/portal/diagnostics/`, including list, start, detail, and step approval routes.
+- Added Portal templates for diagnostics list, start, and detail pages.
+- Implemented deterministic planning over existing baseline tool keys only.
+- Enforced approval before a diagnostic tool step creates a ToolRun.
+- Integrated approved steps through the existing ToolPolicy path using `create_tool_run_job`; diagnostics do not create AgentJob directly.
+- Added ToolRun result synchronization into DiagnosticStep summaries and concise final reports.
+- Strengthened redaction for `APP_KEY` and API key style strings before diagnostic context/report display.
+- Added focused Sprint 8 tests for login, staff blocking, role permissions, tenant scoping, application ownership, approval gating, ToolPolicy denial, max tool-run limits, ToolRun/AgentJob linking, result ingestion, redaction, no Telegram side effects, and safe Portal display.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint8_diagnostics --noinput` passed: 17 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 102 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 8 implementation is complete within the locked scope.
+- No Telegram Guided Diagnostics, Telegram diagnostic commands/messages/approvals, live LLM execution, remediation/actions, write tools, shell/free commands, Celery, email alerts, PDF export, advanced reporting, IncidentReport, customer-created tools, or Admin Tool Builder Agent were added.
+- Changes are not committed, per instruction.

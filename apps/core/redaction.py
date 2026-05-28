@@ -3,6 +3,8 @@ import re
 
 SECRET_PATTERNS = (
     re.compile(r"(?i)(password\s*[:=]\s*)\S+"),
+    re.compile(r"(?i)(app_key\s*[:=]\s*)\S+"),
+    re.compile(r"(?i)(api[_ -]?key\s*[:=]\s*)\S+"),
     re.compile(r"(?i)(private[_ -]?key\s*[:=]\s*)\S+"),
     re.compile(r"(?i)(token\s*[:=]\s*)\S+"),
     re.compile(r"(?i)(authorization\s*[:=]\s*)\S+"),
@@ -16,6 +18,7 @@ SENSITIVE_KEY_PARTS = (
     "token",
     "api_key",
     "apikey",
+    "app_key",
     "private_key",
     "authorization",
     "bearer",

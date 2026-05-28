@@ -1,5 +1,7 @@
 from django.urls import path
 
+from apps.diagnostics import views as diagnostic_views
+
 from . import views
 
 
@@ -24,6 +26,13 @@ urlpatterns = [
     path("baseline-scans/", views.baseline_scans, name="baseline_scans"),
     path("subscription/", views.subscription_usage, name="subscription"),
     path("telegram/", views.telegram_settings, name="telegram"),
-    path("diagnostics/", views.placeholder, {"page": "diagnostics"}, name="diagnostics"),
+    path("diagnostics/", diagnostic_views.diagnostics_list, name="diagnostics"),
+    path("diagnostics/start/", diagnostic_views.diagnostics_start, name="diagnostic_start"),
+    path("diagnostics/<int:session_id>/", diagnostic_views.diagnostic_detail, name="diagnostic_detail"),
+    path(
+        "diagnostics/<int:session_id>/steps/<int:step_id>/approve/",
+        diagnostic_views.diagnostic_step_approve,
+        name="diagnostic_step_approve",
+    ),
     path("reports/", views.placeholder, {"page": "reports"}, name="reports"),
 ]

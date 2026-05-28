@@ -1,0 +1,63 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Diagnostic Session{% endblock %}
+
+{% block content %}
+<h1>Diagnostic Session</h1>
+
+<section class="card">
+  <p><strong>Status:</strong> {{ session.status }}</p>
+  <p><strong>Server:</strong> {{ session.server.name }}</p>
+  <p><strong>Application:</strong> {{ session.application.name|default:"-" }}</p>
+  <p><strong>Problem:</strong> {{ session.problem_type }}</p>
+  <p><strong>Summary:</strong> {{ session.summary_redacted }}</p>
+  <p><strong>Tool runs:</strong> {{ session.tool_run_count }} / {{ session.max_tool_runs }}</p>
+  {% if session.error_message %}
+    <p><strong>Error:</strong> {{ session.error_message }}</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Steps</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Step</th>
+        <th>Tool</th>
+        <th>Status</th>
+        <th>Run status</th>
+        <th>Result summary</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for step in steps %}
+        <tr>
+          <td>{{ step.step_type }}</td>
+          <td>{{ step.tool_key|default:"-" }}</td>
+          <td>{{ step.status }}</td>
+          <td>{% if step.tool_run %}{{ step.tool_run.status }}{% else %}-{% endif %}</td>
+          <td>{{ step.result_summary_redacted|default:"-" }}</td>
+          <td>
+            {% if can_approve and step.id == next_approval_step.id %}
+              <form method="post" action="{% url 'portal:diagnostic_step_approve' session.id step.id %}">
+                {% csrf_token %}
+                <button type="submit">Approve next read-only step</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">No diagnostic steps yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if session.final_report_redacted %}
+  <section class="card">
+    <h2>Final Report</h2>
+    <pre style="white-space:pre-wrap;">{{ session.final_report_redacted }}</pre>
+  </section>
+{% endif %}
+{% endblock %}

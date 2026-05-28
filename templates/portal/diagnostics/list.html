@@ -1,0 +1,41 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Diagnostic Sessions{% endblock %}
+
+{% block content %}
+<div class="actions">
+  <h1>Diagnostic Sessions</h1>
+  {% if can_start %}
+    <a class="button" href="{% url 'portal:diagnostic_start' %}">Start diagnostic</a>
+  {% endif %}
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Created</th>
+      <th>Server</th>
+      <th>Application</th>
+      <th>Problem</th>
+      <th>Status</th>
+      <th>Tool runs</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for session in sessions %}
+      <tr>
+        <td>{{ session.created_at }}</td>
+        <td>{{ session.server.name }}</td>
+        <td>{{ session.application.name|default:"-" }}</td>
+        <td>{{ session.problem_type }}</td>
+        <td>{{ session.status }}</td>
+        <td>{{ session.tool_run_count }} / {{ session.max_tool_runs }}</td>
+        <td><a href="{% url 'portal:diagnostic_detail' session.id %}">Open</a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7">No diagnostic sessions yet.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
