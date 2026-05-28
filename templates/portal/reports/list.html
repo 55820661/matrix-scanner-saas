@@ -1,0 +1,65 @@
+{% extends "portal/base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="actions">
+  <h1 style="margin-right:auto">Reports</h1>
+</div>
+
+{% if can_generate %}
+  <section class="card">
+    <h2>Generate Report</h2>
+    <form method="post" action="{% url 'portal:report_generate' %}">
+      {% csrf_token %}
+      <label>Report type
+        <select name="report_type">
+          <option value="findings_summary">Findings summary</option>
+          <option value="server_health_summary">Server health summary</option>
+          <option value="baseline_report">Baseline report</option>
+        </select>
+      </label>
+      <label>Server
+        <select name="server_id">
+          <option value="">All account data</option>
+          {% for server in servers %}
+            <option value="{{ server.id }}">{{ server.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Baseline scan
+        <select name="baseline_scan_id">
+          <option value="">Latest selected manually</option>
+          {% for scan in baseline_scans %}
+            <option value="{{ scan.id }}">{{ scan.server.name }} - {{ scan.status }} - {{ scan.created_at }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">Generate</button>
+    </form>
+  </section>
+{% endif %}
+
+<table>
+  <tr><th>Title</th><th>Type</th><th>Server</th><th>Generated</th><th>Status</th></tr>
+  {% for report in reports %}
+    <tr>
+      <td><a href="{% url 'portal:report_detail' report.id %}">{{ report.title }}</a></td>
+      <td>{{ report.report_type }}</td>
+      <td>{{ report.server.name|default:"-" }}</td>
+      <td>{{ report.generated_at|default:report.created_at }}</td>
+      <td>{{ report.status }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5">No reports.</td></tr>
+  {% endfor %}
+</table>
+
+{% if knowledge_entries %}
+  <h2>Knowledge</h2>
+  <table>
+    <tr><th>Title</th><th>Scope</th><th>Category</th></tr>
+    {% for entry in knowledge_entries %}
+      <tr><td>{{ entry.title }}</td><td>{{ entry.scope }}</td><td>{{ entry.category|default:"-" }}</td></tr>
+    {% endfor %}
+  </table>
+{% endif %}
+{% endblock %}

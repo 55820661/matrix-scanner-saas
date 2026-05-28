@@ -6,6 +6,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.models import User
 from apps.applications.models import Application
 from apps.portal.permissions import portal_required
+from apps.reports.models import Report
 from apps.servers.models import Server
 
 from .models import DiagnosticSession, DiagnosticStep
@@ -92,6 +93,9 @@ def diagnostic_detail(request, session_id):
             "next_approval_step": next_approval_step,
             "can_approve": user_can_start_or_approve(request.user),
             "viewer_role": User.CustomerRole.VIEWER,
+            "reports": Report.objects.filter(account=account_for(request), diagnostic_session=session).order_by(
+                "-generated_at", "-created_at"
+            ),
         },
     )
 

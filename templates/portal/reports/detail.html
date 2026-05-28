@@ -1,0 +1,38 @@
+{% extends "portal/base.html" %}
+{% block title %}Report Detail{% endblock %}
+{% block content %}
+<h1>{{ report.title }}</h1>
+<section class="card">
+  <p><strong>Type:</strong> {{ report.report_type }}</p>
+  <p><strong>Status:</strong> {{ report.status }}</p>
+  <p><strong>Server:</strong> {{ report.server.name|default:"-" }}</p>
+  <p><strong>Application:</strong> {{ report.application.name|default:"-" }}</p>
+  <p><strong>Generated:</strong> {{ report.generated_at|default:report.created_at }}</p>
+  <p><strong>Summary:</strong> {{ report.summary_redacted }}</p>
+</section>
+
+{% for section in sections %}
+  <section class="card">
+    <h2>{{ section.title }}</h2>
+    {% if section.body_redacted %}<p>{{ section.body_redacted }}</p>{% endif %}
+    {% if section.data_redacted %}
+      <pre style="white-space:pre-wrap;">{{ section.data_redacted }}</pre>
+    {% endif %}
+  </section>
+{% endfor %}
+
+{% if recommendations %}
+  <h2>Advisory Recommendations</h2>
+  <table>
+    <tr><th>Title</th><th>Priority</th><th>Status</th><th>Guidance</th></tr>
+    {% for recommendation in recommendations %}
+      <tr>
+        <td>{{ recommendation.title }}</td>
+        <td>{{ recommendation.priority }}</td>
+        <td>{{ recommendation.status }}</td>
+        <td>{{ recommendation.body_redacted }}</td>
+      </tr>
+    {% endfor %}
+  </table>
+{% endif %}
+{% endblock %}

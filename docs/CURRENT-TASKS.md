@@ -722,3 +722,43 @@ Completion:
 - Sprint 10 implementation is complete within the locked scope.
 - No new app, live LLM, provider calls, runtime handler/code generation, shell/free commands, remediation/actions, write/destructive tools, automatic enablement, automatic PlanTool attachment, ToolRun creation, AgentJob creation, or customer server execution were added.
 - Changes are not committed, per instruction.
+
+## Active Task - Sprint 11 Reports, Findings, and Knowledge Base Enhancement
+
+Task:
+- Implement Sprint 11 only: reports, finding groups, advisory recommendations, and safe knowledge/context storage.
+
+Scope:
+- Add Report, ReportSection, FindingGroup, KnowledgeEntry, KnowledgeSource, and Recommendation.
+- Add synchronous explicit report generation from safe/redacted sources only.
+- Add Admin registrations/actions for reports, report sections, finding groups, knowledge, recommendations, baseline report generation, diagnostic report generation, and finding group rebuild.
+- Add Portal reports/finding group visibility and owner/operator report refresh actions with viewer read-only.
+- Add small safe Telegram report summary support.
+
+Out of scope:
+- PDF export, email reports, scheduled reports, Celery/report worker, live LLM report generation, public API endpoints, remediation/actions, write tools, service restarts, package installs, file edits, ToolPolicy bypass, direct AgentJob creation, raw logs, raw `.env`, raw ToolRun output, raw AgentJob output, credentials, tokens, passwords, or private keys.
+
+Immediate next steps:
+- Inspect current Portal/Admin/report-adjacent models and routes.
+- Add Sprint 11 models, services, admin actions, Portal views/templates, Telegram summary update, and tests.
+- Run Django checks, migration dry-run, full test suite, and diff check.
+
+Progress:
+- Added `apps.reports` with Report, ReportSection, FindingGroup, KnowledgeEntry, KnowledgeSource, and Recommendation.
+- Added synchronous redacted report generation services for baseline, diagnostic, server health, and findings summaries.
+- Added finding group rebuild/deduplication and advisory-only recommendation creation.
+- Added Django Admin registrations and actions for reports, report generation, and finding group rebuilds.
+- Added Portal report list/detail/generation views, finding group list/detail views, findings filters, server report/group summaries, and diagnostic report links.
+- Added safe Telegram `/report` fallback to the latest stored redacted report summary.
+- Added Sprint 11 tests for report safety, grouping, portal tenant isolation, Admin visibility, recommendations, knowledge redaction, Telegram summaries, and out-of-scope exclusions.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 142 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 11 implementation is complete within the locked scope.
+- No PDF export, email reports, scheduled reports/Celery, live LLM report generation, public API endpoints, remediation/actions, write tools, ToolPolicy bypass, direct AgentJob creation, or raw sensitive output display/storage were added.
+- Changes are not committed, per instruction.

@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.contrib import messages
 
+from apps.reports.services import create_baseline_report, rebuild_finding_groups
+
 from .baseline import BaselineScanError, start_baseline_scan
 from .models import (
     AgentJob,
@@ -71,7 +73,7 @@ class BaselineScanAdmin(admin.ModelAdmin):
     list_filter = ("status", "account", "created_at")
     search_fields = ("server__name", "server__hostname", "account__name")
     readonly_fields = ("summary", "error_message", "created_at", "updated_at")
-    actions = ("start_selected_baseline_scans",)
+    actions = ("start_selected_baseline_scans", "generate_baseline_reports")
 
     @admin.action(description="Start selected baseline scans")
     def start_selected_baseline_scans(self, request, queryset):
@@ -90,6 +92,14 @@ class BaselineScanAdmin(admin.ModelAdmin):
             except BaselineScanError:
                 failed += 1
         self.message_user(request, f"Started {started} baseline scan(s); failed {failed}.")
+
+    @admin.action(description="Generate redacted baseline reports")
+    def generate_baseline_reports(self, request, queryset):
+        generated = 0
+        for scan in queryset:
+            create_baseline_report(scan, user=request.user)
+            generated += 1
+        self.message_user(request, f"Generated {generated} baseline report(s).")
 
 
 @admin.register(BaselineScanStep)
@@ -130,3 +140,13 @@ class FindingAdmin(admin.ModelAdmin):
     list_filter = ("status", "severity", "account", "created_at")
     search_fields = ("title", "fingerprint", "server__name", "account__name")
     readonly_fields = ("created_at", "updated_at")
+    actions = ("rebuild_finding_groups_for_selected",)
+
+    @admin.action(description="Rebuild finding groups for selected findings")
+    def rebuild_finding_groups_for_selected(self, request, queryset):
+        pairs = {(finding.account_id, finding.server_id) for finding in queryset.select_related("account", "server")}
+        rebuilt = 0
+        for account_id, server_id in pairs:
+            finding = queryset.filter(account_id=account_id, server_id=server_id).select_related("account", "server").first()
+            rebuilt += len(rebuild_finding_groups(account=finding.account, server=finding.server))
+        self.message_user(request, f"Rebuilt {rebuilt} finding group(s).")

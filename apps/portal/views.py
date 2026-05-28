@@ -9,6 +9,14 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.models import User
 from apps.applications.models import Application
+from apps.reports.models import FindingGroup, KnowledgeEntry, Report
+from apps.reports.services import (
+    create_baseline_report,
+    create_diagnostic_report,
+    create_findings_summary,
+    create_server_health_summary,
+    visible_knowledge_for_account,
+)
 from apps.servers.models import (
     AgentRegistrationToken,
     BaselineScan,
@@ -73,6 +81,20 @@ def scoped_findings(request):
     return Finding.objects.select_related("server", "application").filter(account=account_for(request))
 
 
+def scoped_reports(request):
+    return Report.objects.select_related("server", "application", "baseline_scan", "diagnostic_session").filter(
+        account=account_for(request)
+    )
+
+
+def scoped_finding_groups(request):
+    return FindingGroup.objects.select_related("server", "application", "latest_finding").filter(account=account_for(request))
+
+
+def can_generate_reports(user):
+    return user.role in {User.CustomerRole.OWNER, User.CustomerRole.OPERATOR}
+
+
 @portal_required
 def dashboard(request):
     account = account_for(request)
@@ -135,6 +157,8 @@ def server_detail(request, server_id):
         "services": DiscoveredService.objects.filter(account=account_for(request), server=server).order_by("name"),
         "log_sources": LogSource.objects.filter(account=account_for(request), server=server).order_by("path")[:20],
         "baseline_scans": server.baseline_scans.filter(account=account_for(request)).order_by("-created_at")[:10],
+        "latest_report": Report.objects.filter(account=account_for(request), server=server).order_by("-generated_at", "-created_at").first(),
+        "finding_groups": FindingGroup.objects.filter(account=account_for(request), server=server).order_by("-last_seen_at")[:10],
         "can_generate_registration": request.user.role == User.CustomerRole.OWNER,
     }
     return render(request, "portal/servers/detail.html", context)
@@ -202,8 +226,35 @@ def application_action(request, application_id, action):
 
 @portal_required
 def findings_list(request):
-    findings = scoped_findings(request).order_by("status", "-created_at")
-    return render(request, "portal/findings/list.html", {"findings": findings})
+    findings = scoped_findings(request)
+    severity = request.GET.get("severity") or ""
+    status = request.GET.get("status") or ""
+    server_id = request.GET.get("server") or ""
+    application_id = request.GET.get("application") or ""
+    if severity:
+        findings = findings.filter(severity=severity)
+    if status:
+        findings = findings.filter(status=status)
+    if server_id:
+        findings = findings.filter(server_id=server_id)
+    if application_id:
+        findings = findings.filter(application_id=application_id)
+    findings = findings.order_by("status", "-created_at")
+    return render(
+        request,
+        "portal/findings/list.html",
+        {
+            "findings": findings,
+            "servers": scoped_servers(request).order_by("name"),
+            "applications": scoped_applications(request).order_by("name"),
+            "selected_severity": severity,
+            "selected_status": status,
+            "selected_server": server_id,
+            "selected_application": application_id,
+            "severity_choices": ["critical", "high", "medium", "low", "info"],
+            "status_choices": Finding.Status.choices,
+        },
+    )
 
 
 @portal_required
@@ -291,6 +342,104 @@ def telegram_settings(request):
         "can_generate_group": request.user.role == User.CustomerRole.OWNER,
     }
     return render(request, "portal/telegram.html", context)
+
+
+@portal_required
+def reports_list(request):
+    reports = scoped_reports(request).order_by("-generated_at", "-created_at")
+    return render(
+        request,
+        "portal/reports/list.html",
+        {
+            "reports": reports,
+            "servers": scoped_servers(request).order_by("name"),
+            "baseline_scans": BaselineScan.objects.filter(account=account_for(request)).select_related("server").order_by("-created_at")[:20],
+            "can_generate": can_generate_reports(request.user),
+            "knowledge_entries": visible_knowledge_for_account(account_for(request))[:10],
+        },
+    )
+
+
+@portal_required
+def report_detail(request, report_id):
+    report = get_object_or_404(scoped_reports(request), id=report_id)
+    sections = report.sections.order_by("order", "created_at")
+    recommendations = report.recommendations.order_by("-created_at")
+    return render(
+        request,
+        "portal/reports/detail.html",
+        {"report": report, "sections": sections, "recommendations": recommendations},
+    )
+
+
+@require_POST
+@portal_required
+def report_generate(request):
+    if not can_generate_reports(request.user):
+        raise PermissionDenied
+    account = account_for(request)
+    report_type = request.POST.get("report_type")
+    server = None
+    server_id = request.POST.get("server_id") or None
+    if server_id:
+        server = get_object_or_404(scoped_servers(request), id=server_id)
+    if report_type == Report.ReportType.FINDINGS:
+        report = create_findings_summary(account, user=request.user, server=server)
+    elif report_type == Report.ReportType.SERVER_HEALTH:
+        if not server:
+            raise Http404
+        report = create_server_health_summary(server, user=request.user)
+    elif report_type == Report.ReportType.BASELINE:
+        scan = get_object_or_404(BaselineScan.objects.filter(account=account), id=request.POST.get("baseline_scan_id"))
+        report = create_baseline_report(scan, user=request.user)
+    else:
+        raise Http404
+    messages.success(request, "Report generated.")
+    return redirect("portal:report_detail", report_id=report.id)
+
+
+@portal_required
+def finding_groups_list(request):
+    groups = scoped_finding_groups(request)
+    severity = request.GET.get("severity") or ""
+    status = request.GET.get("status") or ""
+    server_id = request.GET.get("server") or ""
+    application_id = request.GET.get("application") or ""
+    if severity:
+        groups = groups.filter(severity=severity)
+    if status:
+        groups = groups.filter(status=status)
+    if server_id:
+        groups = groups.filter(server_id=server_id)
+    if application_id:
+        groups = groups.filter(application_id=application_id)
+    groups = groups.order_by("-last_seen_at", "-created_at")
+    return render(
+        request,
+        "portal/finding_groups/list.html",
+        {
+            "groups": groups,
+            "servers": scoped_servers(request).order_by("name"),
+            "applications": scoped_applications(request).order_by("name"),
+            "severity_choices": ["critical", "high", "medium", "low", "info"],
+            "status_choices": Finding.Status.choices,
+            "selected_severity": severity,
+            "selected_status": status,
+            "selected_server": server_id,
+            "selected_application": application_id,
+        },
+    )
+
+
+@portal_required
+def finding_group_detail(request, group_id):
+    group = get_object_or_404(scoped_finding_groups(request), id=group_id)
+    findings = scoped_findings(request).filter(
+        server=group.server,
+        application=group.application,
+        fingerprint=group.fingerprint,
+    ).order_by("-created_at")
+    return render(request, "portal/finding_groups/detail.html", {"group": group, "findings": findings})
 
 
 @portal_required

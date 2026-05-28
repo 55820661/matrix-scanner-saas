@@ -54,6 +54,17 @@
   </table>
 </section>
 
+{% if reports %}
+  <section class="card">
+    <h2>Reports</h2>
+    <ul>
+      {% for report in reports %}
+        <li><a href="{% url 'portal:report_detail' report.id %}">{{ report.title }}</a> - {{ report.generated_at|default:report.created_at }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}
+
 {% if session.final_report_redacted %}
   <section class="card">
     <h2>Final Report</h2>

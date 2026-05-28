@@ -21,6 +21,7 @@ from apps.diagnostics.services import (
     start_diagnostic_session,
     sync_completed_tool_runs,
 )
+from apps.reports.services import telegram_latest_report_summary
 from apps.servers.models import BaselineScan, Finding, Server
 
 from .models import TelegramChatLink, TelegramDiagnosticState, TelegramLinkToken, TelegramNotification
@@ -831,7 +832,7 @@ def short_report_text(session):
 def report_response(chat_link):
     state = active_diagnostic_state(chat_link)
     if not state or not state.diagnostic_session_id:
-        return telegram_response("No active diagnostic session for this chat.")
+        return telegram_response(telegram_latest_report_summary(chat_link))
     session = state.diagnostic_session
     sync_completed_tool_runs(session)
     session.refresh_from_db()

@@ -34,5 +34,9 @@ urlpatterns = [
         diagnostic_views.diagnostic_step_approve,
         name="diagnostic_step_approve",
     ),
-    path("reports/", views.placeholder, {"page": "reports"}, name="reports"),
+    path("reports/", views.reports_list, name="reports"),
+    path("reports/generate/", views.report_generate, name="report_generate"),
+    path("reports/<int:report_id>/", views.report_detail, name="report_detail"),
+    path("finding-groups/", views.finding_groups_list, name="finding_groups"),
+    path("finding-groups/<int:group_id>/", views.finding_group_detail, name="finding_group_detail"),
 ]

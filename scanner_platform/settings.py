@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "apps.audit",
     "apps.telegram_integration",
     "apps.diagnostics",
+    "apps.reports",
     "apps.portal",
 ]
 

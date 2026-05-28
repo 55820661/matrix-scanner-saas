@@ -1,4 +1,7 @@
 from django.contrib import admin
+from django.contrib import messages
+
+from apps.reports.services import create_diagnostic_report
 
 from .models import DiagnosticDecision, DiagnosticSession, DiagnosticStep
 
@@ -17,6 +20,15 @@ class DiagnosticSessionAdmin(admin.ModelAdmin):
     search_fields = ("account__name", "server__name", "application__name", "user_prompt_redacted", "final_report_redacted")
     readonly_fields = ("created_at", "updated_at", "started_at", "finished_at", "final_report_redacted")
     inlines = [DiagnosticStepInline]
+    actions = ("generate_diagnostic_reports",)
+
+    @admin.action(description="Generate redacted diagnostic reports")
+    def generate_diagnostic_reports(self, request, queryset):
+        generated = 0
+        for session in queryset:
+            create_diagnostic_report(session, user=request.user)
+            generated += 1
+        self.message_user(request, f"Generated {generated} diagnostic report(s).", level=messages.SUCCESS)
 
 
 @admin.register(DiagnosticStep)

@@ -1,0 +1,28 @@
+{% extends "portal/base.html" %}
+{% block title %}Finding Group Detail{% endblock %}
+{% block content %}
+<h1>{{ group.title }}</h1>
+<section class="card">
+  <p><strong>Server:</strong> {{ group.server.name }}</p>
+  <p><strong>Application:</strong> {{ group.application.name|default:"-" }}</p>
+  <p><strong>Severity:</strong> {{ group.severity }}</p>
+  <p><strong>Status:</strong> {{ group.status }}</p>
+  <p><strong>Occurrences:</strong> {{ group.occurrence_count }}</p>
+  <p><strong>Summary:</strong> {{ group.summary_redacted }}</p>
+</section>
+
+<h2>Grouped Findings</h2>
+<table>
+  <tr><th>Title</th><th>Severity</th><th>Status</th><th>Created</th></tr>
+  {% for finding in findings %}
+    <tr>
+      <td><a href="{% url 'portal:finding_detail' finding.id %}">{{ finding.title }}</a></td>
+      <td>{{ finding.severity }}</td>
+      <td>{{ finding.status }}</td>
+      <td>{{ finding.created_at }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4">No findings in this group.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

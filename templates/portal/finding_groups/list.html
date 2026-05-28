@@ -1,7 +1,7 @@
 {% extends "portal/base.html" %}
-{% block title %}Findings{% endblock %}
+{% block title %}Finding Groups{% endblock %}
 {% block content %}
-<h1>Findings</h1>
+<h1>Finding Groups</h1>
 <form method="get" class="card">
   <div class="grid">
     <label>Severity
@@ -40,18 +40,19 @@
   <button type="submit">Filter</button>
 </form>
 <table>
-  <tr><th>Title</th><th>Server</th><th>Application</th><th>Severity</th><th>Status</th><th>Created</th></tr>
-  {% for finding in findings %}
+  <tr><th>Title</th><th>Server</th><th>Application</th><th>Severity</th><th>Status</th><th>Occurrences</th><th>Last seen</th></tr>
+  {% for group in groups %}
     <tr>
-      <td><a href="{% url 'portal:finding_detail' finding.id %}">{{ finding.title }}</a></td>
-      <td>{{ finding.server.name }}</td>
-      <td>{{ finding.application.name|default:"-" }}</td>
-      <td>{{ finding.severity }}</td>
-      <td>{{ finding.status }}</td>
-      <td>{{ finding.created_at }}</td>
+      <td><a href="{% url 'portal:finding_group_detail' group.id %}">{{ group.title }}</a></td>
+      <td>{{ group.server.name }}</td>
+      <td>{{ group.application.name|default:"-" }}</td>
+      <td>{{ group.severity }}</td>
+      <td>{{ group.status }}</td>
+      <td>{{ group.occurrence_count }}</td>
+      <td>{{ group.last_seen_at|default:"-" }}</td>
     </tr>
   {% empty %}
-    <tr><td colspan="6">No findings.</td></tr>
+    <tr><td colspan="7">No finding groups.</td></tr>
   {% endfor %}
 </table>
 {% endblock %}

@@ -13,6 +13,30 @@
   <div class="card"><strong>Hostname</strong><br>{{ server.hostname|default:"-" }}</div>
   <div class="card"><strong>Last seen</strong><br>{{ server.last_seen_at|default:"-" }}</div>
 </div>
+<h2>Latest Report</h2>
+{% if latest_report %}
+  <div class="card">
+    <strong><a href="{% url 'portal:report_detail' latest_report.id %}">{{ latest_report.title }}</a></strong><br>
+    {{ latest_report.report_type }} - {{ latest_report.generated_at|default:latest_report.created_at }}<br>
+    <span class="muted">{{ latest_report.summary_redacted }}</span>
+  </div>
+{% else %}
+  <p class="muted">No reports generated for this server.</p>
+{% endif %}
+<h2>Finding Group Summary</h2>
+<table>
+  <tr><th>Title</th><th>Severity</th><th>Status</th><th>Occurrences</th></tr>
+  {% for group in finding_groups %}
+    <tr>
+      <td><a href="{% url 'portal:finding_group_detail' group.id %}">{{ group.title }}</a></td>
+      <td>{{ group.severity }}</td>
+      <td>{{ group.status }}</td>
+      <td>{{ group.occurrence_count }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4">No finding groups.</td></tr>
+  {% endfor %}
+</table>
 <h2>Baseline Scans</h2>
 <table>
   <tr><th>Status</th><th>Started</th><th>Finished</th><th>Summary counts</th></tr>
