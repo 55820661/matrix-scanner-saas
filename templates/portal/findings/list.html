@@ -1,0 +1,20 @@
+{% extends "portal/base.html" %}
+{% block title %}Findings{% endblock %}
+{% block content %}
+<h1>Findings</h1>
+<table>
+  <tr><th>Title</th><th>Server</th><th>Application</th><th>Severity</th><th>Status</th><th>Created</th></tr>
+  {% for finding in findings %}
+    <tr>
+      <td><a href="{% url 'portal:finding_detail' finding.id %}">{{ finding.title }}</a></td>
+      <td>{{ finding.server.name }}</td>
+      <td>{{ finding.application.name|default:"-" }}</td>
+      <td>{{ finding.severity }}</td>
+      <td>{{ finding.status }}</td>
+      <td>{{ finding.created_at }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6">No findings.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -314,3 +314,47 @@ Verification:
 Remaining:
 - No known Sprint 5 implementation issues.
 - Changes are not committed, per instruction.
+
+## 2026-05-28 - Sprint 6 Start
+
+Intent:
+- Implement Sprint 6 Admin and Portal MVP Screens within the locked scope.
+
+Scope:
+- Create/use `apps/portal`.
+- Add customer Portal templates, views, permissions, role checks, and tenant-scoped querysets.
+- Add Portal pages for dashboard, servers, add server, server detail, registration token generation, applications, findings, baseline visibility, subscription/usage, and placeholders.
+- Improve Django Admin usability where useful without changing product behavior outside Sprint 6.
+- Add focused tests for Portal access, tenant isolation, role behavior, token safety, action audits, and safe display.
+
+Out of scope:
+- Telegram integration, Diagnostic Agent, Celery, payments gateway, remediation/actions, Admin Tool Builder Agent, advanced reporting, PDF/email output, customer Remote Bootstrap, React/Vue, user invitation/role management, and customer baseline start.
+
+Pre-start:
+- Read the required agent, log, current task, decision, plan, interface, security, structure, checklist, and test plan documents.
+- Updated `docs/CURRENT-TASKS.md` before implementation.
+
+Result:
+- Added `apps.portal` with app config, permissions, forms, services, views, and URLs.
+- Added Portal templates for dashboard, servers, add server, server detail, registration token generation, applications, findings, baseline scans, subscription/usage, login/logout/access-denied, and placeholders.
+- Wired `/portal/` into the project and registered `apps.portal`.
+- Implemented Portal access rules requiring authentication, account linkage, active account, and owner/operator/viewer role.
+- Implemented tenant-scoped querysets and account ownership checks for every Portal object lookup.
+- Implemented owner-only server creation and owner-only registration token generation.
+- Ensured registration token raw value is shown once, stored hashed only, and audited without raw token metadata.
+- Implemented application approve/ignore/archive actions and finding acknowledge/ignore actions with AuditLog entries.
+- Added read-only baseline scan and subscription/usage views.
+- Kept baseline start and remote bootstrap Admin-only by not exposing Portal routes for those actions.
+- Added safe display rules for application metadata, finding evidence, baseline summaries, and server details without raw AgentJob or ToolRun output.
+- Added minimal Django Admin branding for Matrix Scanner Admin.
+- Added Sprint 6 tests covering login, staff blocking, tenant isolation, role permissions, token generation safety, action auditing, subscription read-only behavior, bootstrap route absence, and secret/output display safety.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 72 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No known Sprint 6 implementation issues.
+- Changes are not committed, per instruction.

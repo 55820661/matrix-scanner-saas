@@ -1,0 +1,28 @@
+{% extends "portal/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<div class="grid">
+  <div class="card"><strong>Servers</strong><br>{{ server_count }} total, {{ active_server_count }} active</div>
+  <div class="card"><strong>Applications</strong><br>{{ application_count }} total, {{ pending_application_count }} pending review</div>
+  <div class="card"><strong>Findings</strong><br>{{ open_finding_count }} open, {{ critical_finding_count }} critical</div>
+  <div class="card"><strong>Agents</strong><br>{{ offline_agent_count }} offline or not registered</div>
+</div>
+<div class="card">
+  <h2>Subscription</h2>
+  {% if subscription %}
+    <p>{{ subscription.plan.name }} - {{ subscription.status }}</p>
+  {% else %}
+    <p class="muted">No active subscription.</p>
+  {% endif %}
+</div>
+<h2>Latest Baseline Scans</h2>
+<table>
+  <tr><th>Server</th><th>Status</th><th>Started</th><th>Finished</th></tr>
+  {% for scan in latest_scans %}
+    <tr><td>{{ scan.server.name }}</td><td>{{ scan.status }}</td><td>{{ scan.started_at|default:"-" }}</td><td>{{ scan.finished_at|default:"-" }}</td></tr>
+  {% empty %}
+    <tr><td colspan="4">No baseline scans yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "portal/base.html" %}
+{% block title %}Subscription{% endblock %}
+{% block content %}
+<h1>Subscription & Usage</h1>
+{% if subscription %}
+  <div class="grid">
+    <div class="card"><strong>Plan</strong><br>{{ subscription.plan.name }}</div>
+    <div class="card"><strong>Status</strong><br>{{ subscription.status }}</div>
+    <div class="card"><strong>Current period</strong><br>{{ subscription.current_period_start|default:"-" }} - {{ subscription.current_period_end|default:"-" }}</div>
+    <div class="card"><strong>Retention</strong><br>{{ subscription.plan.retention_days }} days</div>
+  </div>
+  <table>
+    <tr><th>Metric</th><th>Used</th><th>Limit</th></tr>
+    <tr><td>Servers</td><td>{{ server_count }}</td><td>{{ plan.max_servers }}</td></tr>
+    <tr><td>Applications</td><td>{{ application_count }}</td><td>{{ plan.max_applications }}</td></tr>
+    <tr><td>Users</td><td>{{ user_count }}</td><td>{{ plan.max_users }}</td></tr>
+    <tr><td>Diagnostic sessions</td><td>{{ diagnostic_sessions_used }}</td><td>{{ plan.max_diagnostic_sessions_per_month }}</td></tr>
+  </table>
+{% else %}
+  <div class="card">No subscription is available for this account.</div>
+{% endif %}
+<p class="muted">Billing changes and payments are not available in Portal during Sprint 6.</p>
+{% endblock %}

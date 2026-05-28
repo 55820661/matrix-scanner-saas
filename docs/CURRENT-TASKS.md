@@ -446,3 +446,57 @@ Completion:
 - Sprint 5 implementation is complete within the locked scope.
 - No Diagnostic Agent, Telegram, Celery, remediation/actions, Portal UI, full Security Preflight, raw log ingestion, raw `.env` storage, free shell commands, customer-created tools, or Admin Tool Builder Agent were added.
 - Changes are not committed, per instruction.
+
+## Active Task - Sprint 6 Admin and Portal MVP Screens
+
+Task:
+- Implement Sprint 6 only: Admin and Portal MVP Screens.
+
+Scope:
+- Create/use `apps/portal`.
+- Add a minimal customer Portal using Django templates.
+- Keep Portal views/templates separate from Django Admin.
+- Add Portal-safe permissions, tenant-scoped views, templates, actions, and tests.
+- Improve Django Admin usability where needed.
+
+Out of scope:
+- Telegram integration.
+- Diagnostic Agent.
+- Celery.
+- Payments gateway.
+- Remediation/actions.
+- Admin Tool Builder Agent.
+- Advanced reporting, PDF export, or email alerts.
+- Customer Remote Bootstrap.
+- React/Vue.
+- User invitation/role management.
+- Customer baseline start.
+
+Immediate next steps:
+- Add `apps.portal` structure, URLs, permissions, forms, views, and templates.
+- Wire Portal URLs into the project.
+- Add focused tests for authentication, tenant isolation, role permissions, token generation, safe display, and out-of-scope route absence.
+- Run Django checks, migration dry-run, tests, and diff check.
+
+Progress:
+- Added `apps.portal` with Portal app config, permissions, forms, services, URLs, and views.
+- Wired `/portal/` into project URLs and added `apps.portal` to installed apps.
+- Added Portal login/logout/access-denied pages separate from Django Admin UI.
+- Added Portal pages for dashboard, servers, add server, server detail, registration token generation, applications, pending applications, application detail/actions, findings, finding detail/actions, baseline scans, subscription/usage, and placeholders.
+- Implemented tenant-scoped Portal querysets and role checks for owner/operator/viewer.
+- Implemented owner-only registration token generation with raw token shown once and AuditLog without raw token metadata.
+- Added read-only baseline/subscription visibility and placeholder pages for Telegram, diagnostics, and reports.
+- Added safe display for application metadata, findings, baseline summaries, and server details without raw AgentJob or ToolRun output.
+- Added minimal Admin branding for Matrix Scanner Admin.
+- Added focused Sprint 6 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 72 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 6 implementation is complete within the locked scope.
+- No Telegram integration, Diagnostic Agent, Celery, payments gateway, remediation/actions, Admin Tool Builder Agent, advanced reporting, PDF export, email alerts, customer Remote Bootstrap, React/Vue, user invitation/role management, or customer baseline start were added.
+- Changes are not committed, per instruction.

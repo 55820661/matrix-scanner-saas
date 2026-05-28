@@ -1,0 +1,35 @@
+{% extends "portal/base.html" %}
+{% block title %}Application Detail{% endblock %}
+{% block content %}
+<div class="actions">
+  <h1 style="margin-right:auto">{{ application.name }}</h1>
+  {% if can_act %}
+    <form method="post" action="{% url 'portal:application_action' application.id 'approve' %}">{% csrf_token %}<button type="submit">Approve</button></form>
+    <form method="post" action="{% url 'portal:application_action' application.id 'ignore' %}">{% csrf_token %}<button class="secondary" type="submit">Ignore</button></form>
+    <form method="post" action="{% url 'portal:application_action' application.id 'archive' %}">{% csrf_token %}<button class="danger" type="submit">Archive</button></form>
+  {% endif %}
+</div>
+<div class="grid">
+  <div class="card"><strong>Server</strong><br>{{ application.server.name }}</div>
+  <div class="card"><strong>Status</strong><br>{{ application.review_status }}</div>
+  <div class="card"><strong>Framework</strong><br>{{ application.framework|default:"-" }}</div>
+  <div class="card"><strong>Domain</strong><br>{{ application.domain|default:"-" }}</div>
+</div>
+<div class="card">
+  <h2>Path</h2>
+  <p>{{ application.path|default:"-" }}</p>
+</div>
+<div class="card">
+  <h2>Safe metadata</h2>
+  {% if safe_metadata.laravel_env %}
+    <table>
+      <tr><th>Key</th><th>Value</th></tr>
+      {% for key, value in safe_metadata.laravel_env.items %}
+        <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="muted">No safe metadata available.</p>
+  {% endif %}
+</div>
+{% endblock %}

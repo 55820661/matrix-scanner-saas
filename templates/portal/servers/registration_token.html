@@ -1,0 +1,33 @@
+{% extends "portal/base.html" %}
+{% block title %}Registration Token{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Registration Token for {{ server.name }}</h1>
+  <p>This creates a one-time registration token that expires after 60 minutes. The raw value is shown once.</p>
+  {% if raw_token %}
+    <h2>Raw token</h2>
+    <div class="token">{{ raw_token }}</div>
+    <p class="muted">Store it temporarily for manual runtime registration. It cannot be shown again.</p>
+    <h2>Manual registration guidance</h2>
+    <pre class="token">python -m scanner_runtime.prototype register --base-url {{ request.scheme }}://{{ request.get_host }} --registration-token {{ raw_token }}</pre>
+    <p class="muted">This is manual guidance only. Portal does not install services, run SSH, or perform remote bootstrap.</p>
+  {% endif %}
+  {% if server.status != "archived" %}
+    <form method="post">
+      {% csrf_token %}
+      <button type="submit">Generate token</button>
+    </form>
+  {% else %}
+    <p>Archived servers cannot receive registration tokens.</p>
+  {% endif %}
+</div>
+<h2>Recent token records</h2>
+<table>
+  <tr><th>Created</th><th>Expires</th><th>Used</th><th>Revoked</th></tr>
+  {% for item in recent_tokens %}
+    <tr><td>{{ item.created_at }}</td><td>{{ item.expires_at }}</td><td>{{ item.used_at|default:"-" }}</td><td>{{ item.revoked_at|default:"-" }}</td></tr>
+  {% empty %}
+    <tr><td colspan="4">No token records.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

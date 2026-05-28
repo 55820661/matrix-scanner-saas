@@ -1,0 +1,75 @@
+{% extends "portal/base.html" %}
+{% block title %}Server Detail{% endblock %}
+{% block content %}
+<div class="actions">
+  <h1 style="margin-right:auto">{{ server.name }}</h1>
+  {% if can_generate_registration %}
+    <a class="button" href="{% url 'portal:registration_token' server.id %}">Registration Token</a>
+  {% endif %}
+</div>
+<div class="grid">
+  <div class="card"><strong>Status</strong><br>{{ server.status }}</div>
+  <div class="card"><strong>Agent</strong><br>{{ server.agent_status|default:"not registered" }}</div>
+  <div class="card"><strong>Hostname</strong><br>{{ server.hostname|default:"-" }}</div>
+  <div class="card"><strong>Last seen</strong><br>{{ server.last_seen_at|default:"-" }}</div>
+</div>
+<h2>Baseline Scans</h2>
+<table>
+  <tr><th>Status</th><th>Started</th><th>Finished</th><th>Summary counts</th></tr>
+  {% for scan in baseline_scans %}
+    <tr>
+      <td>{{ scan.status }}</td>
+      <td>{{ scan.started_at|default:"-" }}</td>
+      <td>{{ scan.finished_at|default:"-" }}</td>
+      <td>apps {{ scan.summary.applications|default:0 }}, findings {{ scan.summary.findings|default:0 }}, services {{ scan.summary.services|default:0 }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4">No baseline scans.</td></tr>
+  {% endfor %}
+</table>
+<h2>Applications</h2>
+<table>
+  <tr><th>Name</th><th>Domain</th><th>Framework</th><th>Status</th></tr>
+  {% for app in applications %}
+    <tr><td><a href="{% url 'portal:application_detail' app.id %}">{{ app.name }}</a></td><td>{{ app.domain|default:"-" }}</td><td>{{ app.framework|default:"-" }}</td><td>{{ app.review_status }}</td></tr>
+  {% empty %}
+    <tr><td colspan="4">No applications.</td></tr>
+  {% endfor %}
+</table>
+<h2>Discovered Domains</h2>
+<table>
+  <tr><th>Domain</th><th>Document root</th><th>Owner</th></tr>
+  {% for domain in domains %}
+    <tr><td>{{ domain.domain }}</td><td>{{ domain.document_root }}</td><td>{{ domain.owner|default:"-" }}</td></tr>
+  {% empty %}
+    <tr><td colspan="3">No domains.</td></tr>
+  {% endfor %}
+</table>
+<h2>Services</h2>
+<table>
+  <tr><th>Name</th><th>Status</th><th>Version</th></tr>
+  {% for service in services %}
+    <tr><td>{{ service.name }}</td><td>{{ service.status|default:"-" }}</td><td>{{ service.version|default:"-" }}</td></tr>
+  {% empty %}
+    <tr><td colspan="3">No services.</td></tr>
+  {% endfor %}
+</table>
+<h2>Log Sources</h2>
+<table>
+  <tr><th>Path</th><th>Type</th><th>Exists</th><th>Size</th></tr>
+  {% for log_source in log_sources %}
+    <tr><td>{{ log_source.path }}</td><td>{{ log_source.source_type|default:"-" }}</td><td>{{ log_source.exists }}</td><td>{{ log_source.size_bytes|default:"-" }}</td></tr>
+  {% empty %}
+    <tr><td colspan="4">No log sources.</td></tr>
+  {% endfor %}
+</table>
+<h2>Findings</h2>
+<table>
+  <tr><th>Title</th><th>Severity</th><th>Status</th></tr>
+  {% for finding in findings %}
+    <tr><td><a href="{% url 'portal:finding_detail' finding.id %}">{{ finding.title }}</a></td><td>{{ finding.severity }}</td><td>{{ finding.status }}</td></tr>
+  {% empty %}
+    <tr><td colspan="3">No findings.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "portal/base.html" %}
+{% block title %}Baseline Scans{% endblock %}
+{% block content %}
+<h1>Baseline Scans</h1>
+<p class="muted">Baseline start remains Admin-only in this sprint. This page is read-only.</p>
+<table>
+  <tr><th>Server</th><th>Status</th><th>Started</th><th>Finished</th><th>Summary counts</th></tr>
+  {% for scan, summary in safe_scans %}
+    <tr>
+      <td>{{ scan.server.name }}</td>
+      <td>{{ scan.status }}</td>
+      <td>{{ scan.started_at|default:"-" }}</td>
+      <td>{{ scan.finished_at|default:"-" }}</td>
+      <td>apps {{ summary.applications }}, findings {{ summary.findings }}, services {{ summary.services }}, domains {{ summary.domains }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5">No baseline scans.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

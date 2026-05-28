@@ -1,0 +1,29 @@
+from django.urls import path
+
+from . import views
+
+
+app_name = "portal"
+
+urlpatterns = [
+    path("login/", views.PortalLoginView.as_view(), name="login"),
+    path("logout/", views.PortalLogoutView.as_view(), name="logout"),
+    path("access-denied/", views.access_denied, name="access_denied"),
+    path("", views.dashboard, name="dashboard"),
+    path("servers/", views.servers_list, name="servers"),
+    path("servers/add/", views.server_add, name="server_add"),
+    path("servers/<int:server_id>/", views.server_detail, name="server_detail"),
+    path("servers/<int:server_id>/registration-token/", views.registration_token, name="registration_token"),
+    path("applications/", views.applications_list, name="applications"),
+    path("applications/pending/", views.pending_applications, name="pending_applications"),
+    path("applications/<int:application_id>/", views.application_detail, name="application_detail"),
+    path("applications/<int:application_id>/<str:action>/", views.application_action, name="application_action"),
+    path("findings/", views.findings_list, name="findings"),
+    path("findings/<int:finding_id>/", views.finding_detail, name="finding_detail"),
+    path("findings/<int:finding_id>/<str:action>/", views.finding_action, name="finding_action"),
+    path("baseline-scans/", views.baseline_scans, name="baseline_scans"),
+    path("subscription/", views.subscription_usage, name="subscription"),
+    path("telegram/", views.placeholder, {"page": "telegram"}, name="telegram"),
+    path("diagnostics/", views.placeholder, {"page": "diagnostics"}, name="diagnostics"),
+    path("reports/", views.placeholder, {"page": "reports"}, name="reports"),
+]

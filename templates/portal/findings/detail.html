@@ -1,0 +1,27 @@
+{% extends "portal/base.html" %}
+{% block title %}Finding Detail{% endblock %}
+{% block content %}
+<div class="actions">
+  <h1 style="margin-right:auto">{{ finding.title }}</h1>
+  {% if can_acknowledge %}
+    <form method="post" action="{% url 'portal:finding_action' finding.id 'acknowledge' %}">{% csrf_token %}<button type="submit">Acknowledge</button></form>
+  {% endif %}
+  {% if can_ignore %}
+    <form method="post" action="{% url 'portal:finding_action' finding.id 'ignore' %}">{% csrf_token %}<button class="secondary" type="submit">Ignore</button></form>
+  {% endif %}
+</div>
+<div class="grid">
+  <div class="card"><strong>Server</strong><br>{{ finding.server.name }}</div>
+  <div class="card"><strong>Application</strong><br>{{ finding.application.name|default:"-" }}</div>
+  <div class="card"><strong>Severity</strong><br>{{ finding.severity }}</div>
+  <div class="card"><strong>Status</strong><br>{{ finding.status }}</div>
+</div>
+<div class="card">
+  <h2>Description</h2>
+  <p>{{ finding.description|default:"-" }}</p>
+</div>
+<div class="card">
+  <h2>Evidence summary</h2>
+  <p>{{ evidence_summary|default:"-" }}</p>
+</div>
+{% endblock %}

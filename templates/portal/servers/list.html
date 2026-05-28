@@ -1,0 +1,25 @@
+{% extends "portal/base.html" %}
+{% block title %}Servers{% endblock %}
+{% block content %}
+<div class="actions">
+  <h1 style="margin-right:auto">My Servers</h1>
+  {% if request.user.role == "owner" %}
+    <a class="button" href="{% url 'portal:server_add' %}">Add Server</a>
+  {% endif %}
+</div>
+<table>
+  <tr><th>Name</th><th>Status</th><th>Agent</th><th>Last seen</th><th>Applications</th><th>Findings</th></tr>
+  {% for server in servers %}
+    <tr>
+      <td><a href="{% url 'portal:server_detail' server.id %}">{{ server.name }}</a></td>
+      <td>{{ server.status }}</td>
+      <td>{{ server.agent_status|default:"not registered" }}</td>
+      <td>{{ server.last_seen_at|default:"-" }}</td>
+      <td>{{ server.application_count }}</td>
+      <td>{{ server.finding_count }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6">No servers yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

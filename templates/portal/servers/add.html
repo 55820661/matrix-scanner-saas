@@ -1,0 +1,13 @@
+{% extends "portal/base.html" %}
+{% block title %}Add Server{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Add Server</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Create server</button>
+  </form>
+  <p class="muted">Registration tokens are generated separately from the server detail page.</p>
+</div>
+{% endblock %}
