@@ -88,7 +88,16 @@ def create_decision(*, session, step=None, decision_type, output=None, reasoning
     )
 
 
-def start_diagnostic_session(*, user, server, application=None, problem_type=DiagnosticSession.ProblemType.CUSTOM, user_prompt=""):
+def start_diagnostic_session(
+    *,
+    user,
+    server,
+    application=None,
+    problem_type=DiagnosticSession.ProblemType.CUSTOM,
+    user_prompt="",
+    source=DiagnosticSession.Source.PORTAL,
+    source_chat_link=None,
+):
     if not user_can_start_or_approve(user):
         raise PermissionDenied("Only owners and operators can start diagnostic sessions.")
     if server.account_id != user.account_id:
@@ -105,6 +114,8 @@ def start_diagnostic_session(*, user, server, application=None, problem_type=Dia
             requested_by=user,
             status=DiagnosticSession.Status.RUNNING,
             problem_type=problem_type,
+            source=source,
+            source_chat_link=source_chat_link,
             user_prompt_redacted=redact_secrets(user_prompt)[:4000],
             summary_redacted=redact_secrets(f"Diagnostic session for {problem_type} on {server.name}")[:1000],
             max_tool_runs=10,

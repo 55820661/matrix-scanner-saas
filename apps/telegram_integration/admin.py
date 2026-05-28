@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import TelegramChatLink, TelegramLinkToken, TelegramNotification
+from .models import TelegramChatLink, TelegramDiagnosticState, TelegramLinkToken, TelegramNotification
 
 
 @admin.register(TelegramChatLink)
@@ -25,3 +25,11 @@ class TelegramNotificationAdmin(admin.ModelAdmin):
     list_filter = ("notification_type", "status", "account")
     search_fields = ("account__name", "server__name", "dedupe_key", "error_message")
     readonly_fields = ("payload_redacted", "created_at", "updated_at", "sent_at")
+
+
+@admin.register(TelegramDiagnosticState)
+class TelegramDiagnosticStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "chat_link", "account", "user", "state", "selected_server", "diagnostic_session", "expires_at")
+    list_filter = ("state", "account", "expires_at")
+    search_fields = ("account__name", "user__username", "selected_server__name", "diagnostic_session__id")
+    readonly_fields = ("problem_description_redacted", "created_at", "updated_at", "last_message_at")

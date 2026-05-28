@@ -335,6 +335,31 @@ Pre-start:
 - Updated `docs/CURRENT-TASKS.md` before implementation.
 
 Result:
+- Added `TelegramDiagnosticState` to manage private-chat Telegram guided diagnostic flow state separately from `TelegramChatLink`.
+- Added `DiagnosticSession.source` and nullable `source_chat_link` for Portal vs Telegram attribution.
+- Added Telegram guided diagnostic commands: `/diagnose`, `/cancel`, `/approve`, `/session`, and `/report`.
+- Added `callback_query` handling to the Telegram webhook and inline keyboard response payloads with constrained callback keys.
+- Implemented private-chat-only server selection, application selection, problem type selection, bounded/redacted description capture, confirmation, approval, status, report, and cancellation flow.
+- Enforced owner/operator-only diagnostic actions and blocked viewer and group/supergroup diagnostics.
+- Enforced one active Telegram diagnostic state per private chat and 30-minute state expiry.
+- Connected Telegram session creation and approval to existing diagnostics services and ToolPolicy-backed ToolRun/AgentJob creation.
+- Added replay controls so repeated approvals are rejected once a step is no longer awaiting approval.
+- Added concise redacted Telegram final report output and avoided raw ToolRun, AgentJob, logs, `.env`, stdout/stderr, credentials, tokens, and passwords.
+- Added AuditLog entries for important Telegram diagnostic interactions without raw prompts, raw callback payloads, raw Telegram updates, or secrets.
+- Added Sprint 9 tests covering unlinked/group/viewer denial, owner/operator flow, account-scoped server/application selection, cross-account callback rejection, one active state, cancellation, expiry, approval, replay prevention, webhook callbacks, Sprint 7 command compatibility, group summary behavior, and final report redaction.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint9_telegram_diagnostics --noinput` passed: 16 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 118 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No known Sprint 9 implementation issues.
+- Changes are not committed, per instruction.
+
+Result:
 - Added `apps.diagnostics` with DiagnosticSession, DiagnosticStep, and DiagnosticDecision models plus Admin registrations and initial migration.
 - Added deterministic diagnostic services that plan one approved read-only baseline tool step at a time.
 - Added user approval gating before any diagnostic ToolRun is created.
@@ -355,6 +380,26 @@ Verification:
 Remaining:
 - No known Sprint 8 implementation issues.
 - Changes are not committed, per instruction.
+
+## 2026-05-28 - Sprint 9 Start
+
+Intent:
+- Implement Sprint 9 Telegram Guided Diagnostics within the locked scope.
+
+Scope:
+- Add private-chat-only Telegram diagnostic state and guided command/callback flow.
+- Add Telegram diagnostic commands: `/diagnose`, `/cancel`, `/approve`, `/session`, and `/report`.
+- Add callback_query handling and inline keyboard responses.
+- Connect Telegram diagnostics to existing diagnostics services and ToolPolicy-backed approval workflow.
+- Add minimal DiagnosticSession source fields for Portal vs Telegram attribution.
+- Keep Telegram output concise and redacted.
+
+Out of scope:
+- Group diagnostics, remediation/actions, write tools, free shell commands, direct AgentJob creation from Telegram, ToolPolicy bypass, live LLM execution, and raw outputs/secrets in Telegram.
+
+Pre-start:
+- Read the required agent, log, current task, decision, plan, interface, security, structure, checklist, and test plan documents.
+- Updated `docs/CURRENT-TASKS.md` before implementation.
 
 Result:
 - Added `apps.telegram_integration` with `TelegramChatLink`, `TelegramLinkToken`, and `TelegramNotification` models, Admin registrations, and initial migration.

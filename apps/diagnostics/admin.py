@@ -12,8 +12,8 @@ class DiagnosticStepInline(admin.TabularInline):
 
 @admin.register(DiagnosticSession)
 class DiagnosticSessionAdmin(admin.ModelAdmin):
-    list_display = ("id", "account", "server", "application", "problem_type", "status", "tool_run_count", "created_at")
-    list_filter = ("status", "problem_type", "account", "created_at")
+    list_display = ("id", "account", "server", "application", "problem_type", "source", "status", "tool_run_count", "created_at")
+    list_filter = ("status", "problem_type", "source", "account", "created_at")
     search_fields = ("account__name", "server__name", "application__name", "user_prompt_redacted", "final_report_redacted")
     readonly_fields = ("created_at", "updated_at", "started_at", "finished_at", "final_report_redacted")
     inlines = [DiagnosticStepInline]

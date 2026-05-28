@@ -2,9 +2,11 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.accounts.models import Account
+from apps.applications.models import Application
 from apps.core.models import TimeStampedModel
 from apps.core.tokens import generate_raw_token, hash_token
 from apps.servers.models import Finding, Server
@@ -167,3 +169,93 @@ class TelegramNotification(TimeStampedModel):
 
     def __str__(self):
         return f"{self.notification_type} for {self.chat_link}"
+
+
+class TelegramDiagnosticState(TimeStampedModel):
+    class State(models.TextChoices):
+        SELECTING_SERVER = "selecting_server", "Selecting server"
+        SELECTING_APPLICATION = "selecting_application", "Selecting application"
+        SELECTING_PROBLEM_TYPE = "selecting_problem_type", "Selecting problem type"
+        AWAITING_DESCRIPTION = "awaiting_description", "Awaiting description"
+        AWAITING_CONFIRMATION = "awaiting_confirmation", "Awaiting confirmation"
+        ACTIVE = "active", "Active"
+        CANCELLED = "cancelled", "Cancelled"
+        EXPIRED = "expired", "Expired"
+        COMPLETED = "completed", "Completed"
+
+    ACTIVE_STATES = {
+        State.SELECTING_SERVER,
+        State.SELECTING_APPLICATION,
+        State.SELECTING_PROBLEM_TYPE,
+        State.AWAITING_DESCRIPTION,
+        State.AWAITING_CONFIRMATION,
+        State.ACTIVE,
+    }
+
+    chat_link = models.ForeignKey(TelegramChatLink, on_delete=models.PROTECT, related_name="diagnostic_states")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="telegram_diagnostic_states")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="telegram_diagnostic_states",
+    )
+    diagnostic_session = models.ForeignKey(
+        "diagnostics.DiagnosticSession",
+        on_delete=models.SET_NULL,
+        related_name="telegram_states",
+        null=True,
+        blank=True,
+    )
+    state = models.CharField(max_length=40, choices=State.choices, default=State.SELECTING_SERVER)
+    selected_server = models.ForeignKey(
+        Server,
+        on_delete=models.PROTECT,
+        related_name="telegram_diagnostic_states",
+        null=True,
+        blank=True,
+    )
+    selected_application = models.ForeignKey(
+        Application,
+        on_delete=models.PROTECT,
+        related_name="telegram_diagnostic_states",
+        null=True,
+        blank=True,
+    )
+    problem_type = models.CharField(max_length=40, blank=True)
+    problem_description_redacted = models.TextField(blank=True)
+    expires_at = models.DateTimeField()
+    last_message_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["chat_link", "state", "expires_at"]),
+            models.Index(fields=["account", "state", "created_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["chat_link"],
+                condition=Q(
+                    state__in=[
+                        "selecting_server",
+                        "selecting_application",
+                        "selecting_problem_type",
+                        "awaiting_description",
+                        "awaiting_confirmation",
+                        "active",
+                    ]
+                ),
+                name="unique_active_telegram_diagnostic_state_per_chat",
+            )
+        ]
+
+    def __str__(self):
+        return f"Telegram diagnostic state {self.state} for {self.chat_link}"
+
+    @property
+    def is_expired(self):
+        return self.expires_at <= timezone.now()
+
+    @property
+    def is_active_state(self):
+        return self.state in self.ACTIVE_STATES and not self.is_expired

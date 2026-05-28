@@ -616,3 +616,59 @@ Completion:
 - Sprint 8 implementation is complete within the locked scope.
 - No Telegram Guided Diagnostics, Telegram diagnostic commands/messages/approvals, live LLM execution, remediation/actions, write tools, shell/free commands, Celery, email alerts, PDF export, advanced reporting, IncidentReport, customer-created tools, or Admin Tool Builder Agent were added.
 - Changes are not committed, per instruction.
+
+## Active Task - Sprint 9 Telegram Guided Diagnostics
+
+Task:
+- Implement Sprint 9 only: Telegram Guided Diagnostics.
+
+Scope:
+- Add private-chat-only Telegram diagnostic flow.
+- Add `TelegramDiagnosticState`.
+- Add Telegram diagnostic commands: `/diagnose`, `/cancel`, `/approve`, `/session`, `/report`.
+- Add `callback_query` handling and inline keyboard responses with text fallback.
+- Connect Telegram flow to existing diagnostics services.
+- Keep ToolPolicy / ToolRun / AgentJob flow unchanged and only reached through diagnostics services.
+- Keep all Telegram diagnostic output concise and redacted.
+
+Out of scope:
+- Group diagnostics.
+- Remediation/actions.
+- Write tools.
+- Free shell commands.
+- Direct AgentJob creation from Telegram.
+- ToolPolicy bypass.
+- Live LLM execution.
+- Raw outputs or secrets in Telegram.
+
+Immediate next steps:
+- Inspect current Telegram and diagnostics services/models/webhook handling.
+- Add diagnostic source fields, Telegram diagnostic state model, services, callback support, and admin registration.
+- Add focused tests for private chat flow, role checks, tenant scoping, callbacks, approval replay protection, cancellation, redaction, and out-of-scope side effects.
+- Run Django checks, migration dry-run, full test suite, and diff check.
+
+Progress:
+- Added `TelegramDiagnosticState` for private-chat diagnostic flow state without storing active state on `TelegramChatLink`.
+- Added `DiagnosticSession.source` and nullable `source_chat_link` to distinguish Portal and Telegram sessions.
+- Added Telegram diagnostic commands: `/diagnose`, `/cancel`, `/approve`, `/session`, and `/report`.
+- Kept Sprint 7 read-only commands unchanged.
+- Added `callback_query` handling and inline keyboard response payloads with constrained callback keys.
+- Implemented private-chat-only diagnostic server, application, problem type, description, confirmation, approval, status, report, and cancellation flow.
+- Enforced owner/operator-only Telegram diagnostics and blocked viewer/group diagnostics.
+- Enforced one active Telegram diagnostic state per private chat with 30-minute expiry.
+- Routed session creation and approval through existing diagnostics services; Telegram never creates AgentJob directly and never bypasses ToolPolicy.
+- Added concise redacted Telegram diagnostic report formatting.
+- Added AuditLog events for important Telegram diagnostic interactions without raw prompts, raw callbacks, raw updates, or secrets.
+- Added focused Sprint 9 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint9_telegram_diagnostics --noinput` passed: 16 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 118 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 9 implementation is complete within the locked scope.
+- No group diagnostics, remediation/actions, write tools, free shell commands, direct AgentJob creation from Telegram, ToolPolicy bypass, live LLM execution, or raw outputs/secrets in Telegram were added.
+- Changes are not committed, per instruction.

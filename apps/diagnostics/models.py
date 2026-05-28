@@ -24,6 +24,10 @@ class DiagnosticSession(TimeStampedModel):
         LARAVEL_PRODUCTION_AUDIT = "laravel_production_audit", "Laravel production audit"
         CUSTOM = "custom", "Custom"
 
+    class Source(models.TextChoices):
+        PORTAL = "portal", "Portal"
+        TELEGRAM = "telegram", "Telegram"
+
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="diagnostic_sessions")
     server = models.ForeignKey(Server, on_delete=models.PROTECT, related_name="diagnostic_sessions")
     application = models.ForeignKey(
@@ -42,6 +46,14 @@ class DiagnosticSession(TimeStampedModel):
     )
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.DRAFT)
     problem_type = models.CharField(max_length=40, choices=ProblemType.choices, default=ProblemType.CUSTOM)
+    source = models.CharField(max_length=20, choices=Source.choices, default=Source.PORTAL)
+    source_chat_link = models.ForeignKey(
+        "telegram_integration.TelegramChatLink",
+        on_delete=models.SET_NULL,
+        related_name="diagnostic_sessions",
+        null=True,
+        blank=True,
+    )
     user_prompt_redacted = models.TextField(blank=True)
     summary_redacted = models.TextField(blank=True)
     final_report_redacted = models.TextField(blank=True)

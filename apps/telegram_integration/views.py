@@ -6,7 +6,7 @@ from django.http import HttpResponseForbidden, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from .services import handle_update
+from .services import handle_update_response
 
 
 def webhook_secret_valid(request, path_secret):
@@ -26,6 +26,8 @@ def telegram_webhook(request, secret):
         update = json.loads(request.body.decode("utf-8") or "{}")
     except json.JSONDecodeError:
         return JsonResponse({"ok": False, "error": "invalid_json"}, status=400)
-    response_text = handle_update(update)
-    return JsonResponse({"ok": True, "response": response_text})
-
+    response = handle_update_response(update)
+    payload = {"ok": True, "response": response["text"]}
+    if response.get("reply_markup"):
+        payload["reply_markup"] = response["reply_markup"]
+    return JsonResponse(payload)
