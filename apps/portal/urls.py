@@ -23,7 +23,7 @@ urlpatterns = [
     path("findings/<int:finding_id>/<str:action>/", views.finding_action, name="finding_action"),
     path("baseline-scans/", views.baseline_scans, name="baseline_scans"),
     path("subscription/", views.subscription_usage, name="subscription"),
-    path("telegram/", views.placeholder, {"page": "telegram"}, name="telegram"),
+    path("telegram/", views.telegram_settings, name="telegram"),
     path("diagnostics/", views.placeholder, {"page": "diagnostics"}, name="diagnostics"),
     path("reports/", views.placeholder, {"page": "reports"}, name="reports"),
 ]

@@ -1,0 +1,96 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Telegram Settings{% endblock %}
+
+{% block content %}
+<h1>Telegram Settings</h1>
+
+{% if raw_code %}
+  <section class="card">
+    <h2>One-time link code</h2>
+    <p class="muted">This raw code is shown once. Use it in Telegram with <strong>/link &lt;code&gt;</strong>.</p>
+    <div class="token">{{ raw_code }}</div>
+    <p class="muted">Expires at {{ token.expires_at }}.</p>
+  </section>
+{% endif %}
+
+<section class="card">
+  <h2>Create link code</h2>
+  {% if can_generate_private or can_generate_group %}
+    <form method="post">
+      {% csrf_token %}
+      <label for="chat_scope">Chat type</label>
+      <select id="chat_scope" name="chat_scope">
+        {% if can_generate_private %}<option value="private">Private chat</option>{% endif %}
+        {% if can_generate_group %}<option value="group">Group or supergroup</option>{% endif %}
+      </select>
+      <label for="server_id">Optional server scope</label>
+      <select id="server_id" name="server_id">
+        <option value="">All servers</option>
+        {% for server in servers %}
+          <option value="{{ server.id }}">{{ server.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit">Generate code</button>
+    </form>
+  {% else %}
+    <p class="muted">Your role can view Telegram links but cannot create link codes.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Linked chats</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Chat</th>
+        <th>Type</th>
+        <th>Server</th>
+        <th>Status</th>
+        <th>Linked</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for link in links %}
+        <tr>
+          <td>{{ link.title|default:link.telegram_chat_id }}</td>
+          <td>{{ link.chat_type }}</td>
+          <td>{{ link.server.name|default:"All servers" }}</td>
+          <td>{{ link.status }}</td>
+          <td>{{ link.linked_at|default:"-" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">No Telegram chats are linked.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Recent link codes</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Scope</th>
+        <th>Server</th>
+        <th>Expires</th>
+        <th>Used</th>
+        <th>Revoked</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for link_token in recent_tokens %}
+        <tr>
+          <td>{{ link_token.chat_scope }}</td>
+          <td>{{ link_token.server.name|default:"All servers" }}</td>
+          <td>{{ link_token.expires_at }}</td>
+          <td>{{ link_token.used_at|default:"-" }}</td>
+          <td>{{ link_token.revoked_at|default:"-" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">No recent link codes.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

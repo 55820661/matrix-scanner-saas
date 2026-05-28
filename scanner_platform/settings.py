@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "apps.tools",
     "apps.applications",
     "apps.audit",
+    "apps.telegram_integration",
     "apps.portal",
 ]
 
@@ -129,3 +130,5 @@ LOGIN_URL = "admin:login"
 BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY = os.environ.get("BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY", "")
 BOOTSTRAP_HEARTBEAT_TIMEOUT_SECONDS = int(os.environ.get("BOOTSTRAP_HEARTBEAT_TIMEOUT_SECONDS", "60"))
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "http://localhost:8000")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")

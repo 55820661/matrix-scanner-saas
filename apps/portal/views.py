@@ -19,6 +19,8 @@ from apps.servers.models import (
     Server,
 )
 from apps.subscriptions.models import Subscription
+from apps.telegram_integration.models import TelegramChatLink, TelegramLinkToken
+from apps.telegram_integration.services import create_link_token_for_portal
 
 from .forms import ServerCreateForm
 from .permissions import (
@@ -259,9 +261,41 @@ def subscription_usage(request):
 
 
 @portal_required
+def telegram_settings(request):
+    raw_code = None
+    token = None
+    error = ""
+    account = account_for(request)
+    if request.method == "POST":
+        chat_scope = request.POST.get("chat_scope", TelegramLinkToken.ChatScope.PRIVATE)
+        server_id = request.POST.get("server_id") or None
+        server = get_object_or_404(scoped_servers(request), id=server_id) if server_id else None
+        try:
+            token, raw_code = create_link_token_for_portal(user=request.user, chat_scope=chat_scope, server=server)
+            messages.success(request, "Telegram link code generated. It is shown once on this page.")
+        except PermissionDenied:
+            raise
+        except ValueError as exc:
+            error = str(exc)
+            messages.error(request, error)
+    links = TelegramChatLink.objects.filter(account=account).select_related("server", "user").order_by("-created_at")
+    recent_tokens = TelegramLinkToken.objects.filter(account=account).select_related("server", "created_by").order_by("-created_at")[:5]
+    context = {
+        "links": links,
+        "recent_tokens": recent_tokens,
+        "servers": scoped_servers(request).order_by("name"),
+        "raw_code": raw_code,
+        "token": token,
+        "error": error,
+        "can_generate_private": request.user.role in {User.CustomerRole.OWNER, User.CustomerRole.OPERATOR},
+        "can_generate_group": request.user.role == User.CustomerRole.OWNER,
+    }
+    return render(request, "portal/telegram.html", context)
+
+
+@portal_required
 def placeholder(request, page):
     titles = {
-        "telegram": "Telegram Settings",
         "diagnostics": "Diagnostic Sessions",
         "reports": "Reports",
     }

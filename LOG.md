@@ -335,6 +335,30 @@ Pre-start:
 - Updated `docs/CURRENT-TASKS.md` before implementation.
 
 Result:
+- Added `apps.telegram_integration` with `TelegramChatLink`, `TelegramLinkToken`, and `TelegramNotification` models, Admin registrations, and initial migration.
+- Added Telegram webhook foundation at `/telegram/webhook/<secret>/` with path/header secret validation.
+- Added global Telegram settings loaded from environment: `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`; no bot token is stored in the database.
+- Implemented hashed, one-time Telegram link tokens with TTL, used/revoked checks, private/group scope validation, and raw code shown once through Portal.
+- Implemented read-only allowlisted Telegram commands: `/start`, `/link`, `/unlink`, `/help`, `/menu`, `/servers`, `/apps`, `/findings`, `/status`, and `/baseline`.
+- Implemented account-scoped Telegram command summaries that avoid raw ToolRun output, AgentJob results, logs, `.env`, bootstrap credentials, SSH credentials, and secrets.
+- Added safe notification records for Sprint 7 notification types with redacted payloads, dedupe suppression, and an explicit Bot API delivery helper.
+- Added notification event hooks for baseline completion, high/critical findings, agent offline/recovered, and bootstrap completed/failed.
+- Added Portal Telegram settings page and route, with owner/operator private link-code generation and owner-only group link-code generation.
+- Added AuditLog entries for Telegram link-code generation and chat link/unlink events without raw codes or sensitive metadata.
+- Added Sprint 7 tests covering token hashing/use/expiry/revocation, linking, Portal permissions, webhook secret enforcement, tenant scoping, read-only command behavior, notification redaction/suppression, event notification creation, and no DiagnosticSession/ToolRun/AgentJob creation from Telegram commands.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint7_telegram --noinput` passed: 13 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 85 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No known Sprint 7 implementation issues.
+- Changes are not committed, per instruction.
+
+Result:
 - Added `apps.portal` with app config, permissions, forms, services, views, and URLs.
 - Added Portal templates for dashboard, servers, add server, server detail, registration token generation, applications, findings, baseline scans, subscription/usage, login/logout/access-denied, and placeholders.
 - Wired `/portal/` into the project and registered `apps.portal`.
@@ -358,3 +382,24 @@ Verification:
 Remaining:
 - No known Sprint 6 implementation issues.
 - Changes are not committed, per instruction.
+
+## 2026-05-28 - Sprint 7 Start
+
+Intent:
+- Implement Sprint 7 Telegram Integration MVP within the locked scope.
+
+Scope:
+- Create/use `apps/telegram_integration`.
+- Add Telegram webhook foundation with secret validation.
+- Add short-lived one-time Telegram link tokens stored hashed only.
+- Add private and group chat linking rules.
+- Add read-only Telegram command handling and safe summaries.
+- Add safe notification records with dedupe/suppression.
+- Add owner-only Portal surface for Telegram link token generation.
+
+Out of scope:
+- Diagnostic Agent, Telegram Guided Diagnostics, DiagnosticSession creation from Telegram, ToolRun or AgentJob creation from Telegram, remediation/actions, write tools, payments, Celery, polling infrastructure, per-account bot tokens, customer-created tools, and Admin Tool Builder Agent.
+
+Pre-start:
+- Read the required agent, log, current task, decision, plan, interface, security, structure, checklist, and test plan documents.
+- Updated `docs/CURRENT-TASKS.md` before implementation.
