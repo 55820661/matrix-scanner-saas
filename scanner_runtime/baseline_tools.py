@@ -2,6 +2,10 @@ import os
 import platform
 from pathlib import Path, PurePosixPath
 
+from apps.core.redaction import redact_secrets
+
+from .safe_exec import SafeExecError, run_fixed_command
+
 
 BASELINE_TOOL_KEYS = {
     "services_status",
@@ -12,6 +16,9 @@ BASELINE_TOOL_KEYS = {
     "log_sources_discovery",
     "webroot_risk_checker",
 }
+SYSTEMD_SERVICES_DISCOVERY_TOOL_KEY = "systemd_services_discovery"
+SYSTEMD_LIST_UNITS_COMMAND = ["systemctl", "list-units", "--type=service", "--all", "--no-pager", "--plain", "--no-legend"]
+SYSTEMD_LIST_UNIT_FILES_COMMAND = ["systemctl", "list-unit-files", "--type=service", "--no-pager", "--plain", "--no-legend"]
 SAFE_LARAVEL_ENV_KEYS = {
     "APP_ENV",
     "APP_DEBUG",
@@ -52,6 +59,81 @@ def file_metadata(path):
         except OSError:
             size = None
     return {"path": canonicalize_path(path), "exists": exists, "size_bytes": size}
+
+
+def parse_systemd_unit_line(line):
+    parts = line.split(None, 4)
+    if len(parts) < 4:
+        return None
+    name, load_state, active_state, sub_state = parts[:4]
+    if not name.endswith(".service"):
+        return None
+    description = redact_secrets(parts[4].strip()) if len(parts) == 5 else ""
+    return {
+        "name": name[:160],
+        "status": active_state[:80],
+        "load_state": load_state[:80],
+        "active_state": active_state[:80],
+        "sub_state": sub_state[:80],
+        "description": description[:255],
+        "unit_type": "service",
+        "metadata": {"source": "systemctl"},
+    }
+
+
+def parse_systemd_units_output(output):
+    services = []
+    for line in (output or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        service = parse_systemd_unit_line(line)
+        if service:
+            services.append(service)
+    return services
+
+
+def parse_systemd_unit_files_output(output):
+    enabled_states = {}
+    for line in (output or "").splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        name, enabled_state = parts[0], parts[1]
+        if name.endswith(".service"):
+            enabled_states[name] = enabled_state[:80]
+    return enabled_states
+
+
+def summarize_systemd_services(services):
+    return {
+        "total": len(services),
+        "active": sum(1 for item in services if item.get("active_state") == "active"),
+        "failed": sum(1 for item in services if item.get("active_state") == "failed"),
+    }
+
+
+def collect_systemd_services(params=None):
+    if params:
+        raise ValueError("systemd_services_discovery does not accept parameters.")
+
+    units_result = run_fixed_command(SYSTEMD_LIST_UNITS_COMMAND, timeout_seconds=15, max_output_bytes=64 * 1024)
+    if units_result.returncode != 0:
+        error_message = redact_secrets(units_result.stderr or "systemctl list-units returned a non-zero status.")
+        raise SafeExecError(f"systemd_services_discovery failed: {error_message}")
+    services = parse_systemd_units_output(units_result.stdout)
+
+    try:
+        unit_files_result = run_fixed_command(SYSTEMD_LIST_UNIT_FILES_COMMAND, timeout_seconds=15, max_output_bytes=64 * 1024)
+        enabled_states = parse_systemd_unit_files_output(unit_files_result.stdout)
+    except Exception:
+        enabled_states = {}
+
+    for service in services:
+        if service["name"] in enabled_states:
+            service["enabled_state"] = enabled_states[service["name"]]
+
+    return {"services": services, "summary": summarize_systemd_services(services)}
 
 
 def collect_services_status(_params=None):
@@ -226,6 +308,7 @@ def execute_baseline_tool(tool_key, params=None):
         "laravel_discovery": collect_laravel_discovery,
         "log_sources_discovery": collect_log_sources,
         "webroot_risk_checker": collect_webroot_risks,
+        SYSTEMD_SERVICES_DISCOVERY_TOOL_KEY: collect_systemd_services,
     }
     handler = handlers.get(tool_key)
     if handler is None:

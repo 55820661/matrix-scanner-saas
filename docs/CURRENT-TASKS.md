@@ -846,3 +846,51 @@ Completion:
 - Phase 2 Sprint 2.1 contract/seeding preparation is complete.
 - Runtime handlers, baseline integration, UI changes, external bot work, live LLM work, and remediation/write behavior remain out of scope and were not implemented.
 - No commit or push was made.
+
+## Active Task - Phase 2 Sprint 2.2 systemd Services Discovery
+
+Task:
+- Implement only the Sprint 2.2 runtime safe execution helper and `systemd_services_discovery` runtime handler.
+
+Scope:
+- Add `scanner_runtime/safe_exec.py`.
+- Use fixed code-defined argv lists with `subprocess.run(..., shell=False)`.
+- Enforce runtime command timeout and output caps.
+- Capture and redact stderr safely.
+- Add `systemd_services_discovery` runtime collector using fixed read-only `systemctl` commands.
+- Register only this handler in the runtime executor.
+- Add focused unit tests for safe execution, parsing, handler routing, param rejection, and unsupported tools.
+
+Out of scope:
+- Baseline orchestration changes.
+- Baseline profiles.
+- `ingest_tool_result()` changes.
+- `DiscoveredService` ingestion.
+- ToolPolicy or PlanTool activation.
+- Migrations to enable tools.
+- Other Phase 2 runtime handlers.
+- AI planner, external bot, remediation/actions, shell commands, raw unit files, raw `ExecStart`, or raw `Environment=...`.
+
+Immediate next steps:
+- Add safe execution helper.
+- Add systemd collector/parser.
+- Register the runtime handler in `scanner_runtime/prototype.py`.
+- Add tests and run requested checks.
+
+Progress:
+- Added `scanner_runtime/safe_exec.py` with fixed argv-only command execution, `shell=False`, timeout handling, output cap enforcement, and redacted stderr.
+- Added `systemd_services_discovery` parser and collector using fixed read-only `systemctl` commands.
+- Registered only `systemd_services_discovery` in the runtime executor path.
+- Added focused tests for safe execution, timeout/output caps, parser behavior, enabled-state merge, runtime execution routing, param rejection, and unsupported tool rejection.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_systemd_discovery --noinput` passed: 12 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 171 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 2.2 implementation is complete within the approved runtime-only scope.
+- No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, enabling migration, AI planner, external bot, or remediation/write behavior was added.
+- No commit or push was made.

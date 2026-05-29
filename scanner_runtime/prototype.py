@@ -4,7 +4,8 @@ import socket
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .baseline_tools import BASELINE_TOOL_KEYS, execute_baseline_tool
+from .baseline_tools import BASELINE_TOOL_KEYS, SYSTEMD_SERVICES_DISCOVERY_TOOL_KEY, collect_systemd_services, execute_baseline_tool
+from .safe_exec import SafeExecError
 from .system_identity import SYSTEM_IDENTITY_TOOL_KEY, SystemIdentityError, collect_system_identity
 
 
@@ -78,6 +79,13 @@ def execute_job(job):
         try:
             return {"status": "succeeded", "output": execute_baseline_tool(tool_key, job.get("params") or {}), "error": ""}
         except (OSError, ValueError) as exc:
+            return {"status": "failed", "output": {}, "error": str(exc)}
+    if tool_key == SYSTEMD_SERVICES_DISCOVERY_TOOL_KEY:
+        try:
+            return {"status": "succeeded", "output": collect_systemd_services(job.get("params") or {}), "error": ""}
+        except ValueError as exc:
+            return {"status": "rejected", "output": {}, "error": str(exc)}
+        except (OSError, SafeExecError) as exc:
             return {"status": "failed", "output": {}, "error": str(exc)}
 
     else:

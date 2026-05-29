@@ -650,3 +650,36 @@ Verification:
 Remaining:
 - Implement runtime handlers in later Phase 2 steps before enabling these tools or adding them to baseline/diagnostics.
 - No commit or push was made.
+
+## 2026-05-29 - Phase 2 Sprint 2.2 Start
+
+Intent:
+- Implement only the approved Sprint 2.2 runtime safe execution helper and `systemd_services_discovery` handler.
+
+Scope:
+- Add a runtime helper for fixed argv-only read-only command execution using `subprocess.run(..., shell=False)`.
+- Enforce timeouts, output size caps, safe stderr capture, and redaction.
+- Add `systemd_services_discovery` using fixed `systemctl` read-only commands.
+- Register only this handler in the runtime executor.
+- Add focused tests for safety, parsing, runtime execution routing, param rejection, and unsupported tools.
+
+Out of scope:
+- Baseline orchestration, baseline profiles, baseline ingestion, `DiscoveredService` updates, ToolPolicy/PlanTool activation, enabling migrations, other Phase 2 handlers, AI planner, external bot, remediation/actions, shell execution, raw unit file reads, raw `ExecStart`, and raw `Environment=...`.
+
+Result:
+- Added `scanner_runtime/safe_exec.py` with fixed argv-list command execution, `subprocess.run(..., shell=False)`, timeout enforcement, output cap enforcement, and redacted stderr handling.
+- Added `systemd_services_discovery` runtime parsing and collection using fixed read-only `systemctl` commands only.
+- Added structured `services` and `summary` output with safe fields only.
+- Registered only `systemd_services_discovery` in the runtime executor; runtime still creates no ToolRun or AgentJob.
+- Added focused Sprint 2.2 tests for safe execution, parser behavior, enabled-state merge, runtime routing, param rejection, and unsupported tool rejection.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_systemd_discovery --noinput` passed: 12 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 171 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
+- No commit or push was made.
