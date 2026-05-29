@@ -28,6 +28,11 @@ ALLOWED_HOSTS = [
     for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     if host.strip()
 ]
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -128,6 +133,10 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "admin:login"
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if os.environ.get("DJANGO_SECURE_PROXY_SSL_HEADER", "").lower() in {"1", "true", "yes", "on"} else None
+SESSION_COOKIE_SECURE = os.environ.get("DJANGO_SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes", "on"}
+CSRF_COOKIE_SECURE = os.environ.get("DJANGO_CSRF_COOKIE_SECURE", "false").lower() in {"1", "true", "yes", "on"}
 
 BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY = os.environ.get("BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY", "")
 BOOTSTRAP_HEARTBEAT_TIMEOUT_SECONDS = int(os.environ.get("BOOTSTRAP_HEARTBEAT_TIMEOUT_SECONDS", "60"))

@@ -1,105 +1,178 @@
 # Implementation Checklist
 
-Use this checklist to keep implementation aligned with the approved plan.
+This checklist reflects the actual MVP sprint order through Sprint 12.
 
-## Before Sprint 1
+## Global Guardrails
 
-- [ ] Confirm Django project name: `scanner_platform`.
-- [ ] Confirm custom User model before first migration.
-- [ ] Confirm PostgreSQL database configuration.
-- [ ] Confirm Account direct FK on User.
-- [ ] Confirm Matrix Admin is staff/superuser only.
-- [ ] Confirm status enum values.
-- [ ] Confirm AuditLog fields.
+- [ ] MVP diagnostics remain read-only and advisory.
+- [ ] No free shell execution from Portal, Telegram, AI, DB rows, or config.
+- [ ] No remediation/actions, write tools, service restarts, package installs, file edits, or permission changes outside approved Matrix Admin Remote Bootstrap.
+- [ ] Tenant-owned data is scoped by `account_id` directly or through a required parent.
+- [ ] Raw registration tokens, agent tokens, Telegram link tokens, SSH credentials, private keys, and `.env` secrets are never stored.
+- [ ] Redaction happens before storage, Portal, Admin, Telegram, reports, findings, knowledge entries, and audit metadata.
 
 ## Sprint 1 - SaaS Core
 
-- [ ] Create Django project.
-- [ ] Create apps: accounts, servers, applications, plans, subscriptions, audit, core.
-- [ ] Implement custom User with `account_id`.
-- [ ] Implement Account.
-- [ ] Implement customer roles: owner/operator/viewer.
-- [ ] Implement Plan.
-- [ ] Implement Subscription.
-- [ ] Implement Server skeleton.
-- [ ] Implement Application skeleton.
-- [ ] Implement AuditLog.
-- [ ] Implement status/soft-archive fields.
-- [ ] Register models in Django Admin.
-- [ ] Add model tests.
-- [ ] Add admin smoke tests where useful.
-- [ ] Verify no agent API/bootstrap/baseline/Telegram code entered Sprint 1.
+- [x] Django project `scanner_platform`.
+- [x] PostgreSQL-ready settings.
+- [x] Custom User from day one.
+- [x] Account, User, Plan, Subscription, Server, Application, AuditLog.
+- [x] owner/operator/viewer roles.
+- [x] Matrix Admin as staff/superuser.
+- [x] Django Admin registrations.
+- [x] Sprint 1 tests.
 
-## Sprint 2 - Agent Registration and Jobs
+## Sprint 2 - Agent Registration Foundation
 
-- [ ] Add ScannerAgent.
-- [ ] Add AgentRegistrationToken.
-- [ ] Add AgentJob.
-- [ ] Add hashed registration token storage.
-- [ ] Add one-time registration flow.
-- [ ] Add 60-minute token TTL.
-- [ ] Add heartbeat endpoint.
-- [ ] Add job polling endpoints.
-- [ ] Add job result endpoint.
-- [ ] Add revocation support.
-- [ ] Add audit events.
-- [ ] Add tests for token expiry, revocation, replay, mismatch, and hashing.
+- [x] ScannerAgent.
+- [x] AgentRegistrationToken.
+- [x] AgentJob.
+- [x] hashed one-time registration token storage.
+- [x] hashed raw-once agent token storage.
+- [x] register, heartbeat, poll, result endpoints.
+- [x] terminal result replay rejection.
+- [x] token expiry/revocation/mismatch tests.
 
-## Sprint 3 - Remote Bootstrap
+## Sprint 3 - Remote Bootstrap MVP
 
-- [ ] Add BootstrapSession.
-- [ ] Add BootstrapStep.
-- [ ] Add BootstrapCredential.
-- [ ] Add AgentInstallation.
-- [ ] Add BootstrapPolicy.
-- [ ] Add encrypted temporary credential storage.
-- [ ] Add credential TTL and cleanup.
-- [ ] Add fixed command templates.
-- [ ] Add typed parameter validation.
-- [ ] Add explicit confirmation before package install.
-- [ ] Deploy runtime tarball/SFTP.
-- [ ] Write config.
-- [ ] Create systemd service.
-- [ ] Start service.
-- [ ] Verify heartbeat.
-- [ ] Audit every step.
-- [ ] Confirm no Baseline Scan or Security Preflight runs in Sprint 3.
+- [x] BootstrapSession.
+- [x] BootstrapStep.
+- [x] BootstrapCredential.
+- [x] AgentInstallation.
+- [x] BootstrapPolicy fixed command templates.
+- [x] temporary encrypted credentials with TTL and cleanup.
+- [x] package install confirmation.
+- [x] runtime tarball/SFTP deployment.
+- [x] systemd service install/start.
+- [x] heartbeat verification.
+- [x] Matrix Admin only.
 
-## Sprint 4 - Tool Registry and Policy
+## Sprint 4 - Tool Registry and Policy Engine MVP
 
-- [ ] Add ToolTemplate.
-- [ ] Add ToolDefinition.
-- [ ] Add ToolPolicy.
-- [ ] Add PlanTool.
-- [ ] Add ToolRun.
-- [ ] Add policy service.
-- [ ] Add input schema validation.
-- [ ] Add path canonicalization and allow rules.
-- [ ] Add runtime/output limits.
-- [ ] Add redaction service.
-- [ ] Ensure AgentJob is created only after policy approval.
-- [ ] Add denial and cross-account tests.
+- [x] ToolTemplate.
+- [x] ToolDefinition.
+- [x] ToolPolicy.
+- [x] PlanTool.
+- [x] ToolRun.
+- [x] registry-backed `system_identity`.
+- [x] input schema validation.
+- [x] path canonicalization and blocked-before-allowed policy.
+- [x] timeout/output caps.
+- [x] ToolPolicy-approved AgentJob creation only.
 
-## Sprint 5 - Baseline Scan
+## Sprint 5 - Baseline Scan Implementation
 
-- [ ] Add BaselineScan.
-- [ ] Add DiscoveredService.
-- [ ] Add DiscoveredDomain.
-- [ ] Add LogSource.
-- [ ] Implement baseline orchestration in SaaS.
-- [ ] Register baseline tools.
-- [ ] Discover cPanel domains.
-- [ ] Discover Laravel/WordPress/Unknown applications.
-- [ ] Store safe Laravel env keys only.
-- [ ] Create findings.
-- [ ] Put apps into `pending_review`.
+- [x] BaselineScanStep.
+- [x] DiscoveredService.
+- [x] DiscoveredDomain.
+- [x] LogSource.
+- [x] Finding.
+- [x] baseline orchestration through ToolPolicy.
+- [x] required baseline tools seeded.
+- [x] application discovery creates `pending_review`.
+- [x] Laravel `.env` allowlisted safe keys only.
+- [x] raw logs and full `.env` excluded.
 
-## Later Sprints
+## Sprint 6 - Admin and Portal MVP Screens
 
-- [ ] Portal MVP.
-- [ ] Telegram linking and alerts.
-- [ ] Diagnostic Agent from Portal.
-- [ ] Telegram guided diagnostics.
-- [ ] Admin Tool Builder Agent.
-- [ ] Reports/findings/knowledge base.
-- [ ] Stabilization and internal pilot.
+- [x] Portal app.
+- [x] Portal auth and account scoping.
+- [x] dashboard, servers, applications, findings, baseline, subscription.
+- [x] owner-only registration token generation.
+- [x] application and finding actions with AuditLog.
+- [x] Remote Bootstrap remains Admin-only.
+
+## Sprint 7 - Telegram Integration MVP
+
+- [x] TelegramChatLink.
+- [x] TelegramLinkToken.
+- [x] TelegramNotification.
+- [x] webhook secret validation.
+- [x] private/group linking.
+- [x] read-only commands.
+- [x] safe notifications and suppression.
+- [x] no ToolRun/AgentJob/DiagnosticSession creation from Telegram.
+
+## Sprint 8 - Diagnostic Agent MVP
+
+- [x] DiagnosticSession.
+- [x] DiagnosticStep.
+- [x] DiagnosticDecision.
+- [x] deterministic planner.
+- [x] Portal-only start.
+- [x] approval before every tool step.
+- [x] uses ToolPolicy path only.
+- [x] redacted final reports.
+- [x] no live LLM.
+
+## Sprint 9 - Telegram Guided Diagnostics
+
+- [x] TelegramDiagnosticState.
+- [x] private-chat-only diagnostics.
+- [x] owner/operator only.
+- [x] viewer and groups blocked.
+- [x] callback query handling.
+- [x] approval through Diagnostic service.
+- [x] no direct AgentJob creation.
+
+## Sprint 10 - Tool Definition Proposal Builder
+
+- [x] Implemented inside `apps/tools`.
+- [x] ToolBuildRequest.
+- [x] ToolBuildProposal.
+- [x] ToolBuildReview.
+- [x] ToolTestResult.
+- [x] deterministic metadata-only proposals.
+- [x] read-only risk only.
+- [x] draft/pending_review conversion only.
+- [x] no runtime handler or executable code generation.
+
+## Sprint 11 - Reports, Findings, and Knowledge Base
+
+- [x] Report.
+- [x] ReportSection.
+- [x] FindingGroup.
+- [x] KnowledgeEntry.
+- [x] KnowledgeSource.
+- [x] Recommendation.
+- [x] redacted stored report snapshots.
+- [x] advisory-only recommendations.
+- [x] Portal/Admin report and finding group visibility.
+- [x] safe Telegram report summaries.
+
+Deferred:
+
+- [ ] IncidentReport model.
+- [ ] AlertEvent model.
+- [ ] KnowledgePattern model.
+- [ ] PDF/email/scheduled reports.
+- [ ] Celery/report workers.
+- [ ] live LLM report generation.
+- [ ] remediation workflows.
+
+## Sprint 12 - Stabilization and Release Preparation
+
+- [ ] Final full test pass.
+- [ ] `makemigrations --check --dry-run` clean.
+- [ ] Fresh `migrate` verified.
+- [ ] `.env.example` required variables reviewed.
+- [ ] Admin raw-output display reviewed.
+- [ ] Portal tenant isolation reviewed.
+- [ ] Telegram authorization and redaction reviewed.
+- [ ] ToolPolicy enforcement reviewed.
+- [ ] Bootstrap credential cleanup reviewed.
+- [ ] AuditLog metadata secret handling reviewed.
+- [ ] README, local development, deployment notes, runbook, test plan, and release checklist updated.
+
+Must remain deferred:
+
+- [ ] Celery/Redis workers.
+- [ ] payment gateway.
+- [ ] PDF/email/scheduled reports.
+- [ ] customer Remote Bootstrap.
+- [ ] live LLM.
+- [ ] remediation/write/destructive tools.
+- [ ] PostgreSQL RLS.
+- [ ] multi-account membership.
+- [ ] full self-install automation.
+- [ ] advanced knowledge matching.

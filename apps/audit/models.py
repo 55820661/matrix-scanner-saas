@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.accounts.models import Account
+from apps.core.redaction import redact_json
 
 
 SENSITIVE_METADATA_KEYS = (
@@ -85,5 +86,6 @@ class AuditLog(models.Model):
             raise ValidationError({"metadata": "Audit metadata must not contain secret-like keys."})
 
     def save(self, *args, **kwargs):
+        self.metadata = redact_json(self.metadata or {})
         self.full_clean()
         return super().save(*args, **kwargs)

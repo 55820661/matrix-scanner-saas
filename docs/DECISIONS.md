@@ -4,7 +4,8 @@ These decisions are constraints for implementation. Do not change them casually 
 
 ## SaaS and Tenancy
 
-- The SaaS platform is built with Django, Django REST Framework, PostgreSQL, Celery, Redis, Django Admin, and Django templates for the MVP Portal.
+- The SaaS platform is built with Django, Django REST Framework, PostgreSQL, Django Admin, and Django templates for the MVP Portal.
+- Celery and Redis are deferred future production components and are not implemented in the MVP Sprint 12 release.
 - Each MVP user belongs to one Account directly through `account_id` on the custom User model.
 - Multi-account membership is deferred.
 - Tenant-owned records must be scoped by Account directly or through a required parent.

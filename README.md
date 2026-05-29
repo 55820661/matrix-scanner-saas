@@ -1,24 +1,59 @@
 # Matrix Scanner SaaS
 
-Matrix Scanner SaaS is a Django-based platform for read-only diagnostics of customer servers, initially focused on cPanel/WHM, Laravel, Apache/EasyApache, PHP, MySQL/MariaDB, and traditional `public_html` production environments.
+Matrix Scanner SaaS is a Django-based platform for read-only diagnostics of customer servers. The MVP targets cPanel/WHM, Laravel, Apache/EasyApache, PHP, MySQL/MariaDB, `public_html`, application discovery, safe findings, reports, Telegram summaries, and guided diagnostics.
 
-The current repository state is planning and scaffolding. Implementation should follow:
+The customer server runs a small Python Scanner Runtime as a systemd service. The runtime polls the SaaS platform for approved jobs, executes only registered and policy-approved read-only tools, and returns structured JSON.
+
+## MVP Safety Rule
+
+Read-only advisory diagnostics only.
+
+The MVP does not provide automatic remediation, write tools, file edits, service restarts, package changes, permission changes, PDF export, email reports, scheduled reports, payment gateway, live LLM execution, or customer Remote Bootstrap.
+
+Do not enter real secrets into prompts, descriptions, reports, knowledge entries, support notes, or test fixtures. Secrets must not appear in database storage, Admin, Portal, Telegram, reports, findings, knowledge entries, logs, or audit metadata.
+
+Telegram group summaries can expose operational metadata. Group linking is owner-only.
+
+## Implemented MVP Areas
+
+- Django SaaS core: accounts, users, plans, subscriptions, servers, applications, audit.
+- Agent registration, heartbeat, polling, job result submission.
+- Matrix Admin Remote Bootstrap for installing and starting Scanner Runtime only.
+- Tool Registry and ToolPolicy MVP.
+- Baseline scan implementation using registered read-only tools.
+- Customer Portal using Django templates.
+- Telegram linking, read-only summaries, safe notifications, and private-chat guided diagnostics.
+- Deterministic Diagnostic Agent from Portal and Telegram.
+- Matrix Admin Tool Definition Proposal Builder for metadata-only read-only tool proposals.
+- Reports, finding groups, advisory recommendations, and safe knowledge storage.
+
+## Deferred
+
+- Celery/Redis workers.
+- PDF/email/scheduled reports.
+- Payment gateway.
+- Customer Remote Bootstrap.
+- Live LLM execution.
+- Remediation/write/destructive tools.
+- PostgreSQL RLS.
+- Multi-account membership.
+- Full self-install automation.
+- Advanced knowledge matching.
+
+## Documentation
 
 - [PLANS.md](PLANS.md)
 - [docs/DECISIONS.md](docs/DECISIONS.md)
-- [docs/PROJECT-STRUCTURE.md](docs/PROJECT-STRUCTURE.md)
 - [docs/SECURITY-MODEL.md](docs/SECURITY-MODEL.md)
-- [docs/IMPLEMENTATION-CHECKLIST.md](docs/IMPLEMENTATION-CHECKLIST.md)
+- [docs/TEST-PLAN.md](docs/TEST-PLAN.md)
+- [docs/operations/LOCAL-DEVELOPMENT.md](docs/operations/LOCAL-DEVELOPMENT.md)
+- [docs/operations/DEPLOYMENT-NOTES.md](docs/operations/DEPLOYMENT-NOTES.md)
+- [docs/operations/RUNBOOK.md](docs/operations/RUNBOOK.md)
+- [docs/operations/RELEASE-CHECKLIST.md](docs/operations/RELEASE-CHECKLIST.md)
 
-## MVP Rule
+## Local Setup
 
-Read-only first. No free shell commands, no remediation, no file edits, no service restarts, and no secrets in storage, reports, AI prompts, or Telegram.
-
-## Sprint 1 Local Setup
-
-Detailed Windows PowerShell setup is documented in [docs/operations/LOCAL-DEVELOPMENT.md](docs/operations/LOCAL-DEVELOPMENT.md).
-
-PostgreSQL is required. Provide it either with a local Windows PostgreSQL installation or, optionally, with Docker Compose. Docker is not mandatory.
+PostgreSQL is required. Use a local Windows PostgreSQL installation as the primary path, or optional Docker Compose for PostgreSQL only.
 
 ```powershell
 python -m venv .venv
@@ -29,7 +64,7 @@ python manage.py check
 python manage.py makemigrations --check --dry-run
 python manage.py migrate
 python manage.py createsuperuser
-python manage.py test
+python manage.py test --noinput
 ```
 
-Configure `DATABASE_URL` in `.env` for PostgreSQL before running migrations against a real database.
+Configure `DATABASE_URL`, `DJANGO_SECRET_KEY`, `BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY`, `TELEGRAM_WEBHOOK_SECRET`, and production host/HTTPS settings in `.env`. Never commit `.env`.

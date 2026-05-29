@@ -1,23 +1,14 @@
 # Local Development
 
-This guide prepares a Windows PowerShell development environment for the current Sprint 1 Django codebase.
-
-## Scope
-
-This setup is for the existing Django SaaS core only. It does not start Sprint 2 and does not implement agent APIs, Scanner Runtime, Bootstrap, Baseline, Tool Registry, Policy Engine, Telegram, Diagnostic Agent, Celery, Redis, payments, or remediation features.
+This guide prepares a Windows PowerShell development environment for the Matrix Scanner SaaS MVP.
 
 ## Requirements
 
-- Python 3.13 or compatible Python 3.x supported by the installed Django version.
+- Python 3.13 or compatible Python 3.x supported by Django.
 - PostgreSQL.
-- Docker Desktop with Docker Compose is optional only, as a helper for PostgreSQL.
+- Docker Desktop is optional only as a helper for PostgreSQL.
 
-Python packages are listed in `requirements.txt`:
-
-```text
-Django
-psycopg[binary]
-```
+Do not switch the project to SQLite. Local tests intentionally run against PostgreSQL.
 
 ## Create `.env`
 
@@ -27,29 +18,31 @@ From the repository root:
 Copy-Item .env.example .env
 ```
 
-The default `.env.example` values match the recommended local PostgreSQL database:
+Set or confirm:
 
 ```text
 DATABASE_URL=postgres://matrix_scanner:matrix_scanner@localhost:5432/matrix_scanner
-POSTGRES_DB=matrix_scanner
-POSTGRES_USER=matrix_scanner
-POSTGRES_PASSWORD=matrix_scanner
-POSTGRES_PORT=5432
+DJANGO_SECRET_KEY=change-me
+DJANGO_DEBUG=true
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+CSRF_TRUSTED_ORIGINS=http://localhost:8000
+BOOTSTRAP_CREDENTIAL_ENCRYPTION_KEY=change-me-to-a-long-random-bootstrap-key
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_WEBHOOK_SECRET=change-me-to-a-random-webhook-secret
+PUBLIC_BASE_URL=http://localhost:8000
 ```
 
 Do not commit `.env`.
 
 ## Primary PostgreSQL Setup on Windows
 
-Install PostgreSQL locally on Windows from the official PostgreSQL installer or your preferred package manager.
-
-After installation, open PowerShell and create the development database and user. If `psql` is not on your PATH, run it from the PostgreSQL `bin` directory, for example `C:\Program Files\PostgreSQL\16\bin\psql.exe`.
+Install PostgreSQL locally on Windows. If `psql` is not on your PATH, run it from the PostgreSQL `bin` directory, for example:
 
 ```powershell
-psql -U postgres
+& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres
 ```
 
-Inside the `psql` prompt:
+Inside `psql`:
 
 ```sql
 CREATE USER matrix_scanner WITH PASSWORD 'matrix_scanner';
@@ -60,55 +53,24 @@ ALTER ROLE matrix_scanner SET timezone TO 'UTC';
 \q
 ```
 
-Confirm `.env` contains:
-
-```text
-DATABASE_URL=postgres://matrix_scanner:matrix_scanner@localhost:5432/matrix_scanner
-```
-
-Then run migrations and tests from the repository root:
-
-```powershell
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py test
-```
-
 ## Optional PostgreSQL via Docker Desktop
 
-Docker is not mandatory. Use this helper only if you prefer Docker for the local PostgreSQL service.
+Docker is not mandatory. Use this only if you prefer Docker for local PostgreSQL.
 
-Start Docker Desktop first and wait until the Linux engine is running.
-
-Start PostgreSQL:
+Docker Desktop must be running with the Linux engine.
 
 ```powershell
 docker compose -f docker-compose.dev.yml up -d postgres
-```
-
-Check status:
-
-```powershell
 docker compose -f docker-compose.dev.yml ps
 ```
 
-The Docker service uses the same default values:
-
-```text
-database: matrix_scanner
-user: matrix_scanner
-password: matrix_scanner
-host: localhost
-port: 5432
-```
-
-Stop PostgreSQL:
+Stop the local PostgreSQL helper:
 
 ```powershell
 docker compose -f docker-compose.dev.yml down
 ```
 
-Remove the local database volume only when you intentionally want to delete local data:
+Delete local Docker database data only when intentional:
 
 ```powershell
 docker compose -f docker-compose.dev.yml down -v
@@ -116,65 +78,58 @@ docker compose -f docker-compose.dev.yml down -v
 
 ## Python Environment
 
-Create and activate a virtual environment:
-
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 ```
 
-If PowerShell blocks activation scripts, run PowerShell as the current user and allow local scripts:
+If PowerShell blocks activation scripts:
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
-Install requirements:
+## Local Verification
 
-```powershell
-python -m pip install -r requirements.txt
-```
-
-## Django Verification Commands
-
-Run these from the repository root after PostgreSQL is available:
+Run from the repository root after PostgreSQL is available:
 
 ```powershell
 python manage.py check
 python manage.py makemigrations --check --dry-run
 python manage.py migrate
 python manage.py createsuperuser
-python manage.py test
+python manage.py test --noinput
+git diff --check
 ```
 
 Expected behavior:
-- `check` should pass without system check issues.
-- `makemigrations --check --dry-run` should report no missing migrations.
-- `migrate` requires a reachable PostgreSQL database.
-- `createsuperuser` creates the Matrix Admin user as Django staff/superuser.
-- `test` requires PostgreSQL because the project intentionally does not switch to SQLite for local tests.
 
-## Troubleshooting
+- `check` passes without system check issues.
+- `makemigrations --check --dry-run` reports no missing migrations.
+- `migrate` applies all committed migrations to PostgreSQL.
+- `createsuperuser` creates a Matrix Admin staff/superuser.
+- `test --noinput` passes against PostgreSQL.
+- `git diff --check` has no whitespace errors. Windows line-ending warnings are acceptable.
 
-If tests fail with a PostgreSQL connection timeout, verify the local Windows PostgreSQL service is running and that `.env` has the correct `DATABASE_URL`.
+## Local Smoke Checks
 
-To inspect Windows services from PowerShell:
+- Admin login at `/admin/`.
+- Portal login at `/portal/login/`.
+- Create Account, owner User, and Server.
+- Generate a registration token from Portal and confirm the raw token is shown once.
+- Mock agent registration, heartbeat, job polling, and job result submission.
+- Run or inspect baseline/report/diagnostic happy paths with test data.
+- Mock Telegram webhook with the configured secret.
 
-```powershell
-Get-Service *postgres*
-```
+## MVP Boundaries
 
-If port `5432` is already in use, change `POSTGRES_PORT` in `.env` and update `DATABASE_URL` to match.
+Local development must not introduce:
 
-If using optional Docker and `docker compose` reports that `dockerDesktopLinuxEngine` cannot be found, Docker Desktop is installed but not running. Open Docker Desktop, wait for it to finish starting, then rerun:
-
-```powershell
-docker compose -f docker-compose.dev.yml up -d postgres
-```
-
-If `python -m venv .venv` fails during `ensurepip`, repair or reinstall Python with pip support enabled, then recreate the virtual environment:
-
-```powershell
-Remove-Item -Recurse -Force .venv
-python -m venv .venv
-```
+- Celery/Redis implementation.
+- Remediation/actions.
+- Write/destructive tools.
+- Live LLM calls.
+- PDF/email/scheduled reports.
+- Payment gateway.
+- Customer Remote Bootstrap.

@@ -762,3 +762,44 @@ Completion:
 - Sprint 11 implementation is complete within the locked scope.
 - No PDF export, email reports, scheduled reports/Celery, live LLM report generation, public API endpoints, remediation/actions, write tools, ToolPolicy bypass, direct AgentJob creation, or raw sensitive output display/storage were added.
 - Changes are not committed, per instruction.
+
+## Active Task - Sprint 12 Stabilization, Security Hardening, and Release Preparation
+
+Task:
+- Implement Sprint 12 only: final MVP stabilization, security hardening, documentation cleanup, release readiness, and regression coverage.
+
+Scope:
+- Review and harden tenant isolation, permissions, secret handling, redaction, ToolPolicy enforcement, Admin/Portal/Telegram access, settings/env coverage, migrations, and operational documentation.
+- Update README, local development, deployment notes, runbook, plans, execution plan, implementation checklist, and test plan.
+- Add a release checklist document.
+- Add or strengthen practical security/regression tests.
+
+Out of scope:
+- New product workflows, remediation/actions, write tools, live LLM execution, Celery/Redis implementation, payment gateway, PDF export, email reports, scheduled reports, customer Remote Bootstrap, ToolPolicy bypass, and direct AgentJob creation outside existing approved flows.
+
+Immediate next steps:
+- Inspect settings, environment variables, routes, services, and existing tests for Sprint 12 hardening gaps.
+- Apply narrow documentation and test/security fixes only.
+- Run Django checks, migration dry-run, migrate, full test suite, and diff check.
+
+Progress:
+- Updated MVP documentation to reflect the actual implemented sprint order, Sprint 4/5 ordering, Sprint 11 actual scope, and deferred features.
+- Added `docs/operations/RELEASE-CHECKLIST.md` with local verification, environment, migration, Admin, Portal, Telegram, security, tenant isolation, deployment, and deferred-feature checks.
+- Updated `.env.example` with CSRF and proxy/secure cookie settings needed for production readiness review.
+- Added production-aware settings for `CSRF_TRUSTED_ORIGINS`, optional proxy SSL header, and secure session/CSRF cookies.
+- Hardened AuditLog metadata by redacting secret-like values before validation/storage while still rejecting secret-like metadata keys.
+- Hid raw `AgentJob.result` from Django Admin detail display.
+- Added Sprint 12 regression tests for env coverage, AuditLog redaction, Portal staff/viewer denial, Telegram token/callback denial, bootstrap credential cleanup, revoked agent token denial, AgentJob double-submit rejection, ToolPolicy denial before ToolRun/AgentJob, and raw AgentJob result display prevention.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint12_stabilization --noinput` passed: 11 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py migrate` passed.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 153 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 12 implementation is complete within the locked stabilization scope.
+- No new product workflows, remediation/actions, write tools, live LLM execution, Celery/Redis, payment gateway, PDF/email/scheduled reporting, customer Remote Bootstrap, ToolPolicy bypass, or direct AgentJob creation outside existing approved flows were added.
+- Changes are not committed, per instruction.

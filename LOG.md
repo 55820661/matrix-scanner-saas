@@ -574,3 +574,40 @@ Verification:
 Remaining:
 - No known Sprint 11 implementation issues.
 - Changes are not committed, per instruction.
+
+## 2026-05-28 - Sprint 12 Start
+
+Intent:
+- Implement Sprint 12 stabilization, security hardening, and release preparation within the locked scope.
+
+Scope:
+- Final verification, tenant isolation review, permission review, secret/redaction review, ToolPolicy enforcement review, Admin/Portal/Telegram access review, settings/env validation, migration consistency checks, documentation cleanup, release checklist, manual smoke checklist, and focused regression tests.
+
+Out of scope:
+- New product workflows, remediation/actions, write tools, live LLM execution, Celery/Redis implementation, payment gateway, PDF export, email reports, scheduled reports, customer Remote Bootstrap, ToolPolicy bypass, and direct AgentJob creation outside existing approved flows.
+
+Pre-start:
+- Read the required agent, log, current task, decision, plan, interface, security, structure, checklist, test plan, README, local development, deployment notes, and runbook documents.
+- Updated `docs/CURRENT-TASKS.md` before implementation.
+
+Result:
+- Updated README, local development, deployment notes, runbook, PLANS, execution plan, implementation checklist, test plan, and decisions docs for MVP release readiness.
+- Added `docs/operations/RELEASE-CHECKLIST.md`.
+- Documented Celery/Redis, PDF/email/scheduled reports, payment gateway, customer Remote Bootstrap, live LLM, remediation/write/destructive tools, PostgreSQL RLS, multi-account membership, full self-install automation, and advanced knowledge matching as deferred.
+- Added `.env.example` entries for CSRF trusted origins, proxy SSL header, and secure session/CSRF cookies.
+- Added settings support for CSRF trusted origins, optional proxy SSL header, and secure cookies.
+- Hardened AuditLog metadata value redaction before validation/storage.
+- Hid raw `AgentJob.result` from Django Admin detail display.
+- Added Sprint 12 security regression tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint12_stabilization --noinput` passed: 11 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py migrate` passed.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 153 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No known Sprint 12 implementation issues.
+- Changes are not committed, per instruction.

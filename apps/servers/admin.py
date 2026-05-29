@@ -64,7 +64,12 @@ class AgentJobAdmin(admin.ModelAdmin):
     list_display = ("tool_key", "server", "agent", "account", "status", "claimed_at", "claim_expires_at", "finished_at")
     list_filter = ("status", "tool_key", "account", "created_at")
     search_fields = ("tool_key", "server__name", "server__hostname", "account__name")
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("raw_result_hidden", "created_at", "updated_at")
+    exclude = ("result",)
+
+    @admin.display(description="Result")
+    def raw_result_hidden(self, obj):
+        return "Raw AgentJob results are hidden. Use redacted ToolRun, report, or diagnostic summaries instead."
 
 
 @admin.register(BaselineScan)

@@ -196,13 +196,23 @@ Scope:
 Goal: improve operational memory and reporting.
 
 Scope:
-- IncidentReport expansion.
-- ReportSection.
-- Finding fingerprint/deduplication.
-- AlertEvent sent/suppressed tracking.
-- KnowledgePattern internal table.
-- Developer report sections.
-- Clear Portal/Admin report and finding views.
+- Report and ReportSection stored redacted snapshots.
+- FindingGroup deduplication by account, server, optional application, and normalized fingerprint.
+- KnowledgeEntry and KnowledgeSource for safe operational context.
+- Advisory Recommendation records only; no executable actions.
+- Portal/Admin report, finding group, and knowledge visibility.
+- Telegram short safe report summaries.
+
+Deferred from Sprint 11:
+- IncidentReport model.
+- AlertEvent model; use TelegramNotification for notification history and suppression.
+- KnowledgePattern model; use KnowledgeEntry and KnowledgeSource.
+- PDF export.
+- Email reports.
+- Scheduled reports.
+- Celery/report workers.
+- Live LLM report generation.
+- Remediation workflows.
 
 ### Sprint 12 - Stabilization, Security Hardening, and Pilot Readiness
 
@@ -211,9 +221,19 @@ Goal: harden the MVP for internal pilot.
 Scope:
 - Security review for agent auth, registration tokens, bootstrap credentials, tenant isolation, tool policy, redaction, Telegram linking, Admin/Portal permissions.
 - Timeouts and output caps on every ToolRun.
-- Invalid AI JSON fails safely.
-- Deployment docs for Gunicorn, Nginx, systemd, Celery, Redis, PostgreSQL, environment variables, logging, and backups.
+- Documentation cleanup for the implemented sprint order and deferred features.
+- Deployment notes for Gunicorn, Nginx, systemd, PostgreSQL, environment variables, logging, and backups.
+- Release checklist and manual smoke checklist.
+- Regression tests for security, redaction, tenant isolation, and permissions.
 - Internal pilot on Matrix Clouds/WhatsApp SaaS infrastructure.
+
+Out of scope:
+- Celery/Redis implementation.
+- Live LLM execution.
+- Remediation/write/destructive tools.
+- Payment gateway.
+- PDF/email/scheduled reporting.
+- Customer Remote Bootstrap.
 
 ## Post-MVP
 
@@ -221,5 +241,11 @@ Scope:
 - Limited customer pilot.
 - Payment gateway.
 - PDF/email reports.
+- Celery/Redis workers.
+- Live LLM execution.
+- PostgreSQL RLS.
+- Multi-account membership.
+- Full self-install automation.
+- Advanced knowledge matching.
 - Low-risk actions study.
 - Advanced/sensitive actions only after read-only MVP proves stable.
