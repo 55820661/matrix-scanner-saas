@@ -803,3 +803,46 @@ Completion:
 - Sprint 12 implementation is complete within the locked stabilization scope.
 - No new product workflows, remediation/actions, write tools, live LLM execution, Celery/Redis, payment gateway, PDF/email/scheduled reporting, customer Remote Bootstrap, ToolPolicy bypass, or direct AgentJob creation outside existing approved flows were added.
 - Changes are not committed, per instruction.
+
+## Active Task - Phase 2 Sprint 2.1 Runtime Discovery Tool Contracts
+
+Task:
+- Prepare only the first Phase 2 implementation step: Runtime Discovery Tool Contracts and seeding structure for Debian/Nginx `/opt` discovery tools.
+
+Scope:
+- Pull local `main` to the deployed source-of-truth commit `762abd4`.
+- Re-inspect current baseline, tools, diagnostics, and runtime code after the deployment fix.
+- Add safe Tool Registry contract/seeding structure for planned Phase 2 runtime discovery tools.
+- Keep the contracts non-executing until runtime handlers and baseline integration are implemented in later steps.
+
+Out of scope:
+- Runtime handler implementation.
+- Baseline orchestration changes.
+- UI redesign.
+- External bot work.
+- Live LLM work.
+- Remediation/actions, write tools, free shell commands, or unsafe execution paths.
+
+Immediate next steps:
+- Add Phase 2 discovery tool specs and idempotent seeding helper.
+- Add focused tests for contract safety, disabled-by-default behavior, and no ToolRun/AgentJob side effects.
+- Run Django checks, migration dry-run, tests, and diff check.
+
+Progress:
+- Added Phase 2 discovery tool contract specs for Debian/Nginx `/opt` discovery tools.
+- Added idempotent seeding helper that creates ToolTemplate, ToolDefinition, and inactive ToolPolicy records.
+- Kept Phase 2 tools out of the current baseline and diagnostic tool sets until handlers and orchestration are implemented later.
+- Added a data migration that seeds the contracts as approved/read-only but non-executable by default.
+- Added focused tests for safe seeding, idempotency, baseline/diagnostic separation, and no ToolRun/AgentJob side effects.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_tool_contracts --noinput` passed: 4 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 157 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Phase 2 Sprint 2.1 contract/seeding preparation is complete.
+- Runtime handlers, baseline integration, UI changes, external bot work, live LLM work, and remediation/write behavior remain out of scope and were not implemented.
+- No commit or push was made.

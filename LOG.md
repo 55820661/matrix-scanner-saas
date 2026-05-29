@@ -611,3 +611,42 @@ Verification:
 Remaining:
 - No known Sprint 12 implementation issues.
 - Changes are not committed, per instruction.
+
+## 2026-05-29 - Phase 2 Sprint 2.1 Start
+
+Intent:
+- Prepare only Phase 2 Sprint 2.1: runtime discovery tool contracts and seeding structure for Debian/Nginx `/opt`-based servers.
+
+Scope:
+- Update local `main` to deployed source-of-truth commit `762abd4`.
+- Re-inspect current baseline, tool registry, diagnostics, and runtime code.
+- Add non-executing Tool Registry contracts and idempotent seeding helper for the new Phase 2 discovery tools.
+- Add focused tests for safe contract defaults and absence of ToolRun/AgentJob side effects.
+
+Out of scope:
+- Runtime handler implementation, baseline orchestration changes, UI redesign, external bot work, live LLM work, remediation/actions, write tools, free shell commands, and unsafe execution paths.
+
+Pre-start:
+- Fast-forwarded local `main` to `762abd4 fix: auto-ingest baseline after agent job result`.
+- Confirmed working tree was clean before task-tracking updates.
+- Re-inspected current code paths before implementation.
+
+Result:
+- Added Phase 2 discovery tool contracts for Debian/Nginx `/opt` runtime discovery:
+  `systemd_services_discovery`, `nginx_sites_discovery`, `opt_apps_discovery`, `django_apps_discovery`,
+  `gunicorn_uvicorn_services_discovery`, `postgres_status_discovery`, and `log_sources_discovery_v2`.
+- Added an idempotent seeding helper that creates ToolTemplate, ToolDefinition, and inactive ToolPolicy records.
+- Added a safe data migration to seed the contracts as approved/read-only but non-executable by default.
+- Kept the new contracts out of current `BASELINE_TOOL_KEYS` and diagnostic allowed tools to avoid requesting runtime handlers that are not implemented yet.
+- Added focused Phase 2 contract tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_tool_contracts --noinput` passed: 4 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 157 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Implement runtime handlers in later Phase 2 steps before enabling these tools or adding them to baseline/diagnostics.
+- No commit or push was made.
