@@ -1,10 +1,13 @@
 import json
+import logging
 
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .models import AgentJob
+logger = logging.getLogger(__name__)
+
 from .services import (
     AgentAuthError,
     AgentJobError,
@@ -137,5 +140,15 @@ def job_result(request, job_id):
         return JsonResponse({"error": str(exc)}, status=401)
     except AgentJobError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
+
+    try:
+        from .baseline import ingest_completed_tool_runs
+
+        tool_run = getattr(job, "tool_run", None)
+        baseline_step = getattr(tool_run, "baseline_step", None) if tool_run else None
+        if baseline_step:
+            ingest_completed_tool_runs(baseline_step.baseline_scan)
+    except Exception:
+        logger.exception("Failed to ingest baseline scan after agent job result.")
 
     return JsonResponse({"ok": True, "job_id": str(job.id), "status": job.status})
