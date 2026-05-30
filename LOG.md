@@ -720,6 +720,45 @@ Remaining:
 - Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
 - No commit or push was made.
 
+## 2026-05-30 - Phase 2 Sprint 2.5 Start
+
+Intent:
+- Implement only the approved Sprint 2.5 runtime `django_apps_discovery` collector for safe Django application metadata under `/opt`.
+
+Scope:
+- Add `scanner_runtime/django_discovery.py` as a pure filesystem runtime collector rooted at `/opt` only (max depth 2), with strict caps.
+- Detect Django application roots using `manage.py` or strong project-root markers plus Django indicators.
+- Treat `wsgi.py`, `asgi.py`, `urls.py`, and `apps.py` as supporting markers only.
+- Suppress nested Django package false positives when an ancestor is already selected as a Django root.
+- Optionally read only size-capped `pyproject.toml` for a safe project name.
+- Reject non-empty params.
+- Register only `django_apps_discovery` in the runtime executor.
+- Add focused unit tests for detection, nested package suppression, symlink safety, output safety, and unsupported tool behavior.
+
+Out of scope:
+- Baseline orchestration, baseline profiles, baseline ingestion, `Application` DB writes, ToolPolicy/PlanTool activation, migrations, other Phase 2 handlers, AI planner, external bot, remediation/actions, and shell command execution.
+
+Result:
+- Added `scanner_runtime/django_discovery.py` as a pure filesystem runtime collector rooted at `/opt` only.
+- Added max-depth-2 candidate scanning, symlink realpath validation under `/opt`, heavy/hidden directory skipping, strict stat/output caps, and redacted JSON output.
+- Added Django root detection using `manage.py` or strong project-root markers plus Django indicators.
+- Treated `wsgi.py`, `asgi.py`, `urls.py`, and `apps.py` as supporting markers only.
+- Suppressed nested Django package false positives when an ancestor is already selected as a Django root.
+- Registered only `django_apps_discovery` in the runtime executor; runtime still creates no ToolRun or AgentJob.
+- Added focused Sprint 2.5 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_django_apps_discovery --noinput` passed: 15 tests ran successfully with 2 symlink tests skipped in this Windows environment.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` ran 200 tests before failing in `tests.unit.test_sprint8_diagnostics.Sprint8DiagnosticsTests.setUpClass` due to PostgreSQL connection timeout.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Re-run the full test suite once the local PostgreSQL test database connection is stable.
+- Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
+- No commit or push was made.
+
 ## 2026-05-30 - Phase 2 Sprint 2.3 Start
 
 Intent:

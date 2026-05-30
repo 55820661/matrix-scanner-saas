@@ -994,3 +994,52 @@ Completion status:
 - Sprint 2.4 implementation is complete except for a full-suite re-run after local PostgreSQL test database connectivity is restored.
 - No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, migrations, other Phase 2 handlers, AI planner, external bot, or remediation/write behavior was added.
 - No commit or push was made.
+
+## Active Task - Phase 2 Sprint 2.5 Django Apps Discovery
+
+Task:
+- Implement only the Sprint 2.5 runtime `django_apps_discovery` collector.
+
+Scope:
+- Add `scanner_runtime/django_discovery.py` as a pure filesystem runtime collector for `/opt`.
+- Candidate directories: `/opt/*` and `/opt/*/*` only (max depth 2), with strict caps.
+- Detect Django roots using:
+  - `manage.py`; or
+  - strong project-root markers (`pyproject.toml`, `requirements.txt`, `Pipfile`, `poetry.lock`, `uv.lock`) plus Django indicators.
+- Treat `wsgi.py`, `asgi.py`, `urls.py`, and `apps.py` as supporting markers only.
+- Avoid nested false positives when a child package sits under an already selected Django root.
+- Return only `applications` and `summary` with safe redacted metadata.
+- Reject non-empty params.
+- Register only `django_apps_discovery` in `scanner_runtime/prototype.py`.
+- Add focused tests.
+
+Out of scope:
+- Baseline orchestration changes.
+- Baseline profile changes.
+- `ingest_tool_result()` changes.
+- `Application` database writes.
+- ToolPolicy or PlanTool activation.
+- Migrations.
+- Other Phase 2 runtime handlers.
+- AI planner, external bot, remediation/actions, or shell execution.
+
+Progress:
+- Added `scanner_runtime/django_discovery.py` with `/opt`-rooted discovery, max-depth-2 candidate scanning, strict caps, symlink validation under `/opt`, and heavy/hidden directory skipping.
+- Added Django root detection using `manage.py` or strong project-root markers plus Django indicators.
+- Treated `wsgi.py`, `asgi.py`, `urls.py`, and `apps.py` as supporting markers only.
+- Added nested candidate suppression so child Django packages are not emitted as standalone apps when an ancestor is already selected as a Django root.
+- Returned `applications` and `summary` only, with redacted safe fields.
+- Registered only `django_apps_discovery` in `scanner_runtime/prototype.py`.
+- Added focused Sprint 2.5 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_django_apps_discovery --noinput` passed: 15 tests ran successfully with 2 symlink tests skipped in this Windows environment.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` ran 200 tests before failing in `tests.unit.test_sprint8_diagnostics.Sprint8DiagnosticsTests.setUpClass` due to PostgreSQL connection timeout.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.5 implementation is complete except for a full-suite re-run after local PostgreSQL test database connectivity is stable.
+- No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, migrations, other Phase 2 handlers, AI planner, external bot, or remediation/write behavior was added.
+- No commit or push was made.
