@@ -944,3 +944,53 @@ Completion:
 - Sprint 2.3 implementation is complete within the approved runtime-only scope.
 - No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, migrations, AI planner, external bot, or remediation/write behavior was added.
 - No commit or push was made.
+
+## Active Task - Phase 2 Sprint 2.4 /opt Applications Discovery
+
+Task:
+- Implement only the Sprint 2.4 runtime `opt_apps_discovery` collector.
+
+Scope:
+- Add `scanner_runtime/opt_discovery.py` as a pure file-reading runtime collector for `/opt`.
+- Candidate directories: `/opt/*` and `/opt/*/*` only (max depth 2), with strict caps.
+- Presence-based framework detection (Django/Python, Node, Laravel/PHP) using marker files only.
+- Optional safe project name extraction from size-capped:
+  - `pyproject.toml`
+  - `package.json`
+  - `composer.json`
+  Extract only project `name`; ignore all other fields.
+- Reject non-empty params.
+- Register only `opt_apps_discovery` in `scanner_runtime/prototype.py`.
+- Add focused tests for traversal caps, symlink safety, framework detection, safe name extraction, and output safety.
+
+Out of scope:
+- Baseline orchestration changes.
+- Baseline profile changes.
+- `ingest_tool_result()` changes.
+- Any DB writes from runtime (no `Application`, `LogSource`, or `DiscoveredDomain` writes).
+- ToolPolicy or PlanTool activation.
+- Migrations.
+- Other Phase 2 runtime handlers.
+- AI planner, external bot, remediation/actions, or shell execution.
+
+Progress:
+- Added `scanner_runtime/opt_discovery.py` with `/opt`-rooted discovery, max-depth-2 candidate scanning, strict caps, symlink validation under `/opt`, and heavy/hidden directory skipping.
+- Added marker-based framework detection for Django/Python, Node, and Laravel/PHP.
+- Added safe project-name extraction from size-capped `pyproject.toml`, `package.json`, and `composer.json`.
+- Returned `applications` and `summary` only, with redacted strings and no raw file contents.
+- Registered only `opt_apps_discovery` in `scanner_runtime/prototype.py`.
+- Added focused Sprint 2.4 tests.
+- Fixed empty-marker parent directories being counted as applications and deduped applications by resolved realpath.
+- Corrected the `pyproject.toml` name regex to use proper whitespace matching.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected; database connection timeout warning only.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_opt_apps_discovery --noinput` passed: 13 tests ran successfully with 2 symlink tests skipped in this Windows environment.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` was blocked by PostgreSQL connection timeout while creating the test database.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.4 implementation is complete except for a full-suite re-run after local PostgreSQL test database connectivity is restored.
+- No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, migrations, other Phase 2 handlers, AI planner, external bot, or remediation/write behavior was added.
+- No commit or push was made.

@@ -684,6 +684,42 @@ Remaining:
 - Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
 - No commit or push was made.
 
+## 2026-05-30 - Phase 2 Sprint 2.4 Start
+
+Intent:
+- Implement only the approved Sprint 2.4 runtime `opt_apps_discovery` collector for Debian/Nginx `/opt` servers.
+
+Scope:
+- Add `scanner_runtime/opt_discovery.py` as a pure file-reading runtime collector rooted at `/opt` only (max depth 2), with strict caps.
+- Use presence-based framework detection for Django/Python, Node, and Laravel/PHP without reading source files.
+- Optionally extract only a safe project name from size-capped `pyproject.toml`, `package.json`, and `composer.json`.
+- Reject non-empty params.
+- Register only `opt_apps_discovery` in the runtime executor.
+- Add focused unit tests for traversal, symlink safety, framework detection, safe name extraction, and output safety.
+
+Out of scope:
+- Baseline orchestration, baseline profiles, baseline ingestion, any DB writes from runtime, ToolPolicy/PlanTool activation, migrations, other Phase 2 handlers, AI planner, external bot, remediation/actions, and shell command execution.
+
+Result:
+- Added `scanner_runtime/opt_discovery.py` as a pure file-reading runtime collector rooted at `/opt` only.
+- Added max-depth-2 candidate discovery, strict caps, symlink realpath validation under `/opt`, heavy/hidden directory skipping, marker-based framework detection, safe project-name extraction, redaction, and JSON output cap enforcement.
+- Returned `applications` and `summary` only, matching the Phase 2 ToolDefinition contract.
+- Registered only `opt_apps_discovery` in the runtime executor; runtime still creates no ToolRun or AgentJob.
+- Added focused Sprint 2.4 tests.
+- Fixed candidate handling so directories without detection markers are not appended as applications, deduped by resolved realpath, and corrected the `pyproject.toml` name regex.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected; database connection timeout warning only.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_opt_apps_discovery --noinput` passed: 13 tests ran successfully with 2 symlink tests skipped in this Windows environment.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` was blocked by PostgreSQL connection timeout while creating the test database.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Re-run the full test suite once the local PostgreSQL test database connection is available.
+- Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
+- No commit or push was made.
+
 ## 2026-05-30 - Phase 2 Sprint 2.3 Start
 
 Intent:
