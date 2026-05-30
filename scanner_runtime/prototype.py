@@ -5,6 +5,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .baseline_tools import BASELINE_TOOL_KEYS, SYSTEMD_SERVICES_DISCOVERY_TOOL_KEY, collect_systemd_services, execute_baseline_tool
+from .nginx_discovery import NGINX_SITES_DISCOVERY_TOOL_KEY, NginxDiscoveryError, collect_nginx_sites
 from .safe_exec import SafeExecError
 from .system_identity import SYSTEM_IDENTITY_TOOL_KEY, SystemIdentityError, collect_system_identity
 
@@ -86,6 +87,13 @@ def execute_job(job):
         except ValueError as exc:
             return {"status": "rejected", "output": {}, "error": str(exc)}
         except (OSError, SafeExecError) as exc:
+            return {"status": "failed", "output": {}, "error": str(exc)}
+    if tool_key == NGINX_SITES_DISCOVERY_TOOL_KEY:
+        try:
+            return {"status": "succeeded", "output": collect_nginx_sites(job.get("params") or {}), "error": ""}
+        except ValueError as exc:
+            return {"status": "rejected", "output": {}, "error": str(exc)}
+        except (OSError, NginxDiscoveryError) as exc:
             return {"status": "failed", "output": {}, "error": str(exc)}
 
     else:

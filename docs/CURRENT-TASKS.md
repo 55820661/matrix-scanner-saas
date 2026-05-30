@@ -894,3 +894,53 @@ Completion:
 - Sprint 2.2 implementation is complete within the approved runtime-only scope.
 - No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, enabling migration, AI planner, external bot, or remediation/write behavior was added.
 - No commit or push was made.
+
+## Active Task - Phase 2 Sprint 2.3 Nginx Sites Discovery
+
+Task:
+- Implement only the Sprint 2.3 runtime `nginx_sites_discovery` collector.
+
+Scope:
+- Add `scanner_runtime/nginx_discovery.py`.
+- Read only allowlisted Nginx config sources.
+- Parse Nginx `server` blocks with safe brace counting.
+- Extract safe `server_name`, `listen`, `root`, `access_log`, `error_log`, and `proxy_pass` metadata.
+- Reject non-empty params.
+- Register only `nginx_sites_discovery` in the runtime executor.
+- Add focused tests for parser behavior, path safety, symlink safety, include flagging, param rejection, and output safety.
+
+Out of scope:
+- Baseline orchestration changes.
+- Baseline profile changes.
+- `ingest_tool_result()` changes.
+- `DiscoveredDomain`, `Application`, or `LogSource` writes.
+- ToolPolicy or PlanTool activation.
+- Migrations.
+- Other Phase 2 runtime handlers.
+- AI planner, external bot, remediation/actions, or shell command execution.
+
+Immediate next steps:
+- Add the Nginx discovery runtime module.
+- Wire the handler into `scanner_runtime/prototype.py`.
+- Add focused Sprint 2.3 tests.
+- Run requested checks.
+
+Progress:
+- Added `scanner_runtime/nginx_discovery.py` as a pure file-reading runtime collector.
+- Added allowlisted Nginx config candidate handling, safe symlink resolution checks, file size caps, and total scan cap.
+- Added parser support for `server` blocks, `server_name`, `listen`, `root`, `access_log`, `error_log`, `proxy_pass`, comments, multiple domains, default servers, wildcard names, and include flagging without following includes.
+- Added output safety rules for blocked paths, variable paths, credentialed/variable proxy targets, cert/key/auth directives, and raw config exclusion.
+- Registered only `nginx_sites_discovery` in `scanner_runtime/prototype.py`.
+- Added focused Sprint 2.3 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_nginx_sites_discovery --noinput` passed: 12 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 185 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion:
+- Sprint 2.3 implementation is complete within the approved runtime-only scope.
+- No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, migrations, AI planner, external bot, or remediation/write behavior was added.
+- No commit or push was made.

@@ -683,3 +683,38 @@ Verification:
 Remaining:
 - Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
 - No commit or push was made.
+
+## 2026-05-30 - Phase 2 Sprint 2.3 Start
+
+Intent:
+- Implement only the approved Sprint 2.3 runtime `nginx_sites_discovery` collector.
+
+Scope:
+- Add a pure file-reading Nginx discovery runtime module.
+- Read only `/etc/nginx/nginx.conf`, direct files under `/etc/nginx/sites-enabled/*`, and direct `*.conf` files under `/etc/nginx/conf.d/*.conf`.
+- Handle safe symlinks from `sites-enabled` only when resolved targets remain under allowlisted Nginx roots.
+- Parse safe server block metadata without storing raw config text.
+- Register only `nginx_sites_discovery` in the runtime executor.
+- Add focused tests for parsing, safety, symlink behavior, params rejection, and unsupported tool behavior.
+
+Out of scope:
+- Baseline orchestration, baseline profiles, baseline ingestion, `DiscoveredDomain`, `Application`, or `LogSource` writes, ToolPolicy/PlanTool activation, migrations, other Phase 2 handlers, AI planner, external bot, remediation/actions, and shell command execution.
+
+Result:
+- Added `scanner_runtime/nginx_discovery.py` as a pure file-reading runtime collector.
+- Added code-defined Nginx config sources, safe source validation, safe symlink handling, per-file size cap, and total scanned bytes cap.
+- Added Nginx `server` block parsing for safe `server_name`, `listen`, `root`, `access_log`, `error_log`, and `proxy_pass` metadata.
+- Ignored cert/key/auth directives, rejected variable filesystem paths, dropped credentialed/variable proxy targets, and avoided returning raw config text.
+- Registered only `nginx_sites_discovery` in the runtime executor; runtime still creates no ToolRun or AgentJob.
+- Added focused Sprint 2.3 tests for parsing, safety, symlink behavior via read validation outcomes, include flagging, params rejection, and unsupported tool behavior.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_nginx_sites_discovery --noinput` passed: 12 tests ran successfully.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 185 tests ran successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
+- No commit or push was made.
