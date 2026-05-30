@@ -100,12 +100,13 @@ def source_allowed(candidate):
     sites_available = NGINX_SITES_AVAILABLE_DIR.resolve(strict=False)
     conf_d = NGINX_CONF_D_DIR.resolve(strict=False)
     candidate_path = Path(candidate)
+    candidate_location = candidate_path if candidate_path.is_absolute() else Path.cwd() / candidate_path
 
-    if candidate_path == NGINX_CONF_PATH and resolved == nginx_conf:
+    if candidate_location == nginx_conf and resolved == nginx_conf:
         return resolved
-    if is_relative_to(candidate_path.resolve(strict=False), conf_d) and is_relative_to(resolved, conf_d):
+    if is_relative_to(candidate_location, conf_d) and is_relative_to(resolved, conf_d):
         return resolved
-    if is_relative_to(candidate_path.resolve(strict=False), sites_enabled):
+    if is_relative_to(candidate_location, sites_enabled):
         if is_relative_to(resolved, sites_enabled) or is_relative_to(resolved, sites_available) or is_relative_to(resolved, conf_d):
             return resolved
     return None
