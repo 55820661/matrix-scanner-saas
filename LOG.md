@@ -684,6 +684,54 @@ Remaining:
 - Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
 - No commit or push was made.
 
+## 2026-05-31 - Phase 2 Sprint 2.8 Start
+
+Intent:
+- Implement only the approved Sprint 2.8 runtime `log_sources_discovery_v2` collector.
+
+Scope:
+- Add `scanner_runtime/log_sources_discovery_v2.py` with pure filesystem metadata collection (no content reads, no shell commands).
+- Allow only fixed candidates:
+  - `/var/log/nginx`
+  - `/var/log/postgresql`
+  - `/var/log/syslog`
+  - `/var/log/messages`
+  - `/opt/*/logs`
+  - `/opt/*/*/logs`
+- Return only safe metadata fields and contract-compatible top-level keys: `log_sources`, `summary`.
+- Reject non-empty params.
+- Register only `log_sources_discovery_v2` in runtime executor.
+- Add focused Sprint 2.8 tests.
+
+Out of scope:
+- Baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other runtime handlers, AI planner, external bot, `journalctl`, `systemctl`, service correlation, unit file reads, log parsing, and findings generation.
+
+Result:
+- Added `scanner_runtime/log_sources_discovery_v2.py` implementing `collect_log_sources_v2(params=None)` with pure filesystem metadata only.
+- Added fixed allowlisted candidates only:
+  - `/var/log/nginx`
+  - `/var/log/postgresql`
+  - `/var/log/syslog`
+  - `/var/log/messages`
+  - `/opt/*/logs`
+  - `/opt/*/*/logs`
+- Collected safe metadata fields only: `path`, `type`, `exists`, `is_dir`, `size_bytes`, `modified_at`, `metadata.source`.
+- Added path canonicalization and allowlist enforcement for `/opt` patterns.
+- Enforced params rejection, graceful `OSError/PermissionError` handling, redacted strings, and output cap.
+- Registered only `log_sources_discovery_v2` in `scanner_runtime/prototype.py`.
+- Added focused Sprint 2.8 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_log_sources_discovery_v2 --noinput` passed: 12 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 251 tests (4 skipped).
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
+- No commit or push was made.
+
 ## 2026-05-30 - Phase 2 Sprint 2.4 Start
 
 Intent:

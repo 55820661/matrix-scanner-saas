@@ -9,6 +9,7 @@ from .gunicorn_uvicorn_discovery import (
     GUNICORN_UVICORN_SERVICES_DISCOVERY_TOOL_KEY,
     collect_gunicorn_uvicorn_services,
 )
+from .log_sources_discovery_v2 import LOG_SOURCES_DISCOVERY_V2_TOOL_KEY, collect_log_sources_v2
 from .django_discovery import DJANGO_APPS_DISCOVERY_TOOL_KEY, DjangoDiscoveryError, collect_django_apps
 from .nginx_discovery import NGINX_SITES_DISCOVERY_TOOL_KEY, NginxDiscoveryError, collect_nginx_sites
 from .opt_discovery import OPT_APPS_DISCOVERY_TOOL_KEY, OptDiscoveryError, collect_opt_apps
@@ -129,6 +130,13 @@ def execute_job(job):
         except ValueError as exc:
             return {"status": "rejected", "output": {}, "error": str(exc)}
         except (OSError, SafeExecError) as exc:
+            return {"status": "failed", "output": {}, "error": str(exc)}
+    if tool_key == LOG_SOURCES_DISCOVERY_V2_TOOL_KEY:
+        try:
+            return {"status": "succeeded", "output": collect_log_sources_v2(job.get("params") or {}), "error": ""}
+        except ValueError as exc:
+            return {"status": "rejected", "output": {}, "error": str(exc)}
+        except OSError as exc:
             return {"status": "failed", "output": {}, "error": str(exc)}
 
     else:

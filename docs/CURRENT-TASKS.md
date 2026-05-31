@@ -1148,3 +1148,59 @@ Completion status:
 - Sprint 2.7 implementation is complete within approved runtime-only scope.
 - No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, or external bot changes were added.
 - No commit or push was made.
+
+## Active Task - Phase 2 Sprint 2.8 Log Sources Discovery V2
+
+Task:
+- Implement only the Sprint 2.8 runtime `log_sources_discovery_v2` collector.
+
+Scope:
+- Add `scanner_runtime/log_sources_discovery_v2.py` using pure filesystem metadata only.
+- Fixed allowlisted candidates only:
+  - `/var/log/nginx`
+  - `/var/log/postgresql`
+  - `/var/log/syslog`
+  - `/var/log/messages`
+  - `/opt/*/logs`
+  - `/opt/*/*/logs`
+- Collect safe fields only: `path`, `type`, `exists`, `is_dir`, `size_bytes`, `modified_at`, `metadata.source`.
+- Canonicalize paths and reject outside-allowlist paths.
+- Reject non-empty params.
+- Register only `log_sources_discovery_v2` in `scanner_runtime/prototype.py`.
+- Add focused Sprint 2.8 tests.
+
+Out of scope:
+- Baseline/profile/ingestion changes.
+- ToolPolicy or PlanTool activation.
+- Migrations.
+- Other runtime handlers.
+- `journalctl`, `systemctl`, unit-file reads, service correlation.
+- Any log content reads/parsing/tail/grep.
+- Findings generation.
+- AI planner or external bot.
+
+Progress:
+- Added `scanner_runtime/log_sources_discovery_v2.py` with metadata-only log source discovery.
+- Added fixed allowlisted candidates for:
+  - `/var/log/nginx`
+  - `/var/log/postgresql`
+  - `/var/log/syslog`
+  - `/var/log/messages`
+  - `/opt/*/logs`
+  - `/opt/*/*/logs`
+- Added safe metadata output fields only: `path`, `type`, `exists`, `is_dir`, `size_bytes`, `modified_at`, `metadata.source`.
+- Added canonicalization and allowlist validation to reject unsafe/outside paths.
+- Registered only `log_sources_discovery_v2` in `scanner_runtime/prototype.py`.
+- Added focused Sprint 2.8 unit tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_log_sources_discovery_v2 --noinput` passed: 12 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 251 tests (4 skipped).
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.8 implementation is complete within approved runtime-only scope.
+- No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, or external bot changes were added.
+- No commit or push was made.
