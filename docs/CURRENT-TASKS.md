@@ -1204,3 +1204,41 @@ Completion status:
 - Sprint 2.8 implementation is complete within approved runtime-only scope.
 - No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, or external bot changes were added.
 - No commit or push was made.
+
+## Active Task - Phase 2 Sprint 2.8 Log Sources Discovery V2 Hotfix
+
+Task:
+- Tighten `/opt` log source discovery after server smoke testing showed noisy internal/heavy directories and missing `/opt/.../logs` candidates.
+
+Scope:
+- Skip hidden/heavy/internal directories under `/opt`:
+  `.git`, `.venv`, `venv`, `node_modules`, `__pycache__`, `.cache`, `.config`, `.npm`, `.tox`, `tests`, `docs`, `static`, `staticfiles`, `templates`, `scripts`, `skills`, `dist`, `build`, `tmp`.
+- Do not emit `/opt/*/logs` or `/opt/*/*/logs` if the logs path does not exist.
+- Keep fixed system candidates even when missing.
+- Preserve `/opt` realpath escape protection.
+- Add regression tests for hidden/heavy/missing app log paths.
+
+Out of scope:
+- Baseline/profile/ingestion changes.
+- ToolPolicy or PlanTool activation.
+- Migrations.
+- Other runtime handlers.
+- AI planner or external bot.
+- Log content reads/parsing or findings generation.
+
+Progress:
+- Updated `/opt` log source discovery to skip hidden/heavy/internal directories.
+- Stopped emitting missing `/opt` app log candidates while preserving missing fixed system candidates.
+- Preserved `/opt` realpath escape protection for app log paths.
+- Added regression tests for `.git/logs`, `node_modules/logs`, missing `/opt/app/logs`, existing safe `/opt/app/logs`, and missing fixed system candidates.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_log_sources_discovery_v2 --noinput` passed: 18 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 257 tests (4 skipped).
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.8 hotfix is complete within approved runtime-only scope.
+- No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, external bot, log parsing, or findings generation were added.
+- No commit or push was made.

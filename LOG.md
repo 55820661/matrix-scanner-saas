@@ -684,6 +684,38 @@ Remaining:
 - Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
 - No commit or push was made.
 
+## 2026-05-31 - Phase 2 Sprint 2.8 Hotfix Start
+
+Intent:
+- Tighten `log_sources_discovery_v2` `/opt` log discovery after server smoke testing showed noisy internal/heavy directories and missing app log candidates.
+
+Scope:
+- Skip hidden/heavy/internal directories under `/opt` during log source candidate discovery.
+- Emit `/opt/*/logs` and `/opt/*/*/logs` candidates only when the logs path exists.
+- Preserve fixed system log candidates even when missing.
+- Preserve realpath escape protection for `/opt` log paths.
+- Add focused regression tests.
+
+Out of scope:
+- Baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other runtime handlers, AI planner, external bot, log content reads, and findings generation.
+
+Result:
+- Updated `/opt` log source discovery to skip hidden/heavy/internal directories:
+  `.git`, `.venv`, `venv`, `node_modules`, `__pycache__`, `.cache`, `.config`, `.npm`, `.tox`, `tests`, `docs`, `static`, `staticfiles`, `templates`, `scripts`, `skills`, `dist`, `build`, `tmp`.
+- Stopped emitting missing `/opt/*/logs` and `/opt/*/*/logs` candidates.
+- Kept fixed system candidates emitted even when missing.
+- Preserved `/opt` realpath escape validation for app log paths.
+- Added regression tests for hidden/heavy/missing app log paths and fixed system missing paths.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_log_sources_discovery_v2 --noinput` passed: 18 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 257 tests (4 skipped).
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No commit or push was made.
+
 ## 2026-05-31 - Phase 2 Sprint 2.8 Start
 
 Intent:

@@ -7,6 +7,7 @@ from apps.core.redaction import redact_secrets
 
 LOG_SOURCES_DISCOVERY_V2_TOOL_KEY = "log_sources_discovery_v2"
 MAX_OUTPUT_BYTES = 64 * 1024
+OPT_ROOT = Path("/opt")
 
 SYSTEM_CANDIDATES = [
     ("/var/log/nginx", "nginx_log_dir"),
@@ -14,6 +15,28 @@ SYSTEM_CANDIDATES = [
     ("/var/log/syslog", "system_log_file"),
     ("/var/log/messages", "system_log_file"),
 ]
+
+SKIPPED_OPT_DIR_NAMES = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".cache",
+    ".config",
+    ".npm",
+    ".tox",
+    "tests",
+    "docs",
+    "static",
+    "staticfiles",
+    "templates",
+    "scripts",
+    "skills",
+    "dist",
+    "build",
+    "tmp",
+}
 
 
 def canonicalize_path(value):
@@ -72,6 +95,17 @@ def _iso_mtime(timestamp):
         return ""
 
 
+def _is_skipped_opt_dir(path):
+    return path.name in SKIPPED_OPT_DIR_NAMES or path.name.startswith(".")
+
+
+def _is_existing_dir(path):
+    try:
+        return path.exists() and path.is_dir()
+    except (OSError, PermissionError):
+        return False
+
+
 def _metadata_for_path(path, source_type, stats):
     canonical = canonicalize_path(path)
     if not _is_allowed_path(canonical):
@@ -110,24 +144,28 @@ def _metadata_for_path(path, source_type, stats):
 
 def _discover_opt_logs_candidates():
     candidates = []
-    opt_root = Path("/opt")
+    opt_root = OPT_ROOT
     try:
         level1 = list(opt_root.iterdir())
     except (FileNotFoundError, PermissionError, OSError):
         return candidates
 
     for first in level1:
-        if not first.is_dir():
+        if _is_skipped_opt_dir(first) or not _is_existing_dir(first):
             continue
-        candidates.append(str(first / "logs"))
+        first_logs = first / "logs"
+        if _is_existing_dir(first_logs):
+            candidates.append(str(first_logs))
         try:
             level2 = list(first.iterdir())
         except (PermissionError, OSError):
             continue
         for second in level2:
-            if not second.is_dir():
+            if _is_skipped_opt_dir(second) or not _is_existing_dir(second):
                 continue
-            candidates.append(str(second / "logs"))
+            second_logs = second / "logs"
+            if _is_existing_dir(second_logs):
+                candidates.append(str(second_logs))
     return candidates
 
 

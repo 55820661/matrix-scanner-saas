@@ -1,9 +1,10 @@
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from scanner_runtime.log_sources_discovery_v2 import collect_log_sources_v2
+from scanner_runtime.log_sources_discovery_v2 import _discover_opt_logs_candidates, collect_log_sources_v2
 from scanner_runtime.prototype import execute_job
 
 
@@ -98,6 +99,48 @@ class Phase2LogSourcesDiscoveryV2Tests(SimpleTestCase):
 
         self.assertEqual(result["log_sources"], [])
         self.assertNotIn("/root/secret", str(result))
+
+    def test_hidden_git_logs_under_opt_not_returned(self):
+        with TemporaryDirectory() as tmp:
+            opt_root = Path(tmp) / "opt"
+            (opt_root / "app" / ".git" / "logs").mkdir(parents=True)
+            with patch("scanner_runtime.log_sources_discovery_v2.OPT_ROOT", opt_root):
+                candidates = collect_log_sources_v2({})["log_sources"]
+        self.assertNotIn(".git/logs", str(candidates))
+
+    def test_node_modules_logs_under_opt_not_returned(self):
+        with TemporaryDirectory() as tmp:
+            opt_root = Path(tmp) / "opt"
+            (opt_root / "app" / "node_modules" / "logs").mkdir(parents=True)
+            with patch("scanner_runtime.log_sources_discovery_v2.OPT_ROOT", opt_root):
+                candidates = collect_log_sources_v2({})["log_sources"]
+        self.assertNotIn("node_modules/logs", str(candidates))
+
+    def test_missing_opt_app_logs_not_returned(self):
+        with TemporaryDirectory() as tmp:
+            opt_root = Path(tmp) / "opt"
+            (opt_root / "app").mkdir(parents=True)
+            with patch("scanner_runtime.log_sources_discovery_v2.SYSTEM_CANDIDATES", []):
+                with patch("scanner_runtime.log_sources_discovery_v2.OPT_ROOT", opt_root):
+                    result = collect_log_sources_v2({})
+        self.assertEqual(result["log_sources"], [])
+
+    def test_existing_safe_opt_app_logs_returned_from_real_discovery(self):
+        with TemporaryDirectory() as tmp:
+            opt_root = Path(tmp) / "opt"
+            (opt_root / "app" / "logs").mkdir(parents=True)
+            with patch("scanner_runtime.log_sources_discovery_v2.OPT_ROOT", opt_root):
+                candidates = _discover_opt_logs_candidates()
+        self.assertEqual(len(candidates), 1)
+        self.assertTrue(candidates[0].replace("\\", "/").endswith("/opt/app/logs"))
+
+    def test_fixed_system_missing_candidates_still_returned(self):
+        with patch("scanner_runtime.log_sources_discovery_v2.SYSTEM_CANDIDATES", [("/var/log/messages", "system_log_file")]):
+            with patch("scanner_runtime.log_sources_discovery_v2._discover_opt_logs_candidates", return_value=[]):
+                with patch("scanner_runtime.log_sources_discovery_v2.Path.stat", side_effect=FileNotFoundError):
+                    result = collect_log_sources_v2({})
+        self.assertEqual(len(result["log_sources"]), 1)
+        self.assertEqual(result["log_sources"][0]["exists"], False)
 
     def test_does_not_read_log_contents(self):
         with patch("pathlib.Path.read_text", side_effect=AssertionError("must not read log contents")):
