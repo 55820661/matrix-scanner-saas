@@ -759,6 +759,49 @@ Remaining:
 - Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
 - No commit or push was made.
 
+## 2026-05-31 - Phase 2 Sprint 2.6 Start
+
+Intent:
+- Implement only the approved Sprint 2.6 runtime `gunicorn_uvicorn_services_discovery` collector.
+
+Scope:
+- Add `scanner_runtime/gunicorn_uvicorn_discovery.py` using fixed `systemctl list-units` and capped `systemctl show` execution through `safe_exec.py`.
+- Reject non-empty params.
+- Detect `gunicorn`, `uvicorn`, and `daphne` from safe fields only (unit Id and redacted Description).
+- Return only safe structured metadata and contract-compatible top-level keys: `services`, `applications`, and `summary`.
+- Register only `gunicorn_uvicorn_services_discovery` in the runtime executor.
+- Add focused unit tests for parsing, safety, redaction, and runtime routing behavior.
+
+Out of scope:
+- Baseline orchestration, baseline profiles, baseline ingestion, ToolPolicy/PlanTool activation, migrations, other runtime handlers, AI planner, external bot, Supervisor support, port correlation, unit file content parsing, `/proc/<pid>/cmdline`, and any write/restart actions.
+
+Result:
+- Added `scanner_runtime/gunicorn_uvicorn_discovery.py` with a safe two-step discovery flow:
+  - fixed `systemctl list-units --type=service --all --no-pager --plain --no-legend`
+  - fixed capped `systemctl show <unit names> --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState,MainPID,FragmentPath,User,WorkingDirectory`
+- Enforced unit cap before `systemctl show` and rejected non-empty params.
+- Added safe parsing for `gunicorn`, `uvicorn`, and `daphne` from unit Id + redacted Description only.
+- Excluded unsafe fields and sources (`ExecStart`, `Environment`, unit file contents, `/proc/<pid>/cmdline`).
+- Returned only contract-compatible top-level keys: `services`, `applications`, `summary`.
+- Registered only `gunicorn_uvicorn_services_discovery` in `scanner_runtime/prototype.py`.
+- Added focused Sprint 2.6 tests.
+
+Verification:
+- `python manage.py check` failed locally because shell `python` is not using the project venv and cannot import Django.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` failed for the same shell `python` reason.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected and a database timeout warning.
+- `python manage.py test tests.unit.test_phase2_gunicorn_uvicorn_services_discovery --noinput` failed for the same shell `python` reason.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_gunicorn_uvicorn_services_discovery --noinput` passed: 11 tests ran successfully.
+- `python manage.py test --noinput` failed for the same shell `python` reason.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` ran 216 tests before failing in `tests.unit.test_sprint2_agent_foundation.Sprint2AgentFoundationTests.setUpClass` due to PostgreSQL connection timeout.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Re-run full suite after local PostgreSQL test connection is stable.
+- Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
+- No commit or push was made.
+
 ## 2026-05-30 - Phase 2 Sprint 2.3 Start
 
 Intent:

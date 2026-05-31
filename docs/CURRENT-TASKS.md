@@ -1043,3 +1043,59 @@ Completion status:
 - Sprint 2.5 implementation is complete except for a full-suite re-run after local PostgreSQL test database connectivity is stable.
 - No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, migrations, other Phase 2 handlers, AI planner, external bot, or remediation/write behavior was added.
 - No commit or push was made.
+
+## Active Task - Phase 2 Sprint 2.6 Gunicorn/Uvicorn Services Discovery
+
+Task:
+- Implement only the Sprint 2.6 runtime `gunicorn_uvicorn_services_discovery` collector.
+
+Scope:
+- Add `scanner_runtime/gunicorn_uvicorn_discovery.py`.
+- Discovery flow:
+  - Run fixed `systemctl list-units --type=service --all --no-pager --plain --no-legend`.
+  - Parse safe unit names.
+  - Run fixed `systemctl show <capped units> --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState,MainPID,FragmentPath,User,WorkingDirectory`.
+- Use `safe_exec.py` only with fixed argv and `shell=False`.
+- Reject non-empty params.
+- Detect `gunicorn`, `uvicorn`, `daphne` from safe fields only (Id and redacted Description).
+- Return only safe contract-compatible keys: `services`, `applications`, `summary`.
+- Register only `gunicorn_uvicorn_services_discovery` in `scanner_runtime/prototype.py`.
+- Add focused tests for parsing and safety constraints.
+
+Out of scope:
+- Baseline orchestration/profile/ingestion changes.
+- ToolPolicy or PlanTool activation.
+- Migrations.
+- Other runtime handlers.
+- Supervisor support.
+- Port correlation.
+- Unit file content reads.
+- `/proc/<pid>/cmdline`.
+- AI planner or external bot.
+
+Progress:
+- Added `scanner_runtime/gunicorn_uvicorn_discovery.py` with fixed two-step discovery:
+  - `systemctl list-units --type=service --all --no-pager --plain --no-legend`
+  - capped `systemctl show <unit names> --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState,MainPID,FragmentPath,User,WorkingDirectory`
+- Added safe unit-name extraction and show-unit cap enforcement.
+- Added service typing (`gunicorn`, `uvicorn`, `daphne`, `unknown`) from safe fields only.
+- Added safe metadata shaping with `/opt`-only working directory handling, safe fragment path allowlist, and related app path inference.
+- Returned only top-level keys required by the seeded contract: `services`, `applications`, `summary`.
+- Registered only `gunicorn_uvicorn_services_discovery` in `scanner_runtime/prototype.py`.
+- Added focused Sprint 2.6 tests.
+
+Verification:
+- `python manage.py check` failed locally because shell `python` is not bound to the project venv.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` failed for the same shell `python` reason.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected and a database timeout warning.
+- `python manage.py test tests.unit.test_phase2_gunicorn_uvicorn_services_discovery --noinput` failed for the same shell `python` reason.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_gunicorn_uvicorn_services_discovery --noinput` passed: 11 tests.
+- `python manage.py test --noinput` failed for the same shell `python` reason.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` ran 216 tests before failing in `tests.unit.test_sprint2_agent_foundation.Sprint2AgentFoundationTests.setUpClass` due to PostgreSQL connection timeout.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.6 implementation is complete except for a clean full-suite run after PostgreSQL test connectivity is stable.
+- No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, or external bot changes were added.
+- No commit or push was made.
