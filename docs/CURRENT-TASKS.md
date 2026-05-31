@@ -1099,3 +1099,52 @@ Completion status:
 - Sprint 2.6 implementation is complete except for a clean full-suite run after PostgreSQL test connectivity is stable.
 - No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, or external bot changes were added.
 - No commit or push was made.
+
+## Active Task - Phase 2 Sprint 2.7 PostgreSQL Status Discovery
+
+Task:
+- Implement only the Sprint 2.7 runtime `postgres_status_discovery` collector.
+
+Scope:
+- Add `scanner_runtime/postgres_discovery.py`.
+- Use fixed commands via `safe_exec.py`:
+  - `systemctl list-units --type=service --all --no-pager --plain --no-legend`
+  - capped `systemctl show <unit names> --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState,MainPID,FragmentPath`
+- Add optional fixed `pg_isready` probe without connection arguments.
+- Normalize `pg_isready` health result to `ok|failed|not_available`.
+- Reject non-empty params.
+- Return contract-compatible top-level keys: `services`, `summary`.
+- Register only `postgres_status_discovery` in `scanner_runtime/prototype.py`.
+- Add focused Sprint 2.7 tests.
+
+Out of scope:
+- Baseline/profile/ingestion changes.
+- ToolPolicy or PlanTool activation.
+- Migrations.
+- Other runtime handlers.
+- `psql`, SQL queries, DB contents, `.pgpass`, credentials, connection strings.
+- PostgreSQL config reads (`postgresql.conf`, `pg_hba.conf`).
+- Port inspection.
+- AI planner or external bot.
+
+Progress:
+- Added `scanner_runtime/postgres_discovery.py` with fixed-command safe collection flow.
+- Added PostgreSQL unit discovery from:
+  - `systemctl list-units --type=service --all --no-pager --plain --no-legend`
+  - capped `systemctl show <unit names> --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState,MainPID,FragmentPath`
+- Added optional fixed `pg_isready` probe normalized to `ok|failed|not_available`.
+- Enforced contract-compatible output keys: `services`, `summary`.
+- Registered only `postgres_status_discovery` in `scanner_runtime/prototype.py`.
+- Added focused Sprint 2.7 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_postgres_status_discovery --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 239 tests (4 skipped).
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.7 implementation is complete within approved runtime-only scope.
+- No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, or external bot changes were added.
+- No commit or push was made.

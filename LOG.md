@@ -802,6 +802,47 @@ Remaining:
 - Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
 - No commit or push was made.
 
+## 2026-05-31 - Phase 2 Sprint 2.7 Start
+
+Intent:
+- Implement only the approved Sprint 2.7 runtime `postgres_status_discovery` collector.
+
+Scope:
+- Add `scanner_runtime/postgres_discovery.py` with fixed-command discovery via `safe_exec.py`:
+  - `systemctl list-units --type=service --all --no-pager --plain --no-legend`
+  - capped `systemctl show <unit names> --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState,MainPID,FragmentPath`
+- Parse safe PostgreSQL service variants (`postgresql.service`, `postgresql@*.service`, obvious distro variants).
+- Add optional fixed `pg_isready` probe (no host/user/db/password args), normalized to `ok|failed|not_available`.
+- Reject non-empty params.
+- Register only `postgres_status_discovery` in runtime executor.
+- Add focused unit tests and run requested validation commands.
+
+Out of scope:
+- Baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other runtime handlers, AI planner, external bot, `psql`/SQL queries, `.pgpass`, connection strings, config file reads, and port inspection.
+
+Result:
+- Added `scanner_runtime/postgres_discovery.py` implementing `collect_postgres_status(params=None)`.
+- Implemented safe fixed-command flow via `safe_exec.py`:
+  - `systemctl list-units --type=service --all --no-pager --plain --no-legend`
+  - capped `systemctl show <unit names> --property=Id,Description,LoadState,ActiveState,SubState,UnitFileState,MainPID,FragmentPath`
+  - optional fixed `pg_isready` probe normalized to `ok|failed|not_available`.
+- Added safe parsing for PostgreSQL units (`postgresql.service`, `postgresql@*.service`, obvious variants).
+- Returned contract-compatible top-level keys only: `services`, `summary`.
+- Added strict safety behavior: reject non-empty params, no raw diagnostics with secret-like key names, no `psql`, no config reads, no credentials, no connection strings.
+- Registered only `postgres_status_discovery` in `scanner_runtime/prototype.py`.
+- Added focused Sprint 2.7 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_postgres_status_discovery --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 239 tests (4 skipped).
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Baseline/profile/ingestion integration and ToolPolicy/PlanTool activation remain deferred.
+- No commit or push was made.
+
 ## 2026-05-30 - Phase 2 Sprint 2.3 Start
 
 Intent:

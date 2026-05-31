@@ -12,6 +12,7 @@ from .gunicorn_uvicorn_discovery import (
 from .django_discovery import DJANGO_APPS_DISCOVERY_TOOL_KEY, DjangoDiscoveryError, collect_django_apps
 from .nginx_discovery import NGINX_SITES_DISCOVERY_TOOL_KEY, NginxDiscoveryError, collect_nginx_sites
 from .opt_discovery import OPT_APPS_DISCOVERY_TOOL_KEY, OptDiscoveryError, collect_opt_apps
+from .postgres_discovery import POSTGRES_STATUS_DISCOVERY_TOOL_KEY, collect_postgres_status
 from .safe_exec import SafeExecError
 from .system_identity import SYSTEM_IDENTITY_TOOL_KEY, SystemIdentityError, collect_system_identity
 
@@ -118,6 +119,13 @@ def execute_job(job):
     if tool_key == GUNICORN_UVICORN_SERVICES_DISCOVERY_TOOL_KEY:
         try:
             return {"status": "succeeded", "output": collect_gunicorn_uvicorn_services(job.get("params") or {}), "error": ""}
+        except ValueError as exc:
+            return {"status": "rejected", "output": {}, "error": str(exc)}
+        except (OSError, SafeExecError) as exc:
+            return {"status": "failed", "output": {}, "error": str(exc)}
+    if tool_key == POSTGRES_STATUS_DISCOVERY_TOOL_KEY:
+        try:
+            return {"status": "succeeded", "output": collect_postgres_status(job.get("params") or {}), "error": ""}
         except ValueError as exc:
             return {"status": "rejected", "output": {}, "error": str(exc)}
         except (OSError, SafeExecError) as exc:
