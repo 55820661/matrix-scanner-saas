@@ -2,6 +2,40 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-01 - Phase 2 Sprint 2.10 Start
+
+Intent:
+- Implement only the approved Sprint 2.10 safe Phase 2 pilot tool enablement command/helper.
+
+Scope:
+- Add a management command requiring `--plan-id` to enable Phase 2 read-only discovery tools for one selected pilot plan.
+- Add dry-run support that reports intended ToolDefinition, ToolPolicy, and PlanTool changes without writes.
+- Enable only the Phase 2 tools required by the `debian_nginx_opt` baseline profile.
+- Keep `allow_customer_run=False` and create/update PlanTool only for the selected plan.
+- Add focused tests for dry-run safety, plan scoping, policy shape, preflight success, and no ToolRun/AgentJob/report/ingestion side effects.
+
+Out of scope:
+- Migrations, Admin UI, customer Portal behavior, automatic scan creation, ToolRun/AgentJob creation inside the command, baseline ingestion, reports, AI planner, external bot, remediation/actions, global plan activation, and unrelated refactors.
+
+Result:
+- Added `apps/tools/phase2_enablement.py` with scoped Phase 2 pilot enablement logic.
+- Added `enable_phase2_pilot_tools --plan-id <PLAN_ID> [--dry-run]`.
+- Dry-run reports intended ToolDefinition, ToolPolicy, and PlanTool changes without writing.
+- Actual run seeds missing Phase 2 contracts, enables only selected Phase 2 read-only discovery ToolDefinitions, activates admin/agent ToolPolicy with `allow_customer_run=False`, and creates/enables PlanTool rows only for the selected plan.
+- The command does not create ToolRuns, AgentJobs, baseline scans, reports, or ingestion side effects.
+- Added focused Sprint 2.10 tests for dry-run safety, plan-id requirements, invalid plan handling, selected-plan scoping, non-read-only skip behavior, policy shape, no ToolRun/AgentJob side effects, and Debian/Nginx baseline preflight readiness.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_pilot_enablement --noinput` passed: 11 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 275 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No migration, Admin UI, Portal behavior, ingestion, report, AI planner, external bot, remediation, or global activation changes were added.
+- No commit or push was made.
+
 ## 2026-05-31 - Phase 2 Sprint 2.9 Start
 
 Intent:

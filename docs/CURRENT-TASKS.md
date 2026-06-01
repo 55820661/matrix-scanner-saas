@@ -2,6 +2,56 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## Active Task - Phase 2 Sprint 2.10 Pilot Tool Enablement
+
+Task:
+- Implement only the Sprint 2.10 management command/helper for safe Phase 2 pilot tool enablement.
+
+Scope:
+- Add `enable_phase2_pilot_tools --plan-id <PLAN_ID>` with dry-run support.
+- Enable only Phase 2 discovery tools required by `debian_nginx_opt`.
+- Scope PlanTool creation/update to the selected plan only.
+- Keep customer execution disabled for these tools.
+- Add focused tests for safety, scoping, and baseline preflight readiness.
+
+Out of scope:
+- Migrations.
+- Admin UI.
+- Customer Portal behavior.
+- Automatic scan creation.
+- ToolRun/AgentJob creation inside the command.
+- Baseline ingestion.
+- Report changes.
+- AI planner.
+- External bot.
+- Remediation/actions.
+- Global activation for all plans.
+
+Immediate next steps:
+- Add the enablement helper and management command.
+- Add focused unit tests.
+- Run the requested verification commands.
+
+Progress:
+- Added the Phase 2 pilot enablement helper.
+- Added the `enable_phase2_pilot_tools --plan-id <PLAN_ID> [--dry-run]` management command.
+- Kept dry-run write-free.
+- Scoped PlanTool creation/update to the selected plan only.
+- Kept customer execution disabled for Phase 2 pilot tools.
+- Added focused tests for command safety, policy/plan scoping, and Debian/Nginx baseline preflight readiness.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_pilot_enablement --noinput` passed: 11 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 275 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.10 implementation is complete within the approved scope.
+- No migration/Admin UI/Portal/ingestion/report/AI/external bot/remediation/global activation changes were added.
+- No commit or push was made.
+
 ## Active Task - Phase 2 Sprint 2.9 Baseline Profiles
 
 Task:
