@@ -9,6 +9,7 @@ from apps.tools.services import ToolPolicyDenied, active_subscription_for, creat
 from apps.tools.setup import BASELINE_TOOL_KEYS, ensure_baseline_tools
 from apps.tools.validation import ToolParamValidationError, canonicalize_path, path_matches_prefix
 
+from .baseline_profiles import tool_keys_for_profile
 from .models import BaselineScan, BaselineScanStep, DiscoveredDomain, DiscoveredService, Finding, LogSource, ScannerAgent
 
 
@@ -99,7 +100,7 @@ def preflight_required_baseline_tools(scan):
         raise BaselineScanError("Scanner agent is not active.")
 
     missing = []
-    for tool_key in BASELINE_TOOL_KEYS:
+    for tool_key in baseline_tool_keys_for_scan(scan):
         try:
             tool = ToolDefinition.objects.select_related("template").get(key=tool_key)
         except ToolDefinition.DoesNotExist:
@@ -152,7 +153,7 @@ def enqueue_next_baseline_tools(scan):
         preflight_required_baseline_tools(scan)
         with transaction.atomic():
             locked_scan = BaselineScan.objects.select_for_update().get(id=scan.id)
-            for tool_key in BASELINE_TOOL_KEYS:
+            for tool_key in baseline_tool_keys_for_scan(locked_scan):
                 if BaselineScanStep.objects.filter(baseline_scan=locked_scan, step_key=tool_key).exists():
                     continue
                 tool_run, _job = create_tool_run_job(
@@ -175,6 +176,10 @@ def enqueue_next_baseline_tools(scan):
     scan.current_step = "waiting_for_agent_results"
     scan.save(update_fields=["current_step", "updated_at"])
     return scan
+
+
+def baseline_tool_keys_for_scan(scan):
+    return tool_keys_for_profile(getattr(scan, "profile_key", ""))
 
 
 def result_for_tool_run(tool_run):

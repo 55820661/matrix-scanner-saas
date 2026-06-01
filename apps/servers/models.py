@@ -8,6 +8,8 @@ from apps.accounts.models import Account
 from apps.core.models import TimeStampedModel
 from apps.core.tokens import generate_raw_token, hash_token
 
+from .baseline_profiles import BASELINE_PROFILE_CHOICES, DEFAULT_BASELINE_PROFILE
+
 
 class Server(TimeStampedModel):
     class Status(models.TextChoices):
@@ -180,6 +182,11 @@ class BaselineScan(TimeStampedModel):
         related_name="requested_baseline_scans",
         null=True,
         blank=True,
+    )
+    profile_key = models.CharField(
+        max_length=80,
+        choices=BASELINE_PROFILE_CHOICES,
+        default=DEFAULT_BASELINE_PROFILE,
     )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     current_step = models.CharField(max_length=120, blank=True)

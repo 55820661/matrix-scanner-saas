@@ -2,6 +2,54 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## Active Task - Phase 2 Sprint 2.9 Baseline Profiles
+
+Task:
+- Implement only the Sprint 2.9 baseline profile and runtime tool selection layer.
+
+Scope:
+- Add profile definitions for `legacy_cpanel`, `debian_nginx_opt`, and `minimal_linux`.
+- Add `BaselineScan.profile_key` with default `legacy_cpanel`.
+- Use the selected profile to decide baseline preflight and ToolRun/AgentJob creation.
+- Keep default behavior identical to the current cPanel-oriented baseline.
+- Add focused regression tests for profile tool selection and preflight scoping.
+
+Out of scope:
+- Phase 2 ingestion mapping.
+- Report changes.
+- ToolPolicy or PlanTool activation.
+- AI planner.
+- External bot.
+- Remediation/actions.
+- Customer-facing behavior changes.
+
+Immediate next steps:
+- Add profile definitions and model field migration.
+- Update baseline orchestration to use selected profile tools.
+- Add focused tests.
+- Run the requested verification commands.
+
+Progress:
+- Added baseline profile definitions for `legacy_cpanel`, `debian_nginx_opt`, and `minimal_linux`.
+- Added `BaselineScan.profile_key` with default `legacy_cpanel`.
+- Updated baseline preflight and enqueue logic to use the selected profile's tool list.
+- Kept default cPanel baseline behavior unchanged.
+- Added a small BaselineScan Admin visibility improvement for `profile_key`.
+- Added focused profile selection and preflight regression tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint5_baseline --noinput` passed: 21 tests.
+- First full-suite run produced `OK` but hit the command timeout after test completion; rerun passed cleanly.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 264 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.9 implementation is complete within the approved scope.
+- No ingestion/report/ToolPolicy activation/AI planner/external bot changes were added.
+- No commit or push was made.
+
 ## Active Task
 
 Task:

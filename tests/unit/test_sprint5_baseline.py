@@ -8,8 +8,16 @@ from apps.plans.models import Plan
 from apps.servers.baseline import (
     BASELINE_TOOL_KEYS,
     BaselineScanError,
+    baseline_tool_keys_for_scan,
     ingest_completed_tool_runs,
     start_baseline_scan,
+)
+from apps.servers.baseline_profiles import (
+    DEBIAN_NGINX_OPT_TOOL_KEYS,
+    MINIMAL_LINUX_TOOL_KEYS,
+    PROFILE_DEBIAN_NGINX_OPT,
+    PROFILE_LEGACY_CPANEL,
+    PROFILE_MINIMAL_LINUX,
 )
 from apps.servers.models import (
     AgentJob,
@@ -23,8 +31,8 @@ from apps.servers.models import (
     Server,
 )
 from apps.subscriptions.models import Subscription
-from apps.tools.models import PlanTool, ToolDefinition, ToolRun
-from apps.tools.setup import ensure_baseline_tools
+from apps.tools.models import PlanTool, ToolDefinition, ToolPolicy, ToolRun
+from apps.tools.setup import PHASE2_DISCOVERY_TOOL_KEYS, ensure_baseline_tools, ensure_phase2_discovery_tool_contracts
 
 
 class Sprint5BaselineTests(TestCase):
@@ -52,12 +60,41 @@ class Sprint5BaselineTests(TestCase):
         )
         ensure_baseline_tools()
 
-    def create_scan(self, account=None, server=None):
+    def create_scan(self, account=None, server=None, profile_key=None):
+        values = {
+            "account": account or self.account,
+            "server": server or self.server,
+            "requested_by": self.admin,
+        }
+        if profile_key is not None:
+            values["profile_key"] = profile_key
         return BaselineScan.objects.create(
-            account=account or self.account,
-            server=server or self.server,
-            requested_by=self.admin,
+            **values,
         )
+
+    def enable_phase2_tools_for_plan(self, tool_keys=None):
+        ensure_phase2_discovery_tool_contracts(connect_active_plans=False, activate_policy=False)
+        for tool_key in tool_keys or PHASE2_DISCOVERY_TOOL_KEYS:
+            tool = ToolDefinition.objects.get(key=tool_key)
+            tool.status = ToolDefinition.Status.ENABLED
+            tool.save(update_fields=["status", "updated_at"])
+            ToolPolicy.objects.update_or_create(
+                tool_definition=tool,
+                defaults={
+                    "allow_customer_run": True,
+                    "allow_admin_run": True,
+                    "allow_agent_run": True,
+                    "requires_approved_application": False,
+                    "allowed_roles": ["owner", "operator"],
+                    "allowed_server_statuses": ["active"],
+                    "is_active": True,
+                },
+            )
+            PlanTool.objects.update_or_create(
+                plan=self.plan,
+                tool_definition=tool,
+                defaults={"is_enabled": True},
+            )
 
     def mark_step_succeeded(self, scan, tool_key, result):
         step = scan.steps.select_related("tool_run", "tool_run__agent_job").get(step_key=tool_key)
@@ -82,6 +119,67 @@ class Sprint5BaselineTests(TestCase):
             self.assertTrue(PlanTool.objects.filter(plan=self.plan, tool_definition=tool, is_enabled=True).exists())
 
         self.assertEqual(ToolDefinition.objects.get(key="cpanel_domain_scanner").max_output_bytes, 256 * 1024)
+
+    def test_default_profile_is_legacy_cpanel(self):
+        scan = self.create_scan()
+
+        self.assertEqual(scan.profile_key, PROFILE_LEGACY_CPANEL)
+        self.assertEqual(baseline_tool_keys_for_scan(scan), BASELINE_TOOL_KEYS)
+
+    def test_legacy_cpanel_profile_creates_current_baseline_tools_only(self):
+        scan = self.create_scan(profile_key=PROFILE_LEGACY_CPANEL)
+
+        start_baseline_scan(scan)
+
+        step_keys = tuple(BaselineScanStep.objects.filter(baseline_scan=scan).values_list("step_key", flat=True))
+        self.assertEqual(step_keys, BASELINE_TOOL_KEYS)
+        self.assertFalse(set(step_keys) & set(PHASE2_DISCOVERY_TOOL_KEYS))
+
+    def test_debian_nginx_opt_profile_creates_phase2_tools_only(self):
+        self.enable_phase2_tools_for_plan(DEBIAN_NGINX_OPT_TOOL_KEYS)
+        scan = self.create_scan(profile_key=PROFILE_DEBIAN_NGINX_OPT)
+
+        start_baseline_scan(scan)
+
+        step_keys = tuple(BaselineScanStep.objects.filter(baseline_scan=scan).values_list("step_key", flat=True))
+        self.assertEqual(step_keys, DEBIAN_NGINX_OPT_TOOL_KEYS)
+        self.assertNotIn("cpanel_domain_scanner", step_keys)
+        self.assertNotIn("laravel_discovery", step_keys)
+        self.assertNotIn("webroot_risk_checker", step_keys)
+
+    def test_minimal_linux_profile_creates_minimal_tools_only(self):
+        self.enable_phase2_tools_for_plan(MINIMAL_LINUX_TOOL_KEYS)
+        scan = self.create_scan(profile_key=PROFILE_MINIMAL_LINUX)
+
+        start_baseline_scan(scan)
+
+        step_keys = tuple(BaselineScanStep.objects.filter(baseline_scan=scan).values_list("step_key", flat=True))
+        self.assertEqual(step_keys, MINIMAL_LINUX_TOOL_KEYS)
+
+    def test_preflight_checks_only_selected_profile_tools(self):
+        cpanel_only = set(BASELINE_TOOL_KEYS) - {"system_identity"}
+        PlanTool.objects.filter(tool_definition__key__in=cpanel_only).delete()
+        self.enable_phase2_tools_for_plan(DEBIAN_NGINX_OPT_TOOL_KEYS)
+        scan = self.create_scan(profile_key=PROFILE_DEBIAN_NGINX_OPT)
+
+        start_baseline_scan(scan)
+
+        self.assertEqual(tuple(scan.steps.values_list("step_key", flat=True)), DEBIAN_NGINX_OPT_TOOL_KEYS)
+
+    def test_missing_selected_profile_tool_fails_before_jobs_are_created(self):
+        missing_tool = "postgres_status_discovery"
+        selected = tuple(tool_key for tool_key in DEBIAN_NGINX_OPT_TOOL_KEYS if tool_key != missing_tool)
+        self.enable_phase2_tools_for_plan(selected)
+        scan = self.create_scan(profile_key=PROFILE_DEBIAN_NGINX_OPT)
+
+        with self.assertRaises(BaselineScanError):
+            start_baseline_scan(scan)
+
+        scan.refresh_from_db()
+        self.assertEqual(scan.status, BaselineScan.Status.FAILED)
+        self.assertEqual(BaselineScanStep.objects.filter(baseline_scan=scan).count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+        self.assertEqual(ToolRun.objects.count(), 0)
 
     def test_baseline_refuses_if_required_tool_missing_from_plan(self):
         tool = ToolDefinition.objects.get(key="services_status")
@@ -306,6 +404,40 @@ class Sprint5BaselineTests(TestCase):
         scan.refresh_from_db()
         self.assertEqual(scan.status, BaselineScan.Status.SUCCEEDED)
         self.assertEqual(scan.current_step, "completed")
+
+    def test_phase2_profile_results_are_not_ingested_yet(self):
+        self.enable_phase2_tools_for_plan(DEBIAN_NGINX_OPT_TOOL_KEYS)
+        scan = self.create_scan(profile_key=PROFILE_DEBIAN_NGINX_OPT)
+        start_baseline_scan(scan)
+
+        phase2_outputs = {
+            "systemd_services_discovery": {"services": [{"service_name": "nginx.service", "active_state": "active"}]},
+            "nginx_sites_discovery": {"domains": [{"domain": "example.com"}], "sites": [{"root": "/opt/app"}]},
+            "opt_apps_discovery": {"applications": [{"name": "App", "path": "/opt/app", "framework": "django"}]},
+            "django_apps_discovery": {"applications": [{"name": "App", "path": "/opt/app", "framework": "django"}]},
+            "gunicorn_uvicorn_services_discovery": {
+                "services": [{"service_name": "app.service"}],
+                "applications": [{"path": "/opt/app"}],
+            },
+            "postgres_status_discovery": {"services": [{"service_name": "postgresql.service"}]},
+            "log_sources_discovery_v2": {"log_sources": [{"path": "/var/log/nginx", "type": "nginx_log_dir"}]},
+        }
+        for step in scan.steps.all():
+            self.mark_step_succeeded(scan, step.step_key, phase2_outputs.get(step.step_key, {}))
+
+        ingest_completed_tool_runs(scan)
+
+        scan.refresh_from_db()
+        self.assertEqual(scan.status, BaselineScan.Status.SUCCEEDED)
+        self.assertEqual(DiscoveredService.objects.count(), 0)
+        self.assertEqual(DiscoveredDomain.objects.count(), 0)
+        self.assertEqual(Application.objects.count(), 0)
+        self.assertEqual(LogSource.objects.count(), 0)
+        self.assertEqual(Finding.objects.count(), 0)
+        self.assertEqual(
+            scan.summary,
+            {"services": 0, "domains": 0, "applications": 0, "log_sources": 0, "findings": 0},
+        )
 
     def test_cross_account_baseline_scan_denied(self):
         other_account = Account.objects.create(name="Other")

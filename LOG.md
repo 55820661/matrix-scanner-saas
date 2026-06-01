@@ -2,6 +2,42 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-05-31 - Phase 2 Sprint 2.9 Start
+
+Intent:
+- Implement only the approved Sprint 2.9 baseline profile and runtime tool selection support.
+
+Scope:
+- Add stable baseline profile definitions for `legacy_cpanel`, `debian_nginx_opt`, and `minimal_linux`.
+- Add `BaselineScan.profile_key` with default `legacy_cpanel`.
+- Update baseline preflight and job creation to use the selected profile tool list.
+- Preserve current/default cPanel baseline behavior exactly for `legacy_cpanel`.
+- Add focused tests for profile selection, preflight scoping, and no Phase 2 ingestion side effects.
+
+Out of scope:
+- Phase 2 ingestion mapping, report changes, ToolPolicy/PlanTool activation, AI planner, external bot, remediation/actions, customer-facing behavior changes, and unrelated refactors.
+
+Result:
+- Added `apps/servers/baseline_profiles.py` with stable profile definitions for `legacy_cpanel`, `debian_nginx_opt`, and `minimal_linux`.
+- Added `BaselineScan.profile_key` with default `legacy_cpanel` and a migration.
+- Updated baseline preflight and ToolRun/AgentJob creation to use the selected scan profile tool list.
+- Preserved the legacy cPanel baseline tool list as the default behavior.
+- Exposed `profile_key` in BaselineScan Admin list display/filter only.
+- Added focused tests for default profile behavior, profile-specific tool creation, selected-tool preflight scoping, failure-before-job-creation, and no Phase 2 ingestion side effects.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint5_baseline --noinput` passed: 21 tests.
+- First full-suite run produced `OK` but hit the command timeout after test completion; reran with a longer timeout.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 264 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No Phase 2 result ingestion is implemented yet.
+- Phase 2 ToolPolicy/PlanTool activation remains a separate Matrix Admin operation.
+- No commit or push was made.
+
 ## 2026-05-27 - Documentation and Scaffolding Commit Preparation
 
 Intent:

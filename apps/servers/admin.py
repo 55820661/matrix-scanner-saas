@@ -74,8 +74,8 @@ class AgentJobAdmin(admin.ModelAdmin):
 
 @admin.register(BaselineScan)
 class BaselineScanAdmin(admin.ModelAdmin):
-    list_display = ("server", "account", "status", "current_step", "started_at", "finished_at", "created_at")
-    list_filter = ("status", "account", "created_at")
+    list_display = ("server", "account", "profile_key", "status", "current_step", "started_at", "finished_at", "created_at")
+    list_filter = ("profile_key", "status", "account", "created_at")
     search_fields = ("server__name", "server__hostname", "account__name")
     readonly_fields = ("summary", "error_message", "created_at", "updated_at")
     actions = ("start_selected_baseline_scans", "generate_baseline_reports")
