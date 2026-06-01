@@ -2,6 +2,55 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## Active Task - Phase 2 Sprint 2.11A Ingestion
+
+Task:
+- Implement only Phase 2 services, domains, and log source ingestion plus scan-scoped summary counts.
+
+Scope:
+- Map Phase 2 service discovery outputs into `DiscoveredService`.
+- Map `nginx_sites_discovery.domains[]` into `DiscoveredDomain`.
+- Map `log_sources_discovery_v2.log_sources[]` into `LogSource`.
+- Keep ingestion safe, redacted, tolerant of malformed output, and metadata-capped.
+- Make `summarize_scan()` scan-scoped for models that already support `baseline_scan`.
+
+Out of scope:
+- Application ingestion.
+- `Application.baseline_scan` migration.
+- Report redesign.
+- AI planner.
+- External bot.
+- ToolPolicy/PlanTool changes.
+- Runtime tool changes.
+- Findings generation from Phase 2.
+- Remediation/write actions.
+
+Immediate next steps:
+- Update `apps/servers/baseline.py` ingestion mapping.
+- Add focused `tests/unit/test_phase2_baseline_ingestion.py`.
+- Run the requested verification commands.
+
+Progress:
+- Added Phase 2 services ingestion into `DiscoveredService`.
+- Added Phase 2 Nginx domain ingestion into `DiscoveredDomain`.
+- Added Phase 2 log source ingestion into `LogSource`.
+- Added safe metadata selection, redaction, caps, and merge behavior.
+- Updated scan summaries to count scan-scoped services, domains, log sources, and findings.
+- Kept applications at `0` until the deferred application ingestion sprint.
+- Added focused Phase 2 baseline ingestion tests and updated the Sprint 5 Phase 2 expectation.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_baseline_ingestion --noinput` passed: 10 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 285 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.11A implementation is complete within the approved scope.
+- No Application ingestion/migration/report/AI/tool activation/runtime/remediation changes were added.
+- No commit or push was made.
+
 ## Active Task - Phase 2 Sprint 2.10 Pilot Tool Enablement
 
 Task:

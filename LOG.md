@@ -2,6 +2,43 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-01 - Phase 2 Sprint 2.11A Start
+
+Intent:
+- Implement only Phase 2 services, domains, and log source ingestion plus scan-scoped summary counts for models that already support `baseline_scan`.
+
+Scope:
+- Ingest `systemd_services_discovery`, `gunicorn_uvicorn_services_discovery`, and `postgres_status_discovery` into `DiscoveredService`.
+- Ingest `nginx_sites_discovery.domains[]` into `DiscoveredDomain`.
+- Ingest `log_sources_discovery_v2.log_sources[]` into `LogSource`.
+- Tolerate malformed output, skip unsafe values, redact/cap metadata, and preserve legacy ingestion.
+- Make summary counts scan-scoped for `DiscoveredService`, `DiscoveredDomain`, `LogSource`, and `Finding`.
+- Keep applications at 0 for Phase 2 in this sprint.
+
+Out of scope:
+- Application ingestion, `Application.baseline_scan` migration, report redesign, AI planner, external bot, ToolPolicy/PlanTool changes, runtime tools, findings generation from Phase 2, remediation/actions, and write behavior.
+
+Result:
+- Added safe Phase 2 service ingestion for `systemd_services_discovery`, `gunicorn_uvicorn_services_discovery`, and `postgres_status_discovery`.
+- Added safe Phase 2 domain ingestion for `nginx_sites_discovery.domains[]`.
+- Added safe Phase 2 log source ingestion for `log_sources_discovery_v2.log_sources[]`.
+- Added metadata filtering/redaction/capping helpers and merge behavior for duplicate service/domain/log records.
+- Updated `summarize_scan()` to count `DiscoveredService`, `DiscoveredDomain`, `LogSource`, and `Finding` by `baseline_scan`.
+- Kept applications at `0` in baseline summary for this sprint and did not add application ingestion or migrations.
+- Added focused Phase 2 baseline ingestion tests and updated the Sprint 5 Phase 2 expectation.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_baseline_ingestion --noinput` passed: 10 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 285 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Application ingestion and application scan attribution remain deferred to Sprint 2.11B.
+- No Application migration, report redesign, AI planner, external bot, ToolPolicy/PlanTool change, runtime tool change, finding generation, remediation, or write behavior was added.
+- No commit or push was made.
+
 ## 2026-06-01 - Phase 2 Sprint 2.10 Start
 
 Intent:

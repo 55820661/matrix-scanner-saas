@@ -9,7 +9,7 @@ from apps.tools.services import ToolPolicyDenied, active_subscription_for, creat
 from apps.tools.setup import BASELINE_TOOL_KEYS, ensure_baseline_tools
 from apps.tools.validation import ToolParamValidationError, canonicalize_path, path_matches_prefix
 
-from .baseline_profiles import tool_keys_for_profile
+from .baseline_profiles import PROFILE_LEGACY_CPANEL, tool_keys_for_profile
 from .models import BaselineScan, BaselineScanStep, DiscoveredDomain, DiscoveredService, Finding, LogSource, ScannerAgent
 
 
@@ -27,6 +27,37 @@ LARAVEL_SAFE_ENV_KEYS = {
     "DB_CONNECTION",
 }
 LARAVEL_FORBIDDEN_ENV_KEYS = {"APP_KEY", "DB_PASSWORD", "DB_USERNAME", "MAIL_PASSWORD"}
+PHASE2_SERVICE_METADATA_FIELDS = (
+    "load_state",
+    "active_state",
+    "sub_state",
+    "enabled_state",
+    "unit_type",
+    "description",
+    "process_type",
+    "main_pid",
+    "user",
+    "working_directory",
+    "related_app_path",
+    "fragment_path",
+    "health_check",
+)
+PHASE2_DOMAIN_METADATA_FIELDS = (
+    "listen",
+    "ports",
+    "proxy_pass",
+    "proxy_target",
+    "root",
+    "document_root",
+    "listen_ports",
+    "source_path",
+    "source_config_path",
+    "config_path",
+    "is_wildcard",
+    "is_default",
+)
+PHASE2_LOG_METADATA_FIELDS = ("exists", "is_dir", "size_bytes", "modified_at")
+SAFE_METADATA_TEXT_LIMIT = 1000
 
 
 class BaselineScanError(Exception):
@@ -82,6 +113,39 @@ def safe_laravel_env(raw_env):
         if normalized in LARAVEL_SAFE_ENV_KEYS:
             safe[normalized] = redact_secrets(value)
     return safe
+
+
+def safe_metadata_value(value):
+    if isinstance(value, str):
+        return redact_secrets(value)[:SAFE_METADATA_TEXT_LIMIT]
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    if isinstance(value, list):
+        return [safe_metadata_value(item) for item in value[:50]]
+    if isinstance(value, dict):
+        return {
+            str(key)[:120]: safe_metadata_value(nested)
+            for key, nested in list(value.items())[:50]
+        }
+    return redact_secrets(str(value))[:SAFE_METADATA_TEXT_LIMIT]
+
+
+def selected_metadata(item, fields, source_tool):
+    metadata = {"source": source_tool}
+    for field in fields:
+        if field in item:
+            metadata[field] = safe_metadata_value(item.get(field))
+    nested_metadata = item.get("metadata")
+    if isinstance(nested_metadata, dict):
+        for key, value in nested_metadata.items():
+            normalized_key = str(key)[:120]
+            if normalized_key not in metadata:
+                metadata[normalized_key] = safe_metadata_value(value)
+    return redact_json(metadata)
+
+
+def merge_metadata(existing, incoming):
+    return redact_json({**(existing or {}), **(incoming or {})})
 
 
 def preflight_required_baseline_tools(scan):
@@ -230,14 +294,24 @@ def ingest_completed_tool_runs(scan):
 def ingest_tool_result(scan, tool_key, result):
     if tool_key == "services_status":
         ingest_services(scan, result.get("services", []))
+    elif tool_key in {
+        "systemd_services_discovery",
+        "gunicorn_uvicorn_services_discovery",
+        "postgres_status_discovery",
+    }:
+        ingest_phase2_services(scan, result.get("services", []), tool_key)
     elif tool_key == "cpanel_domain_scanner":
         ingest_domains(scan, result.get("domains", []))
+    elif tool_key == "nginx_sites_discovery":
+        ingest_phase2_domains(scan, result.get("domains", []), tool_key)
     elif tool_key == "application_discovery":
         ingest_applications(scan, result.get("applications", []))
     elif tool_key == "laravel_discovery":
         ingest_applications(scan, result.get("applications", []), framework_hint="laravel")
     elif tool_key == "log_sources_discovery":
         ingest_log_sources(scan, result.get("log_sources", []))
+    elif tool_key == "log_sources_discovery_v2":
+        ingest_phase2_log_sources(scan, result.get("log_sources", []), tool_key)
     elif tool_key == "webroot_risk_checker":
         ingest_findings(scan, result.get("findings", []))
 
@@ -260,6 +334,35 @@ def ingest_services(scan, services):
         )
 
 
+def ingest_phase2_services(scan, services, source_tool):
+    for item in services or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("service_name") or item.get("name") or "").strip()[:160]
+        if not name:
+            continue
+        status = str(item.get("active_state") or item.get("status") or "")[:80]
+        metadata = selected_metadata(item, PHASE2_SERVICE_METADATA_FIELDS, source_tool)
+        service, created = DiscoveredService.objects.get_or_create(
+            account=scan.account,
+            server=scan.server,
+            name=name,
+            defaults={
+                "baseline_scan": scan,
+                "status": status,
+                "version": "",
+                "metadata": metadata,
+            },
+        )
+        if created:
+            continue
+        service.baseline_scan = scan
+        if status:
+            service.status = status
+        service.metadata = merge_metadata(service.metadata, metadata)
+        service.save(update_fields=["baseline_scan", "status", "metadata", "updated_at"])
+
+
 def ingest_domains(scan, domains):
     for item in domains or []:
         domain = str(item.get("domain", "")).strip().lower()[:255]
@@ -276,6 +379,35 @@ def ingest_domains(scan, domains):
                 "metadata": redact_json(item.get("metadata", {})),
             },
         )
+
+
+def ingest_phase2_domains(scan, domains, source_tool):
+    for item in domains or []:
+        if not isinstance(item, dict):
+            continue
+        domain = str(item.get("domain") or item.get("server_name") or "").strip().lower()[:255]
+        if not domain or domain in {"_", "default", "default_server"}:
+            continue
+        document_root = clean_path(item.get("root") or item.get("document_root") or "")
+        metadata = selected_metadata(item, PHASE2_DOMAIN_METADATA_FIELDS, source_tool)
+        discovered, created = DiscoveredDomain.objects.get_or_create(
+            account=scan.account,
+            server=scan.server,
+            domain=domain,
+            defaults={
+                "baseline_scan": scan,
+                "document_root": document_root,
+                "owner": "",
+                "metadata": metadata,
+            },
+        )
+        if created:
+            continue
+        discovered.baseline_scan = scan
+        if document_root:
+            discovered.document_root = document_root
+        discovered.metadata = merge_metadata(discovered.metadata, metadata)
+        discovered.save(update_fields=["baseline_scan", "document_root", "metadata", "updated_at"])
 
 
 def ingest_applications(scan, applications, framework_hint=""):
@@ -337,6 +469,37 @@ def ingest_log_sources(scan, log_sources):
         )
 
 
+def ingest_phase2_log_sources(scan, log_sources, source_tool):
+    for item in log_sources or []:
+        if not isinstance(item, dict):
+            continue
+        path = clean_path(item.get("path", ""))
+        if not path:
+            continue
+        metadata = selected_metadata(item, PHASE2_LOG_METADATA_FIELDS, source_tool)
+        log_source, created = LogSource.objects.get_or_create(
+            account=scan.account,
+            server=scan.server,
+            path=path,
+            defaults={
+                "baseline_scan": scan,
+                "source_type": str(item.get("type", item.get("source_type", "")))[:120],
+                "exists": bool(item.get("exists", False)),
+                "size_bytes": item.get("size_bytes") if isinstance(item.get("size_bytes"), int) else None,
+                "metadata": metadata,
+            },
+        )
+        if created:
+            continue
+        log_source.baseline_scan = scan
+        log_source.source_type = str(item.get("type", item.get("source_type", log_source.source_type)))[:120]
+        log_source.exists = bool(item.get("exists", log_source.exists))
+        if isinstance(item.get("size_bytes"), int):
+            log_source.size_bytes = item.get("size_bytes")
+        log_source.metadata = merge_metadata(log_source.metadata, metadata)
+        log_source.save(update_fields=["baseline_scan", "source_type", "exists", "size_bytes", "metadata", "updated_at"])
+
+
 def ingest_findings(scan, findings):
     for item in findings or []:
         path = clean_path(item.get("path", "")) if item.get("path") else ""
@@ -362,10 +525,13 @@ def ingest_findings(scan, findings):
 
 
 def summarize_scan(scan):
+    application_count = 0
+    if getattr(scan, "profile_key", "") == PROFILE_LEGACY_CPANEL:
+        application_count = Application.objects.filter(account=scan.account, server=scan.server).count()
     return {
-        "services": DiscoveredService.objects.filter(account=scan.account, server=scan.server).count(),
-        "domains": DiscoveredDomain.objects.filter(account=scan.account, server=scan.server).count(),
-        "applications": Application.objects.filter(account=scan.account, server=scan.server).count(),
-        "log_sources": LogSource.objects.filter(account=scan.account, server=scan.server).count(),
-        "findings": Finding.objects.filter(account=scan.account, server=scan.server).count(),
+        "services": DiscoveredService.objects.filter(baseline_scan=scan).count(),
+        "domains": DiscoveredDomain.objects.filter(baseline_scan=scan).count(),
+        "applications": application_count,
+        "log_sources": LogSource.objects.filter(baseline_scan=scan).count(),
+        "findings": Finding.objects.filter(baseline_scan=scan).count(),
     }

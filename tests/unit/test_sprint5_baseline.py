@@ -405,7 +405,34 @@ class Sprint5BaselineTests(TestCase):
         self.assertEqual(scan.status, BaselineScan.Status.SUCCEEDED)
         self.assertEqual(scan.current_step, "completed")
 
-    def test_phase2_profile_results_are_not_ingested_yet(self):
+    def test_legacy_cpanel_summary_still_counts_ingested_applications(self):
+        scan = self.create_scan(profile_key=PROFILE_LEGACY_CPANEL)
+        start_baseline_scan(scan)
+        self.mark_step_succeeded(
+            scan,
+            "application_discovery",
+            {
+                "applications": [
+                    {
+                        "name": "Legacy App",
+                        "domain": "legacy.example.com",
+                        "path": "/home/acme/public_html",
+                        "framework": "unknown",
+                    }
+                ]
+            },
+        )
+        for step in scan.steps.exclude(step_key="application_discovery"):
+            self.mark_step_succeeded(scan, step.step_key, {})
+
+        ingest_completed_tool_runs(scan)
+
+        scan.refresh_from_db()
+        self.assertEqual(scan.status, BaselineScan.Status.SUCCEEDED)
+        self.assertEqual(Application.objects.count(), 1)
+        self.assertEqual(scan.summary["applications"], 1)
+
+    def test_phase2_profile_ingests_services_domains_and_logs_only(self):
         self.enable_phase2_tools_for_plan(DEBIAN_NGINX_OPT_TOOL_KEYS)
         scan = self.create_scan(profile_key=PROFILE_DEBIAN_NGINX_OPT)
         start_baseline_scan(scan)
@@ -429,14 +456,14 @@ class Sprint5BaselineTests(TestCase):
 
         scan.refresh_from_db()
         self.assertEqual(scan.status, BaselineScan.Status.SUCCEEDED)
-        self.assertEqual(DiscoveredService.objects.count(), 0)
-        self.assertEqual(DiscoveredDomain.objects.count(), 0)
+        self.assertEqual(DiscoveredService.objects.count(), 3)
+        self.assertEqual(DiscoveredDomain.objects.count(), 1)
         self.assertEqual(Application.objects.count(), 0)
-        self.assertEqual(LogSource.objects.count(), 0)
+        self.assertEqual(LogSource.objects.count(), 1)
         self.assertEqual(Finding.objects.count(), 0)
         self.assertEqual(
             scan.summary,
-            {"services": 0, "domains": 0, "applications": 0, "log_sources": 0, "findings": 0},
+            {"services": 3, "domains": 1, "applications": 0, "log_sources": 1, "findings": 0},
         )
 
     def test_cross_account_baseline_scan_denied(self):
