@@ -336,6 +336,90 @@ class Phase2BaselineIngestionTests(TestCase):
         self.assertEqual(app.metadata["project_package"], "config")
         self.assertTrue(app.metadata["has_manage_py"])
 
+    def test_opt_apps_discovery_skips_nested_internal_packages_under_parent_app(self):
+        scan = self.create_started_scan()
+        self.mark_step_succeeded(
+            scan,
+            "opt_apps_discovery",
+            {
+                "applications": [
+                    {
+                        "path": "/opt/whatsapp-saas",
+                        "name": "WhatsApp SaaS",
+                        "framework": "python",
+                        "detection": ["pyproject.toml"],
+                        "depth": 1,
+                    },
+                    {
+                        "path": "/opt/whatsapp-saas/config",
+                        "name": "config",
+                        "framework": "python",
+                        "detection": ["wsgi.py", "asgi.py"],
+                        "depth": 2,
+                        "has_systemd_unit_hint": False,
+                    },
+                    {
+                        "path": "/opt/whatsapp-saas/conversation_relay_service",
+                        "name": "conversation_relay_service",
+                        "framework": "python",
+                        "detection": ["requirements.txt"],
+                        "depth": 2,
+                        "has_systemd_unit_hint": False,
+                    },
+                    {
+                        "path": "/opt/whatsapp-saas/worker",
+                        "name": "worker",
+                        "framework": "python",
+                        "detection": ["requirements.txt"],
+                        "depth": 2,
+                        "has_systemd_unit_hint": True,
+                    },
+                    {
+                        "path": "/opt/whatsapp-saas/frontend",
+                        "name": "frontend",
+                        "framework": "node",
+                        "detection": ["package.json"],
+                        "depth": 2,
+                        "has_systemd_unit_hint": False,
+                    },
+                    {
+                        "path": "/opt/matrix-scanner-saas",
+                        "name": "Matrix Scanner",
+                        "framework": "python",
+                        "detection": ["pyproject.toml"],
+                        "depth": 1,
+                    },
+                ]
+            },
+        )
+        self.mark_step_succeeded(
+            scan,
+            "django_apps_discovery",
+            {
+                "applications": [
+                    {
+                        "path": "/opt/whatsapp-saas",
+                        "name": "WhatsApp SaaS",
+                        "framework": "django",
+                        "project_package": "config",
+                    }
+                ]
+            },
+        )
+
+        ingest_completed_tool_runs(scan)
+
+        paths = set(Application.objects.values_list("path", flat=True))
+        self.assertIn("/opt/whatsapp-saas", paths)
+        self.assertIn("/opt/matrix-scanner-saas", paths)
+        self.assertIn("/opt/whatsapp-saas/worker", paths)
+        self.assertIn("/opt/whatsapp-saas/frontend", paths)
+        self.assertNotIn("/opt/whatsapp-saas/config", paths)
+        self.assertNotIn("/opt/whatsapp-saas/conversation_relay_service", paths)
+        parent = Application.objects.get(path="/opt/whatsapp-saas")
+        self.assertEqual(parent.framework, "django")
+        self.assertEqual(parent.metadata["source"], "django_apps_discovery")
+
     def test_application_framework_priority_keeps_specific_framework(self):
         scan = self.create_started_scan()
         self.mark_step_succeeded(

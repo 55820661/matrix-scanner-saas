@@ -39,6 +39,38 @@ Remaining:
 - No report redesign, AI planner, external bot, ToolPolicy/PlanTool change, runtime tool change, finding generation, remediation/write behavior, or service-to-application relationship model was added.
 - No commit or push was made.
 
+## 2026-06-04 - Phase 2 Sprint 2.11B Nested App Hotfix Start
+
+Intent:
+- Prevent `opt_apps_discovery` nested internal package candidates from being ingested as standalone Applications when a parent application is already detected.
+
+Scope:
+- Skip clearly internal depth-2 `opt_apps_discovery` candidates without systemd hints or strong standalone markers.
+- Preserve top-level apps and nested apps with strong standalone indicators.
+- Keep `django_apps_discovery` enrichment for real parent Django apps.
+
+Out of scope:
+- Migrations, report redesign, AI planner, external bot, ToolPolicy/PlanTool changes, runtime tool changes, findings generation, remediation/write actions, and service-to-application relationship modeling.
+
+Result:
+- Added nested internal candidate filtering for `opt_apps_discovery` application ingestion.
+- Candidates nested under a detected parent app are skipped when they are depth 2+, lack a systemd/explicit app hint, and only contain weak markers such as `wsgi.py`, `asgi.py`, or `requirements.txt`.
+- Top-level `/opt` applications continue to ingest.
+- Nested applications with strong markers such as `package.json` or explicit systemd hints continue to ingest.
+- `django_apps_discovery` still enriches the real parent Django application.
+- Added regression coverage for parent apps, internal package skips, nested standalone app preservation, and Django parent enrichment.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_baseline_ingestion --noinput` passed: 16 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint5_baseline --noinput` passed: 22 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 292 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No migrations, report redesign, AI planner, external bot, ToolPolicy/PlanTool changes, runtime tool changes, findings generation, remediation/write behavior, or service-to-application relationship model was added.
+- No commit or push was made.
+
 ## 2026-06-01 - Phase 2 Sprint 2.11A Start
 
 Intent:

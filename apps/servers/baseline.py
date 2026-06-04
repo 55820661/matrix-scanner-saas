@@ -68,6 +68,7 @@ PHASE2_APPLICATION_METADATA_FIELDS = (
     "dependency_files",
 )
 GUNICORN_UVICORN_PROCESS_TYPES = {"gunicorn", "uvicorn", "daphne"}
+PHASE2_STRONG_APP_MARKERS = {"manage.py", "package.json", "pyproject.toml", "composer.json"}
 FRAMEWORK_PRIORITY = {
     "": 0,
     "unknown": 1,
@@ -178,6 +179,42 @@ def preferred_framework(existing, incoming):
     if FRAMEWORK_PRIORITY.get(incoming, 0) > FRAMEWORK_PRIORITY.get(existing, 0):
         return incoming
     return existing
+
+
+def application_detection_markers(item):
+    detection = item.get("detection", [])
+    if not isinstance(detection, list):
+        return set()
+    return {str(marker).strip() for marker in detection if str(marker).strip()}
+
+
+def phase2_candidate_depth(item):
+    depth = item.get("depth")
+    if depth is None and isinstance(item.get("metadata"), dict):
+        depth = item["metadata"].get("depth")
+    return depth if isinstance(depth, int) else 0
+
+
+def has_explicit_phase2_app_hint(item):
+    if bool(item.get("has_systemd_unit_hint")):
+        return True
+    return any(item.get(key) for key in ("service_name", "service_names", "related_service", "related_app_path"))
+
+
+def is_nested_path(path, parent_paths):
+    return any(path != parent and path.startswith(f"{parent}/") for parent in parent_paths)
+
+
+def is_nested_phase2_internal_app_candidate(item, path, parent_paths):
+    if phase2_candidate_depth(item) < 2:
+        return False
+    if not is_nested_path(path, parent_paths):
+        return False
+    if has_explicit_phase2_app_hint(item):
+        return False
+    if application_detection_markers(item) & PHASE2_STRONG_APP_MARKERS:
+        return False
+    return True
 
 
 def preflight_required_baseline_tools(scan):
@@ -491,11 +528,24 @@ def ingest_applications(scan, applications, framework_hint=""):
 
 
 def ingest_phase2_applications(scan, applications, source_tool):
+    existing_paths = set(
+        Application.objects.filter(account=scan.account, server=scan.server, baseline_scan=scan)
+        .exclude(path="")
+        .values_list("path", flat=True)
+    )
+    cleaned_items = []
     for item in applications or []:
         if not isinstance(item, dict):
             continue
         path = clean_path(item.get("path", ""))
         if not path:
+            continue
+        cleaned_items.append((item, path))
+    batch_paths = {path for _item, path in cleaned_items}
+    parent_paths = existing_paths | batch_paths
+
+    for item, path in cleaned_items:
+        if source_tool == "opt_apps_discovery" and is_nested_phase2_internal_app_candidate(item, path, parent_paths):
             continue
         domain = str(item.get("domain", "")).strip().lower()[:255]
         default_framework = "django" if source_tool == "django_apps_discovery" else ""

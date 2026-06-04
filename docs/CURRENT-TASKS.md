@@ -53,6 +53,52 @@ Completion status:
 - No report/AI/external bot/ToolPolicy/runtime/finding/remediation changes were added.
 - No commit or push was made.
 
+## Active Task - Phase 2 Sprint 2.11B Nested App Hotfix
+
+Task:
+- Filter clearly internal nested `opt_apps_discovery` package candidates during Phase 2 application ingestion.
+
+Scope:
+- Skip nested depth-2 opt candidates under an already detected parent app when they only have weak markers and no systemd hint.
+- Keep top-level apps.
+- Keep nested standalone apps with strong markers or explicit hints.
+- Preserve Django enrichment of the real parent app.
+
+Out of scope:
+- Migrations.
+- Report redesign.
+- AI planner.
+- External bot.
+- ToolPolicy/PlanTool changes.
+- Runtime tool changes.
+- Findings generation.
+- Remediation/write actions.
+- Service-to-application relationship modeling.
+
+Immediate next steps:
+- Patch Phase 2 application ingestion filter.
+- Add focused regression tests.
+- Run requested verification commands.
+
+Progress:
+- Added nested internal candidate filtering for `opt_apps_discovery`.
+- Skips depth-2 nested package candidates under an already detected parent app when they lack systemd/explicit app hints and strong standalone markers.
+- Preserves top-level apps and nested standalone apps with strong markers or systemd hints.
+- Preserves `django_apps_discovery` enrichment for the real parent Django app.
+- Added focused regression coverage.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_baseline_ingestion --noinput` passed: 16 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint5_baseline --noinput` passed: 22 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 292 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.11B nested app hotfix is complete within the approved scope.
+- No migration/report/AI/external bot/ToolPolicy/runtime/finding/remediation changes were added.
+- No commit or push was made.
+
 ## Active Task - Phase 2 Sprint 2.11A Ingestion
 
 Task:
