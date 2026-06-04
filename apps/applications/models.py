@@ -14,6 +14,13 @@ class Application(TimeStampedModel):
 
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="applications")
     server = models.ForeignKey(Server, on_delete=models.PROTECT, related_name="applications")
+    baseline_scan = models.ForeignKey(
+        "servers.BaselineScan",
+        on_delete=models.SET_NULL,
+        related_name="applications",
+        null=True,
+        blank=True,
+    )
     name = models.CharField(max_length=255)
     domain = models.CharField(max_length=255, blank=True)
     path = models.CharField(max_length=1024, blank=True)

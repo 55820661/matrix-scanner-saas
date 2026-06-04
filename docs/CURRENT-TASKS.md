@@ -2,6 +2,57 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## Active Task - Phase 2 Sprint 2.11B Application Ingestion
+
+Task:
+- Implement only Phase 2 application ingestion and deduplication for `opt_apps_discovery` and `django_apps_discovery`.
+
+Scope:
+- Add nullable `Application.baseline_scan`.
+- Map safe Phase 2 application outputs into `Application`.
+- Deduplicate by existing application location constraint.
+- Apply framework priority and safe metadata merging.
+- Keep approved applications from being overwritten aggressively.
+- Update application summary counts using scan attribution where available.
+
+Out of scope:
+- Report redesign.
+- AI planner.
+- External bot.
+- ToolPolicy/PlanTool changes.
+- Runtime tool changes.
+- Findings generation.
+- Remediation/write actions.
+- Service-to-application relationship modeling.
+
+Immediate next steps:
+- Add application scan attribution and migration.
+- Update baseline application ingestion mapping.
+- Add focused ingestion tests.
+- Run requested verification commands.
+
+Progress:
+- Added nullable `Application.baseline_scan` attribution.
+- Added migration `applications.0003_application_baseline_scan`.
+- Added Phase 2 ingestion for `opt_apps_discovery` and `django_apps_discovery`.
+- Added application deduplication/enrichment using the existing application location constraint.
+- Added framework priority and approved-application preservation.
+- Updated application summary counts to prefer scan-scoped applications with legacy fallback.
+- Added focused tests for Phase 2 app ingestion, safety, deduplication, summary counts, and legacy behavior.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_baseline_ingestion --noinput` passed: 15 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint5_baseline --noinput` passed: 22 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 291 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.11B implementation is complete within the approved scope.
+- No report/AI/external bot/ToolPolicy/runtime/finding/remediation changes were added.
+- No commit or push was made.
+
 ## Active Task - Phase 2 Sprint 2.11A Ingestion
 
 Task:

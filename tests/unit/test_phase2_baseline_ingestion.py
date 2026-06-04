@@ -272,11 +272,149 @@ class Phase2BaselineIngestionTests(TestCase):
         self.assertNotIn("secret", serialized)
         self.assertIn("[REDACTED]", serialized)
 
-    def test_phase2_summary_is_scan_scoped_and_applications_remain_zero(self):
+    def test_opt_apps_discovery_creates_application(self):
+        scan = self.create_started_scan()
+        self.mark_step_succeeded(
+            scan,
+            "opt_apps_discovery",
+            {
+                "applications": [
+                    {
+                        "path": "/opt/example",
+                        "name": "Example",
+                        "framework": "python",
+                        "detection": ["pyproject.toml"],
+                        "metadata": {"note": "DB_PASSWORD=secret"},
+                    }
+                ]
+            },
+        )
+
+        ingest_completed_tool_runs(scan)
+
+        app = Application.objects.get(path="/opt/example")
+        self.assertEqual(app.baseline_scan, scan)
+        self.assertEqual(app.name, "Example")
+        self.assertEqual(app.framework, "python")
+        self.assertEqual(app.review_status, Application.ReviewStatus.PENDING_REVIEW)
+        serialized = str(app.metadata)
+        self.assertIn("opt_apps_discovery", serialized)
+        self.assertNotIn("secret", serialized)
+        self.assertIn("[REDACTED]", serialized)
+
+    def test_django_apps_discovery_enriches_same_path_without_duplicate(self):
+        scan = self.create_started_scan()
+        self.mark_step_succeeded(
+            scan,
+            "opt_apps_discovery",
+            {"applications": [{"path": "/opt/example", "name": "Example", "framework": "python"}]},
+        )
+        self.mark_step_succeeded(
+            scan,
+            "django_apps_discovery",
+            {
+                "applications": [
+                    {
+                        "path": "/opt/example",
+                        "name": "Example Django",
+                        "framework": "django",
+                        "project_package": "config",
+                        "has_manage_py": True,
+                        "has_wsgi": True,
+                    }
+                ]
+            },
+        )
+
+        ingest_completed_tool_runs(scan)
+
+        self.assertEqual(Application.objects.count(), 1)
+        app = Application.objects.get(path="/opt/example")
+        self.assertEqual(app.framework, "django")
+        self.assertEqual(app.baseline_scan, scan)
+        self.assertEqual(app.metadata["source"], "django_apps_discovery")
+        self.assertEqual(app.metadata["project_package"], "config")
+        self.assertTrue(app.metadata["has_manage_py"])
+
+    def test_application_framework_priority_keeps_specific_framework(self):
+        scan = self.create_started_scan()
+        self.mark_step_succeeded(
+            scan,
+            "opt_apps_discovery",
+            {"applications": [{"path": "/opt/nodeapp", "name": "Node App", "framework": "node"}]},
+        )
+        self.mark_step_succeeded(
+            scan,
+            "django_apps_discovery",
+            {"applications": [{"path": "/opt/nodeapp", "name": "Node App", "framework": "unknown"}]},
+        )
+
+        ingest_completed_tool_runs(scan)
+
+        self.assertEqual(Application.objects.get(path="/opt/nodeapp").framework, "node")
+
+    def test_malformed_and_unsafe_phase2_applications_are_ignored(self):
+        scan = self.create_started_scan()
+        self.mark_step_succeeded(
+            scan,
+            "opt_apps_discovery",
+            {
+                "applications": [
+                    "bad",
+                    {},
+                    {"name": "missing path"},
+                    {"path": "/root/app", "name": "unsafe"},
+                    {"path": "/home/acme/.ssh/app", "name": "ssh"},
+                ]
+            },
+        )
+
+        ingest_completed_tool_runs(scan)
+
+        self.assertEqual(Application.objects.count(), 0)
+
+    def test_approved_application_is_not_overwritten_aggressively(self):
+        app = Application.objects.create(
+            account=self.account,
+            server=self.server,
+            name="Approved",
+            domain="",
+            path="/opt/approved",
+            framework="python",
+            review_status=Application.ReviewStatus.APPROVED,
+            metadata={"existing": True},
+        )
+        scan = self.create_started_scan()
+        self.mark_step_succeeded(
+            scan,
+            "django_apps_discovery",
+            {
+                "applications": [
+                    {
+                        "path": "/opt/approved",
+                        "name": "New Name",
+                        "framework": "django",
+                        "project_package": "config",
+                    }
+                ]
+            },
+        )
+
+        ingest_completed_tool_runs(scan)
+
+        app.refresh_from_db()
+        self.assertEqual(app.baseline_scan, scan)
+        self.assertEqual(app.name, "Approved")
+        self.assertEqual(app.framework, "python")
+        self.assertEqual(app.review_status, Application.ReviewStatus.APPROVED)
+        self.assertEqual(app.metadata["project_package"], "config")
+
+    def test_phase2_summary_is_scan_scoped_and_counts_applications(self):
         old_scan = BaselineScan.objects.create(account=self.account, server=self.server, requested_by=self.admin)
         DiscoveredService.objects.create(account=self.account, server=self.server, baseline_scan=old_scan, name="old.service")
         DiscoveredDomain.objects.create(account=self.account, server=self.server, baseline_scan=old_scan, domain="old.example.com")
         LogSource.objects.create(account=self.account, server=self.server, baseline_scan=old_scan, path="/var/log/old")
+        Application.objects.create(account=self.account, server=self.server, baseline_scan=old_scan, name="Old App", path="/opt/old")
 
         scan = self.create_started_scan()
         self.mark_step_succeeded(scan, "system_identity", {})
@@ -291,6 +429,11 @@ class Phase2BaselineIngestionTests(TestCase):
             "log_sources_discovery_v2",
             {"log_sources": [{"path": "/var/log/nginx", "type": "nginx_log_dir", "exists": True}]},
         )
+        self.mark_step_succeeded(
+            scan,
+            "opt_apps_discovery",
+            {"applications": [{"path": "/opt/example", "name": "Example", "framework": "python"}]},
+        )
         self.complete_remaining_steps(scan)
 
         ingest_completed_tool_runs(scan)
@@ -300,12 +443,12 @@ class Phase2BaselineIngestionTests(TestCase):
         self.assertEqual(scan.summary["services"], 1)
         self.assertEqual(scan.summary["domains"], 1)
         self.assertEqual(scan.summary["log_sources"], 1)
-        self.assertEqual(scan.summary["applications"], 0)
+        self.assertEqual(scan.summary["applications"], 1)
         self.assertEqual(scan.summary["findings"], 0)
         self.assertEqual(DiscoveredService.objects.filter(baseline_scan=scan).count(), 1)
         self.assertEqual(DiscoveredDomain.objects.filter(baseline_scan=scan).count(), 1)
         self.assertEqual(LogSource.objects.filter(baseline_scan=scan).count(), 1)
-        self.assertEqual(Application.objects.count(), 0)
+        self.assertEqual(Application.objects.filter(baseline_scan=scan).count(), 1)
         self.assertEqual(Finding.objects.count(), 0)
 
     def test_phase2_outputs_do_not_create_findings(self):

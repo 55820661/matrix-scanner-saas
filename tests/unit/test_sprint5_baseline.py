@@ -430,6 +430,7 @@ class Sprint5BaselineTests(TestCase):
         scan.refresh_from_db()
         self.assertEqual(scan.status, BaselineScan.Status.SUCCEEDED)
         self.assertEqual(Application.objects.count(), 1)
+        self.assertEqual(Application.objects.get().baseline_scan, scan)
         self.assertEqual(scan.summary["applications"], 1)
 
     def test_phase2_profile_ingests_services_domains_and_logs_only(self):
@@ -458,12 +459,12 @@ class Sprint5BaselineTests(TestCase):
         self.assertEqual(scan.status, BaselineScan.Status.SUCCEEDED)
         self.assertEqual(DiscoveredService.objects.count(), 3)
         self.assertEqual(DiscoveredDomain.objects.count(), 1)
-        self.assertEqual(Application.objects.count(), 0)
+        self.assertEqual(Application.objects.count(), 1)
         self.assertEqual(LogSource.objects.count(), 1)
         self.assertEqual(Finding.objects.count(), 0)
         self.assertEqual(
             scan.summary,
-            {"services": 3, "domains": 1, "applications": 0, "log_sources": 1, "findings": 0},
+            {"services": 3, "domains": 1, "applications": 1, "log_sources": 1, "findings": 0},
         )
 
     def test_cross_account_baseline_scan_denied(self):

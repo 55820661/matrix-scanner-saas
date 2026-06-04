@@ -57,7 +57,26 @@ PHASE2_DOMAIN_METADATA_FIELDS = (
     "is_default",
 )
 PHASE2_LOG_METADATA_FIELDS = ("exists", "is_dir", "size_bytes", "modified_at")
+PHASE2_APPLICATION_METADATA_FIELDS = (
+    "detection",
+    "depth",
+    "project_package",
+    "has_manage_py",
+    "has_wsgi",
+    "has_asgi",
+    "has_systemd_unit_hint",
+    "dependency_files",
+)
 GUNICORN_UVICORN_PROCESS_TYPES = {"gunicorn", "uvicorn", "daphne"}
+FRAMEWORK_PRIORITY = {
+    "": 0,
+    "unknown": 1,
+    "php": 2,
+    "python": 3,
+    "node": 4,
+    "laravel": 5,
+    "django": 6,
+}
 SAFE_METADATA_TEXT_LIMIT = 1000
 
 
@@ -147,6 +166,18 @@ def selected_metadata(item, fields, source_tool):
 
 def merge_metadata(existing, incoming):
     return redact_json({**(existing or {}), **(incoming or {})})
+
+
+def normalized_framework(value):
+    return str(value or "").strip().lower()[:100]
+
+
+def preferred_framework(existing, incoming):
+    existing = normalized_framework(existing)
+    incoming = normalized_framework(incoming)
+    if FRAMEWORK_PRIORITY.get(incoming, 0) > FRAMEWORK_PRIORITY.get(existing, 0):
+        return incoming
+    return existing
 
 
 def preflight_required_baseline_tools(scan):
@@ -309,6 +340,8 @@ def ingest_tool_result(scan, tool_key, result):
         ingest_applications(scan, result.get("applications", []))
     elif tool_key == "laravel_discovery":
         ingest_applications(scan, result.get("applications", []), framework_hint="laravel")
+    elif tool_key in {"opt_apps_discovery", "django_apps_discovery"}:
+        ingest_phase2_applications(scan, result.get("applications", []), tool_key)
     elif tool_key == "log_sources_discovery":
         ingest_log_sources(scan, result.get("log_sources", []))
     elif tool_key == "log_sources_discovery_v2":
@@ -434,6 +467,7 @@ def ingest_applications(scan, applications, framework_hint=""):
             domain=domain,
             path=path,
             defaults={
+                "baseline_scan": scan,
                 "name": name,
                 "framework": framework,
                 "review_status": Application.ReviewStatus.PENDING_REVIEW,
@@ -442,8 +476,9 @@ def ingest_applications(scan, applications, framework_hint=""):
         )
         if created:
             continue
+        app.baseline_scan = scan
         app.metadata = {**(app.metadata or {}), **metadata}
-        update_fields = ["metadata", "updated_at"]
+        update_fields = ["baseline_scan", "metadata", "updated_at"]
         if app.review_status != Application.ReviewStatus.APPROVED:
             app.name = name
             app.framework = framework
@@ -452,6 +487,47 @@ def ingest_applications(scan, applications, framework_hint=""):
         elif not app.framework and framework:
             app.framework = framework
             update_fields.append("framework")
+        app.save(update_fields=update_fields)
+
+
+def ingest_phase2_applications(scan, applications, source_tool):
+    for item in applications or []:
+        if not isinstance(item, dict):
+            continue
+        path = clean_path(item.get("path", ""))
+        if not path:
+            continue
+        domain = str(item.get("domain", "")).strip().lower()[:255]
+        default_framework = "django" if source_tool == "django_apps_discovery" else ""
+        framework = normalized_framework(item.get("framework") or default_framework or "unknown")
+        name = str(item.get("name") or domain or path.rsplit("/", 1)[-1] or path).strip()[:255]
+        metadata = selected_metadata(item, PHASE2_APPLICATION_METADATA_FIELDS, source_tool)
+
+        app, created = Application.objects.get_or_create(
+            account=scan.account,
+            server=scan.server,
+            domain=domain,
+            path=path,
+            defaults={
+                "baseline_scan": scan,
+                "name": name,
+                "framework": framework,
+                "review_status": Application.ReviewStatus.PENDING_REVIEW,
+                "metadata": metadata,
+            },
+        )
+        if created:
+            continue
+
+        app.baseline_scan = scan
+        app.metadata = merge_metadata(app.metadata, metadata)
+        update_fields = ["baseline_scan", "metadata", "updated_at"]
+        if app.review_status != Application.ReviewStatus.APPROVED:
+            app.framework = preferred_framework(app.framework, framework)
+            app.review_status = Application.ReviewStatus.PENDING_REVIEW
+            if name and (not app.name or app.name == app.path or app.name == app.path.rsplit("/", 1)[-1]):
+                app.name = name
+            update_fields.extend(["framework", "review_status", "name"])
         app.save(update_fields=update_fields)
 
 
@@ -530,9 +606,13 @@ def ingest_findings(scan, findings):
 
 
 def summarize_scan(scan):
-    application_count = 0
-    if getattr(scan, "profile_key", "") == PROFILE_LEGACY_CPANEL:
+    scan_applications = Application.objects.filter(baseline_scan=scan)
+    if scan_applications.exists():
+        application_count = scan_applications.count()
+    elif getattr(scan, "profile_key", "") == PROFILE_LEGACY_CPANEL:
         application_count = Application.objects.filter(account=scan.account, server=scan.server).count()
+    else:
+        application_count = 0
     return {
         "services": DiscoveredService.objects.filter(baseline_scan=scan).count(),
         "domains": DiscoveredDomain.objects.filter(baseline_scan=scan).count(),

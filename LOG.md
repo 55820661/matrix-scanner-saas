@@ -2,6 +2,43 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-04 - Phase 2 Sprint 2.11B Start
+
+Intent:
+- Implement only Phase 2 application ingestion and deduplication for `opt_apps_discovery` and `django_apps_discovery`.
+
+Scope:
+- Add nullable `Application.baseline_scan` attribution.
+- Ingest safe application outputs from `opt_apps_discovery` and `django_apps_discovery`.
+- Deduplicate by the existing `account + server + domain + path` application location.
+- Apply safe framework priority so Django enriches generic Python/unknown application records.
+- Update application summary counts to use scan attribution where available while preserving legacy compatibility.
+- Add focused tests for deduplication, metadata safety, approved app preservation, and summary accuracy.
+
+Out of scope:
+- Report redesign, AI planner, external bot, ToolPolicy/PlanTool changes, runtime tool changes, findings generation, remediation/write actions, and service-to-application relationship modeling.
+
+Result:
+- Added nullable `Application.baseline_scan` attribution with migration `applications.0003_application_baseline_scan`.
+- Added Phase 2 application ingestion for `opt_apps_discovery` and `django_apps_discovery`.
+- Deduplicated Phase 2 applications by existing `account + server + domain + path` location.
+- Added framework priority so Django enriches Python/unknown app records and unknown does not overwrite more specific frameworks.
+- Preserved approved applications from aggressive name/framework/status overwrites while still enriching metadata and scan attribution.
+- Updated application summary counting to prefer scan-scoped applications, with legacy cPanel fallback preserved.
+- Added focused tests for app creation, deduplication, framework priority, malformed/unsafe inputs, secret redaction, approved app preservation, scan attribution, summary accuracy, and legacy behavior.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_baseline_ingestion --noinput` passed: 15 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint5_baseline --noinput` passed: 22 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 291 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No report redesign, AI planner, external bot, ToolPolicy/PlanTool change, runtime tool change, finding generation, remediation/write behavior, or service-to-application relationship model was added.
+- No commit or push was made.
+
 ## 2026-06-01 - Phase 2 Sprint 2.11A Start
 
 Intent:
