@@ -102,13 +102,24 @@ class Phase2BaselineIngestionTests(TestCase):
         self.mark_step_succeeded(
             scan,
             "systemd_services_discovery",
-            {"services": [{"service_name": "matrix-scanner-saas.service", "active_state": "active"}]},
+            {
+                "services": [
+                    {"service_name": "cron.service", "active_state": "active"},
+                    {"service_name": "matrix-scanner-saas.service", "active_state": "active"},
+                ]
+            },
         )
         self.mark_step_succeeded(
             scan,
             "gunicorn_uvicorn_services_discovery",
             {
                 "services": [
+                    {
+                        "service_name": "cron.service",
+                        "active_state": "active",
+                        "process_type": "unknown",
+                        "related_app_path": "/opt/not-real",
+                    },
                     {
                         "service_name": "matrix-scanner-saas.service",
                         "active_state": "active",
@@ -121,6 +132,11 @@ class Phase2BaselineIngestionTests(TestCase):
 
         ingest_completed_tool_runs(scan)
 
+        self.assertEqual(DiscoveredService.objects.count(), 2)
+        cron = DiscoveredService.objects.get(name="cron.service")
+        self.assertEqual(cron.metadata["source"], "systemd_services_discovery")
+        self.assertNotIn("process_type", cron.metadata)
+        self.assertNotIn("related_app_path", cron.metadata)
         self.assertEqual(DiscoveredService.objects.filter(name="matrix-scanner-saas.service").count(), 1)
         service = DiscoveredService.objects.get(name="matrix-scanner-saas.service")
         self.assertEqual(service.metadata["source"], "gunicorn_uvicorn_services_discovery")

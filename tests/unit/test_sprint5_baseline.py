@@ -443,7 +443,7 @@ class Sprint5BaselineTests(TestCase):
             "opt_apps_discovery": {"applications": [{"name": "App", "path": "/opt/app", "framework": "django"}]},
             "django_apps_discovery": {"applications": [{"name": "App", "path": "/opt/app", "framework": "django"}]},
             "gunicorn_uvicorn_services_discovery": {
-                "services": [{"service_name": "app.service"}],
+                "services": [{"service_name": "app.service", "process_type": "gunicorn"}],
                 "applications": [{"path": "/opt/app"}],
             },
             "postgres_status_discovery": {"services": [{"service_name": "postgresql.service"}]},

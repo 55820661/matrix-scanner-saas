@@ -39,6 +39,35 @@ Remaining:
 - No Application migration, report redesign, AI planner, external bot, ToolPolicy/PlanTool change, runtime tool change, finding generation, remediation, or write behavior was added.
 - No commit or push was made.
 
+## 2026-06-04 - Phase 2 Sprint 2.11A Metadata Hotfix Start
+
+Intent:
+- Prevent `gunicorn_uvicorn_services_discovery` entries with missing, empty, or `unknown` `process_type` from overwriting generic systemd service metadata.
+
+Scope:
+- Filter Gunicorn/Uvicorn service ingestion to only `gunicorn`, `uvicorn`, or `daphne` process types.
+- Add a regression test proving generic systemd service metadata is not overwritten by unknown Gunicorn/Uvicorn entries.
+
+Out of scope:
+- Application ingestion, migrations, reports, AI planner, external bot, ToolPolicy/PlanTool changes, runtime tools, findings generation, remediation/actions, and write behavior.
+
+Result:
+- Added a Phase 2 service ingestion guard so `gunicorn_uvicorn_services_discovery` only ingests/enriches services with `process_type` of `gunicorn`, `uvicorn`, or `daphne`.
+- Unknown, missing, or empty `process_type` rows from that tool are skipped and cannot overwrite systemd metadata.
+- Updated regression coverage so generic `cron.service` remains sourced from `systemd_services_discovery`, while real Gunicorn services still enrich existing service records without duplicates.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_baseline_ingestion --noinput` passed: 10 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_baseline_ingestion tests.unit.test_sprint5_baseline --noinput` passed: 32 tests.
+- First full-suite run found one outdated Sprint 5 fixture expecting an untyped Gunicorn row to ingest; fixture was corrected to use `process_type="gunicorn"`.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 286 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- No Application ingestion, migrations, report redesign, AI planner, external bot, ToolPolicy/PlanTool changes, runtime tool changes, findings generation, remediation, or write behavior was added.
+- No commit or push was made.
+
 ## 2026-06-01 - Phase 2 Sprint 2.10 Start
 
 Intent:

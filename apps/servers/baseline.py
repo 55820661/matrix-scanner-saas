@@ -57,6 +57,7 @@ PHASE2_DOMAIN_METADATA_FIELDS = (
     "is_default",
 )
 PHASE2_LOG_METADATA_FIELDS = ("exists", "is_dir", "size_bytes", "modified_at")
+GUNICORN_UVICORN_PROCESS_TYPES = {"gunicorn", "uvicorn", "daphne"}
 SAFE_METADATA_TEXT_LIMIT = 1000
 
 
@@ -338,6 +339,10 @@ def ingest_phase2_services(scan, services, source_tool):
     for item in services or []:
         if not isinstance(item, dict):
             continue
+        if source_tool == "gunicorn_uvicorn_services_discovery":
+            process_type = str(item.get("process_type", "")).strip().lower()
+            if process_type not in GUNICORN_UVICORN_PROCESS_TYPES:
+                continue
         name = str(item.get("service_name") or item.get("name") or "").strip()[:160]
         if not name:
             continue

@@ -51,6 +51,48 @@ Completion status:
 - No Application ingestion/migration/report/AI/tool activation/runtime/remediation changes were added.
 - No commit or push was made.
 
+## Active Task - Phase 2 Sprint 2.11A Metadata Hotfix
+
+Task:
+- Prevent unknown Gunicorn/Uvicorn discovery rows from overwriting generic systemd service metadata.
+
+Scope:
+- Update service ingestion so `gunicorn_uvicorn_services_discovery` only ingests/enriches `gunicorn`, `uvicorn`, or `daphne` services.
+- Add a focused regression test.
+
+Out of scope:
+- Application ingestion.
+- Migrations.
+- Report redesign.
+- AI planner.
+- External bot.
+- ToolPolicy/PlanTool changes.
+- Runtime tool changes.
+- Findings generation.
+- Remediation/write actions.
+
+Immediate next steps:
+- Patch Phase 2 service ingestion filter.
+- Update focused ingestion tests.
+- Run requested verification commands.
+
+Progress:
+- Added filtering so `gunicorn_uvicorn_services_discovery` only ingests/enriches `gunicorn`, `uvicorn`, and `daphne` services.
+- Skips missing, empty, or `unknown` `process_type` rows from that tool.
+- Added regression coverage for generic systemd service metadata preservation and real Gunicorn enrichment.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_baseline_ingestion --noinput` passed: 10 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_phase2_baseline_ingestion tests.unit.test_sprint5_baseline --noinput` passed: 32 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 286 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint 2.11A metadata hotfix is complete within the approved scope.
+- No Application ingestion/migration/report/AI/tool activation/runtime/remediation changes were added.
+- No commit or push was made.
+
 ## Active Task - Phase 2 Sprint 2.10 Pilot Tool Enablement
 
 Task:
