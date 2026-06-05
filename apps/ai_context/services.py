@@ -9,6 +9,7 @@ from apps.reports.models import KnowledgeEntry, Recommendation, Report
 from apps.servers.models import BaselineScan, DiscoveredDomain, DiscoveredService, Finding, LogSource, Server
 from apps.subscriptions.models import Subscription
 from apps.tools.models import PlanTool, ToolDefinition, ToolPolicy, ToolRun
+from apps.tools.result_summaries import summarize_tool_run_result
 from apps.tools.services import ACTIVE_SUBSCRIPTION_STATUSES
 
 
@@ -264,6 +265,7 @@ def _recent_tool_runs(account, server):
             "finished_at": _iso(tool_run.finished_at),
             "error_summary": _safe_text(tool_run.error_message),
             "has_result": bool(tool_run.result_redacted),
+            "result_summary": _safe_text(summarize_tool_run_result(tool_run)),
         }
         for tool_run in _limited(queryset)
     ]

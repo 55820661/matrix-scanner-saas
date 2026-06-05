@@ -2134,3 +2134,45 @@ Verification:
 Completion status:
 - Sprint C7 implementation and verification are complete.
 - Full suite was not run because C7 stayed in the proposal layer and did not modify runtime execution semantics directly.
+
+## Active Task - Sprint C8 First Laravel/Apache Tool Cycle
+
+Task:
+- Implement the approved `Sprint C8 - First Laravel/Apache Tool Cycle`.
+
+Scope:
+- Add the first safe commercial command-template tool flow using `apache_5xx_summary`.
+- Keep the tool read-only and summary-only with no raw log exposure.
+- Connect proposal conversion/enablement prerequisites, chat tool request execution, safe runtime output capture, and deterministic result explanation.
+- Preserve existing Tool Builder, ToolPolicy, PlanTool, ToolRun, and AgentJob guardrails.
+
+Out of scope:
+- `laravel_env_sanity`.
+- Raw log display or storage.
+- `script_template`.
+- Live AI providers.
+- Telegram changes.
+- Remediation, write, restart, reload, or destructive actions.
+
+Next steps:
+- Inspect current chat, tool builder, and command-template execution paths for the minimum C8 end-to-end gap.
+- Implement only the missing pieces for one approved safe tool cycle.
+- Add focused tests around command-template seeding, execution safety, and chat-visible explanation.
+
+Progress:
+- Added `enable_command_template_pilot_tool` for explicit pilot-only enablement of one approved read-only command-template tool.
+- Added safe `apache_5xx_summary` result summarization and recent tool-result explanation in safe context/chat.
+- Synced terminal tool-run results back into `AdminChatToolRequest` and posted safe assistant summaries into the chat thread.
+- Added escaped-brace rendering support for fixed `awk` command arguments without introducing free-form shell behavior.
+- Added focused C8 tests for enablement, chat execution, safe result summaries, and viewer denial.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c8_first_tool_cycle --noinput` passed: 7 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 338 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint C8 implementation and verification are complete.
+- Full suite was run because C8 changed tool execution, result propagation, and chat-visible security behavior.

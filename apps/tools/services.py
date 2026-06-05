@@ -165,7 +165,7 @@ def _deny_command_template(account, reason, *, actor_user=None, tool_key="", ser
 
 
 def _render_command_arg(arg, params):
-    rendered = arg
+    rendered = arg.replace("{{", "__LBRACE__").replace("}}", "__RBRACE__")
     for key, value in params.items():
         if isinstance(value, bool):
             safe_value = "true" if value else "false"
@@ -178,7 +178,7 @@ def _render_command_arg(arg, params):
         rendered = rendered.replace("{" + str(key) + "}", safe_value)
     if "{" in rendered or "}" in rendered:
         raise ToolParamValidationError("Command template contains unresolved placeholders.")
-    return rendered
+    return rendered.replace("__LBRACE__", "{").replace("__RBRACE__", "}")
 
 
 def build_execution_payload(tool_definition, validated_params, *, account, server, actor_user=None):
@@ -279,6 +279,9 @@ def update_tool_run_from_job(job):
     if tool_run.status == ToolRun.Status.RUNNING and tool_run.started_at is None:
         tool_run.started_at = timezone.now()
     tool_run.save(update_fields=["status", "result_redacted", "error_message", "finished_at", "started_at", "updated_at"])
+    from apps.ai_chat.services import sync_chat_tool_requests_for_tool_run
+
+    sync_chat_tool_requests_for_tool_run(tool_run)
     return tool_run
 
 

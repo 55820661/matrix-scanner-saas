@@ -1620,3 +1620,39 @@ Verification:
 Testing note:
 - Full suite was not run for Sprint C7 because this sprint did not change runtime execution semantics or agent/job security paths directly.
 - Focused regression was run against chat, tool builder, and C6 command-template validation/runtime compatibility.
+
+## 2026-06-05 - Sprint C8 First Laravel/Apache Tool Cycle Start
+
+Intent:
+- Implement the approved `Sprint C8 - First Laravel/Apache Tool Cycle`.
+
+Scope:
+- Prove the first end-to-end chat-driven commercial tool cycle using a safe `command_template`.
+- Use `apache_5xx_summary` as the first tool under DR-013.
+- Keep outputs limited to counters and safe summaries only.
+- Connect chat request, policy-checked execution, safe runtime result capture, and deterministic explanation.
+
+Out of scope:
+- `laravel_env_sanity`.
+- Raw log display or storage.
+- `script_template`.
+- Live AI providers.
+- Telegram changes.
+- Remediation, write, restart, reload, or destructive actions.
+
+Result:
+- Added explicit pilot enablement for one approved read-only `command_template` tool through `enable_command_template_pilot_tool`.
+- Added safe tool-result summarization for `apache_5xx_summary`.
+- Synced terminal `ToolRun` status back into linked chat tool requests and posted a safe assistant summary into the chat thread.
+- Extended safe context and deterministic chat responses so recent tool results can be explained without exposing raw command output.
+- Added escaped-brace support for argv templates so safe fixed `awk` expressions can be rendered without enabling free-form shell behavior.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c8_first_tool_cycle --noinput` passed: 7 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 338 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Testing note:
+- Full suite was run for Sprint C8 because this sprint touched tool execution, AgentJob-to-ToolRun result propagation, chat-visible security boundaries, and policy-backed customer tool execution.

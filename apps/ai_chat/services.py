@@ -7,6 +7,7 @@ from apps.applications.models import Application
 from apps.core.redaction import redact_json, redact_secrets
 from apps.servers.models import Server
 from apps.tools.models import ToolBuildProposal, ToolBuildRequest, ToolDefinition, ToolRun, ToolTemplate
+from apps.tools.result_summaries import summarize_tool_run_result
 from apps.tools.services import (
     ToolPolicyDenied,
     create_tool_run_job,
@@ -123,6 +124,8 @@ def add_user_message(*, user, session, body, metadata=None):
 
 def _detect_intent(question):
     normalized = (question or "").lower()
+    if any(word in normalized for word in ("result", "latest tool", "last tool", "apache", "5xx")):
+        return "tool_results"
     if any(word in normalized for word in ("finding", "risk", "issue", "critical", "high")):
         return "findings"
     if any(word in normalized for word in ("report", "summary report", "health report")):
@@ -185,6 +188,17 @@ def _format_tools_response(context):
     return "Available read-only tools through policy: " + ", ".join(keys)
 
 
+def _format_tool_results_response(context):
+    tool_runs = context.get("recent_tool_runs") or []
+    for tool_run in tool_runs:
+        if tool_run.get("result_summary"):
+            return tool_run["result_summary"]
+    if tool_runs:
+        latest = tool_runs[0]
+        return f"Latest tool run {latest.get('tool_key', 'tool')} is {latest.get('status', 'unknown')}."
+    return "No recent tool run results are present in the safe context."
+
+
 def _format_summary_response(context):
     baseline = context.get("baseline_summary") or {}
     return (
@@ -199,6 +213,8 @@ def _format_summary_response(context):
 
 
 def _deterministic_response(intent, context):
+    if intent == "tool_results":
+        return _format_tool_results_response(context)
     if intent == "status":
         return _format_status_response(context)
     if intent == "findings":
@@ -346,6 +362,56 @@ def approve_tool_request(*, user, tool_request):
         reasoning_summary="Approved chat tool request queued through create_tool_run_job.",
     )
     return tool_run
+
+
+def sync_chat_tool_requests_for_tool_run(tool_run):
+    if not tool_run:
+        return
+    terminal_status_map = {
+        ToolRun.Status.SUCCEEDED: AdminChatToolRequest.Status.SUCCEEDED,
+        ToolRun.Status.FAILED: AdminChatToolRequest.Status.FAILED,
+        ToolRun.Status.REJECTED: AdminChatToolRequest.Status.FAILED,
+        ToolRun.Status.TIMEOUT: AdminChatToolRequest.Status.FAILED,
+        ToolRun.Status.CANCELLED: AdminChatToolRequest.Status.CANCELLED,
+    }
+    request_status = terminal_status_map.get(tool_run.status)
+    if not request_status:
+        return
+    result_summary = _safe_text(summarize_tool_run_result(tool_run), limit=MAX_RESPONSE_LENGTH)
+    for tool_request in tool_run.chat_tool_requests.select_related("session", "tool_definition"):
+        update_fields = ["status", "updated_at"]
+        tool_request.status = request_status
+        if tool_run.error_message:
+            tool_request.error_summary = _safe_text(tool_run.error_message, limit=500)
+            update_fields.append("error_summary")
+        tool_request.save(update_fields=update_fields)
+        body = result_summary or f"Tool result received for {tool_request.tool_definition.key}."
+        message = AdminChatMessage.objects.create(
+            session=tool_request.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted=body,
+            metadata_redacted={
+                "source": "tool_result_summary",
+                "tool_request_id": str(tool_request.id),
+                "tool_run_id": str(tool_run.id),
+                "tool_key": tool_request.tool_definition.key,
+                "tool_status": tool_run.status,
+            },
+        )
+        tool_request.session.last_message_at = message.created_at
+        tool_request.session.save(update_fields=["last_message_at", "updated_at"])
+        AdminChatDecision.objects.create(
+            session=tool_request.session,
+            decision_type=AdminChatDecision.DecisionType.TOOL_REQUEST,
+            input_context_redacted={"tool_run_id": str(tool_run.id), "tool_key": tool_request.tool_definition.key},
+            output_json_redacted={
+                "tool_request_id": str(tool_request.id),
+                "status": request_status,
+                "tool_status": tool_run.status,
+                "result_summary": body,
+            },
+            reasoning_summary="Safe summary generated from the redacted tool result for chat display.",
+        )
 
 
 def create_tool_build_request_from_chat(
