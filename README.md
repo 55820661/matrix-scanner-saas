@@ -42,6 +42,9 @@ Telegram group summaries can expose operational metadata. Group linking is owner
 
 ## Documentation
 
+- [docs/planning/ROADMAP-CORRECTION.md](docs/planning/ROADMAP-CORRECTION.md) - approved corrected roadmap reference.
+- [docs/planning/CORRECTED-EXECUTION-PLAN.md](docs/planning/CORRECTED-EXECUTION-PLAN.md) - top execution reference after the roadmap correction.
+- [docs/planning/DECISION-REGISTER.md](docs/planning/DECISION-REGISTER.md) - official decision reference for corrected-plan sprints.
 - [PLANS.md](PLANS.md)
 - [docs/DECISIONS.md](docs/DECISIONS.md)
 - [docs/SECURITY-MODEL.md](docs/SECURITY-MODEL.md)

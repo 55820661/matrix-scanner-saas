@@ -2,6 +2,14 @@
 
 These decisions are constraints for implementation. Do not change them casually during a sprint.
 
+## Corrected Roadmap References
+
+- `docs/planning/ROADMAP-CORRECTION.md` is the corrected product and architecture roadmap reference.
+- `docs/planning/CORRECTED-EXECUTION-PLAN.md` is the top execution reference after the roadmap correction.
+- `docs/planning/DECISION-REGISTER.md` is the official approved decision reference for corrected-plan Sprints.
+- The corrected roadmap has one AI only: `Admin AI Chatbot`; diagnostics, reports, Tool Builder, and Telegram are workflows/interfaces around the same chat/orchestrator.
+- The first real implementation Sprint after documentation alignment is `Sprint C1.5 - Remote Bootstrap Runtime Completion`.
+
 ## SaaS and Tenancy
 
 - The SaaS platform is built with Django, Django REST Framework, PostgreSQL, Django Admin, and Django templates for the MVP Portal.

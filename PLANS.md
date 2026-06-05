@@ -2,6 +2,24 @@
 
 This file is the implementation-facing plan for Matrix Scanner SaaS. It summarizes the approved direction from `docs/planning/` and the locked pre-Sprint 1 decisions.
 
+## Corrected Roadmap Authority
+
+The original MVP sprint plan below is retained as implementation history and baseline context. For all work after the corrected roadmap approval, use these references in order:
+
+1. `docs/planning/ROADMAP-CORRECTION.md` - corrected product and architecture roadmap.
+2. `docs/planning/CORRECTED-EXECUTION-PLAN.md` - top execution reference after the roadmap correction.
+3. `docs/planning/DECISION-REGISTER.md` - official approved decision reference for Sprint-by-Sprint execution.
+
+The corrected roadmap has one AI only: `Admin AI Chatbot`. Diagnostics, reports, Tool Builder, and Telegram are service/workflow/interface layers around the same chat/orchestrator, not separate AI systems.
+
+The first real implementation Sprint after documentation alignment is:
+
+```text
+Sprint C1.5 - Remote Bootstrap Runtime Completion
+```
+
+Do not proceed to later corrected-roadmap Sprints until the current Sprint is closed against the decision register and verification requirements.
+
 ## Product Summary
 
 Matrix Scanner SaaS is a Django-based SaaS platform for diagnosing and monitoring customer servers, initially focused on traditional cPanel/WHM, Laravel, Apache/EasyApache, PHP, MySQL/MariaDB, `public_html`, Apache logs, Laravel logs, and related production workflows.

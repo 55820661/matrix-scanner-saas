@@ -2,6 +2,225 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## Active Task - Sprint C1 Current State and Documentation Alignment
+
+Task:
+- Execute Sprint C1 from the approved corrected Matrix Scanner SaaS roadmap.
+
+Scope:
+- Align documentation around the approved correction references:
+  - `docs/planning/ROADMAP-CORRECTION.md`
+  - `docs/planning/CORRECTED-EXECUTION-PLAN.md`
+  - `docs/planning/DECISION-REGISTER.md`
+- Confirm the decision register is the official decision reference.
+- Confirm `CORRECTED-EXECUTION-PLAN.md` is the top execution reference after `ROADMAP-CORRECTION.md`.
+- Document that the first real implementation Sprint after documentation alignment is `Sprint C1.5 - Remote Bootstrap Runtime Completion`.
+- Run non-destructive validation commands.
+
+Out of scope:
+- Product code changes.
+- Model/service/runtime changes.
+- Migrations beyond dry-run checks.
+- Tests that require new product behavior.
+- Server execution.
+- Moving to Sprint C1.5.
+
+Immediate next steps:
+- Inspect current planning/README docs for stale roadmap references.
+- Patch only documentation that needs alignment.
+- Run requested C1 verification commands.
+
+Progress:
+- Added corrected-roadmap documentation links to `README.md`.
+- Added a corrected roadmap authority section to `PLANS.md`.
+- Added corrected roadmap references to `docs/DECISIONS.md`.
+- Added Sprint C1 report to `docs/planning/تقارير التنفيذ.md`.
+- Confirmed `docs/planning/DECISION-REGISTER.md` is the official decision reference.
+- Confirmed `docs/planning/CORRECTED-EXECUTION-PLAN.md` is the top execution reference after `docs/planning/ROADMAP-CORRECTION.md`.
+- Confirmed the first real implementation Sprint after documentation alignment is `Sprint C1.5 - Remote Bootstrap Runtime Completion`.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 292 tests, 4 skipped.
+- Initial full test run also reached `OK` but the shell wrapper timed out after printing results; it was rerun with a longer timeout and exited successfully.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint C1 documentation alignment is complete.
+- No product code, model/service/runtime changes, migrations, or server execution were performed.
+- Do not move to Sprint C1.5 until the owner approves proceeding.
+
+## Active Task - Decision Register Approval Update
+
+Task:
+- Mark `docs/planning/DECISION-REGISTER.md` as approved and record the owner approval.
+
+Scope:
+- Update decision register status only.
+- Update documentation tracking.
+
+Out of scope:
+- Code changes.
+- Migrations.
+- Tests.
+- Runtime changes.
+- Server execution.
+
+Progress:
+- Marked `docs/planning/DECISION-REGISTER.md` as `Approved`.
+- Added owner approval line dated 2026-06-05.
+- Recorded that `DECISION-REGISTER.md` is the official decision reference.
+- Recorded that `CORRECTED-EXECUTION-PLAN.md` is the top execution reference after `ROADMAP-CORRECTION.md`.
+- Recorded that the first real implementation Sprint after documentation alignment is `Sprint C1.5 - Remote Bootstrap Runtime Completion`.
+
+Verification:
+- `git diff --check` passed with line-ending warnings only.
+- No code, migrations, tests, runtime changes, or server execution were performed.
+
+## Active Task - Roadmap Tool Runtime Correction Detail
+
+Task:
+- Strengthen `docs/planning/ROADMAP-CORRECTION.md` with the attached command-template-first tool/runtime correction.
+
+Scope:
+- Keep the correction in the roadmap reference file.
+- Clarify Admin AI Chatbot, Tool Registry, Runtime/Agent, and new-tool workflow responsibilities.
+
+Out of scope:
+- Product code changes.
+- Migrations.
+- Runtime command-template execution implementation.
+- ToolPolicy/PlanTool changes.
+- AI or Telegram implementation.
+- Commit or push.
+
+Immediate next steps:
+- Patch `ROADMAP-CORRECTION.md`.
+- Verify UTF-8 readability and diff formatting.
+
+Progress:
+- Added detailed tool shape guidance to the roadmap reference.
+- Added Admin AI Chatbot tool responsibilities.
+- Added Runtime/Agent command executor responsibilities.
+- Added Tool Registry to Runtime execution flow.
+- Added new command-template proposal, validation, and approval flow.
+- Added tool type classification: `command_template`, `script_template`, and `runtime_handler`.
+
+Verification:
+- Confirmed expected command-template markers exist in `ROADMAP-CORRECTION.md`.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Roadmap tool/runtime correction detail is complete.
+- No product code, migrations, runtime command-template implementation, ToolPolicy/PlanTool changes, AI/Telegram implementation, commit, or push was added.
+
+## Active Task - Tool Model Correction
+
+Task:
+- Apply the attached correction that Matrix Scanner tools should primarily be approved read-only command templates, not necessarily runtime handlers.
+
+Scope:
+- Update the planning documents created for the corrected roadmap.
+- Clarify Tool Registry, Runtime/Agent, Tool Builder, and phase 5 terminology.
+- Preserve all security constraints.
+
+Out of scope:
+- Product code changes.
+- Migrations.
+- Runtime command-template execution implementation.
+- ToolPolicy/PlanTool activation.
+- AI or Telegram implementation.
+- Commit or push.
+
+Immediate next steps:
+- Patch the relevant Markdown plan sections.
+- Verify UTF-8 readability and diff formatting.
+
+Progress:
+- Updated the roadmap correction reference to state that tools are primarily approved read-only command/script templates in Tool Registry.
+- Updated the execution plan to use `Safe Command Execution Runtime` and command-template-first Tool Builder flow.
+- Clarified that runtime handlers remain available later for advanced collectors/parsers only.
+
+Verification:
+- Confirmed both updated Markdown files read correctly as UTF-8.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Tool model correction is complete in the planning documents.
+- No product code, migrations, runtime command-template implementation, ToolPolicy/PlanTool activation, AI/Telegram implementation, commit, or push was added.
+
+## Active Task - Corrected Execution Plan
+
+Task:
+- Create a detailed implementation plan Markdown file based on the roadmap correction and current project state.
+
+Scope:
+- Study the corrected one-AI architecture.
+- Reconcile it with current implemented components and deferred work.
+- Produce a practical phased execution plan for the next project stages.
+
+Out of scope:
+- Product code changes.
+- Migrations.
+- Runtime handlers.
+- ToolPolicy/PlanTool activation.
+- AI or Telegram implementation.
+- Commit or push.
+
+Immediate next steps:
+- Inspect current planning and implementation state.
+- Create the new execution plan document.
+- Run formatting/diff checks.
+
+Progress:
+- Reviewed the corrected roadmap reference and current implementation files for baseline profiles, tool setup, runtime executor, diagnostics, reports, Telegram, and Tool Registry.
+- Created `docs/planning/CORRECTED-EXECUTION-PLAN.md`.
+- Defined practical phases and sprint candidates from Safe Context Builder through Telegram Pilot.
+
+Verification:
+- Confirmed the Markdown file reads correctly as UTF-8.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Corrected execution plan document is complete.
+- No product code, migrations, runtime handlers, ToolPolicy/PlanTool activation, AI/Telegram implementation, commit, or push was added.
+
+## Active Task - Roadmap Correction Markdown Reference
+
+Task:
+- Convert `docs/planning/خطة_تصحيح_المسار_Matrix_Scanner_SaaS.docx` into a Markdown reference document for future project phases.
+
+Scope:
+- Preserve the corrected roadmap and terminology from the Word document.
+- Make the Markdown usable as the reference plan for the next phases.
+- Keep the plan centered on one Admin AI Chatbot and supporting service layers.
+
+Out of scope:
+- Product code changes.
+- Migrations.
+- Runtime handlers.
+- ToolPolicy/PlanTool activation.
+- AI/Telegram implementation.
+- Commit or push.
+
+Immediate next steps:
+- Create the Markdown reference file in `docs/planning`.
+- Run formatting/diff checks.
+- Update tracking with the result.
+
+Progress:
+- Created `docs/planning/ROADMAP-CORRECTION.md`.
+- Converted the roadmap correction content into Markdown sections, phase tables, phase details, fixed security constraints, practical priority order, and terminology definitions.
+
+Verification:
+- Confirmed the Markdown file reads correctly as UTF-8.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Roadmap correction Markdown reference is complete.
+- No product code, migrations, runtime handlers, ToolPolicy/PlanTool activation, AI/Telegram implementation, commit, or push was added.
+
 ## Active Task - Phase 2 Sprint 2.11B Application Ingestion
 
 Task:
@@ -1528,3 +1747,59 @@ Completion status:
 - Sprint 2.8 hotfix is complete within approved runtime-only scope.
 - No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, external bot, log parsing, or findings generation were added.
 - No commit or push was made.
+## Active Task - Corrected Execution Plan Remote Bootstrap Update
+
+Task:
+- Update `docs/planning/CORRECTED-EXECUTION-PLAN.md` only to include the accepted planning corrections.
+
+Scope:
+- Add a standalone Remote Bootstrap Runtime Completion sprint before relying on runtime-based tool execution.
+- Document the current Remote Bootstrap foundation and the remaining gap in the installed bootstrap bundle.
+- Adjust the first full tool cycle so the first preferred tool is less sensitive than `laravel_env_sanity`.
+- Clarify that C5 can orchestrate existing safe tools, while command/script template execution depends on C6.
+
+Out of scope:
+- Code changes.
+- Model/service/runtime changes.
+- Migrations.
+- Tests.
+- Server execution.
+
+Progress:
+- Created `docs/planning/DECISION-REGISTER.md`.
+- Recorded approved decisions for C1 through C12.
+- Recorded deferred decisions separately.
+- Recorded guardrails that require explicit approval to change.
+
+Verification:
+- `git diff --check` passed with line-ending warnings only.
+- No code, migrations, tests, runtime/service/model changes, or server execution were performed.
+
+
+Progress:
+- Updated `docs/planning/CORRECTED-EXECUTION-PLAN.md` with Sprint C1.5 / Phase 0.5 for Remote Bootstrap Runtime Completion.
+- Documented the existing Remote Bootstrap foundation and the remaining `sprint3-bootstrap-runtime` gap.
+- Clarified that C5 can orchestrate existing safe tools only, while command/script template execution depends on C6.
+- Updated C8 to prefer `laravel_log_health` or `apache_5xx_summary` first and defer `laravel_env_sanity`.
+- Updated the recommended next sprint sequence and final roadmap chain.
+
+Verification:
+- `git diff --check` passed with line-ending warnings only.
+- No code, migrations, runtime, model/service, test, or server execution changes were made.
+## Active Task - Decision Register Documentation
+
+Task:
+- Create `docs/planning/DECISION-REGISTER.md` as the official decision register for the corrected execution plan.
+
+Scope:
+- Record approved Sprint decisions from C1 through C12.
+- Record deferred decisions separately.
+- Record non-changeable guardrails that require explicit approval.
+- Update documentation tracking only.
+
+Out of scope:
+- Code changes.
+- Model/service/runtime changes.
+- Migrations.
+- Tests.
+- Server execution.
