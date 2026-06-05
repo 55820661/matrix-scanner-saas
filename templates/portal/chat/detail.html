@@ -78,6 +78,21 @@
         <button type="submit">Create proposal</button>
       </form>
     </div>
+
+    <div class="card">
+      <h2>Report drafts</h2>
+      <p class="muted">Creates a redacted draft for Matrix Admin review before any final report is saved.</p>
+      <form method="post" action="{% url 'portal:chat_report_draft_create' session.id %}">
+        {% csrf_token %}
+        <label for="report_type">Draft type</label>
+        <select id="report_type" name="report_type">
+          {% for value, label in chat_report_types %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Create report draft</button>
+      </form>
+    </div>
   {% endif %}
 
   <div class="card">
@@ -140,6 +155,38 @@
           </tr>
         {% empty %}
           <tr><td colspan="4">No tool builder requests yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Report draft history</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Title</th>
+          <th>Final report</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for draft in report_drafts %}
+          <tr>
+            <td>{{ draft.report_type }}</td>
+            <td>{{ draft.status }}</td>
+            <td>{{ draft.title_redacted }}</td>
+            <td>
+              {% if draft.converted_report %}
+                <a href="{% url 'portal:report_detail' draft.converted_report.id %}">{{ draft.converted_report.title }}</a>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4">No report drafts yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

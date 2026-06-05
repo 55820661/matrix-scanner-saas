@@ -2176,3 +2176,48 @@ Verification:
 Completion status:
 - Sprint C8 implementation and verification are complete.
 - Full suite was run because C8 changed tool execution, result propagation, and chat-visible security behavior.
+
+## Active Task - Sprint C9 Reports from Chat
+
+Task:
+- Implement the approved `Sprint C9 - Reports from Chat`.
+
+Scope:
+- Add `AdminChatReportDraft` with draft/review flow.
+- Support separate `technical/internal` and `customer_summary` chat-generated report drafts.
+- Keep reports deterministic and built from safe summaries only.
+- Require review before conversion to final `Report`.
+
+Out of scope:
+- Raw ToolRun output.
+- Raw AgentJob output.
+- Raw logs or raw `.env`.
+- PDF export.
+- Live AI providers.
+- Telegram changes.
+
+Next steps:
+- Inspect current reports foundation and add the smallest safe chat draft model and conversion path.
+- Add minimal Portal chat actions for draft creation and visibility.
+- Add Matrix Admin review/conversion actions in Admin and focused tests for redaction, scoping, and conversion.
+
+Progress:
+- Added `AdminChatReportDraft` with review-first status flow and optional final `Report` link.
+- Added deterministic draft generation for `technical_internal` and `customer_summary`.
+- Added Matrix Admin review and conversion services plus Admin actions.
+- Added minimal Portal chat form/history for report drafts.
+- Extended final `Report` types to include `technical_internal` and `customer_summary`.
+- Added focused tests for draft creation, viewer denial, admin review/conversion, redaction, and account scoping.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations ai_chat reports` generated only the intended migrations.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c9_chat_reports --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c9_chat_reports tests.unit.test_admin_chat tests.unit.test_sprint11_reports --noinput` passed: 38 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 347 tests, 4 skipped.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint C9 implementation and verification are complete.
+- Full suite was run because C9 changed report redaction, report visibility, and review conversion behavior.

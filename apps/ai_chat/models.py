@@ -5,6 +5,7 @@ from django.db import models
 from apps.accounts.models import Account
 from apps.applications.models import Application
 from apps.core.models import TimeStampedModel
+from apps.reports.models import Report
 from apps.servers.models import Server
 from apps.tools.models import ToolDefinition, ToolRun
 
@@ -133,3 +134,58 @@ class AdminChatToolRequest(TimeStampedModel):
 
     def __str__(self):
         return f"{self.tool_definition.key} request for {self.session_id} ({self.status})"
+
+
+class AdminChatReportDraft(TimeStampedModel):
+    class DraftType(models.TextChoices):
+        TECHNICAL_INTERNAL = "technical_internal", "Technical/internal"
+        CUSTOMER_SUMMARY = "customer_summary", "Customer summary"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PENDING_REVIEW = "pending_review", "Pending review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        CONVERTED = "converted", "Converted"
+
+    session = models.ForeignKey(AdminChatSession, on_delete=models.CASCADE, related_name="report_drafts")
+    message = models.ForeignKey(AdminChatMessage, on_delete=models.SET_NULL, related_name="report_drafts", null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="created_chat_report_drafts",
+        null=True,
+        blank=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_chat_report_drafts",
+        null=True,
+        blank=True,
+    )
+    report_type = models.CharField(max_length=40, choices=DraftType.choices)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    title_redacted = models.CharField(max_length=255, blank=True)
+    summary_redacted = models.TextField(blank=True)
+    sections_redacted = models.JSONField(default=list, blank=True)
+    source_snapshot_redacted = models.JSONField(default=dict, blank=True)
+    review_notes_redacted = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    converted_report = models.ForeignKey(
+        Report,
+        on_delete=models.SET_NULL,
+        related_name="chat_report_drafts",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["session", "status", "created_at"]),
+            models.Index(fields=["report_type", "status", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.report_type} draft for {self.session_id} ({self.status})"

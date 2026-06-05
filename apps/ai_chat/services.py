@@ -5,6 +5,7 @@ from apps.accounts.models import Account, User
 from apps.ai_context.services import build_safe_context
 from apps.applications.models import Application
 from apps.core.redaction import redact_json, redact_secrets
+from apps.reports.models import Report, ReportSection
 from apps.servers.models import Server
 from apps.tools.models import ToolBuildProposal, ToolBuildRequest, ToolDefinition, ToolRun, ToolTemplate
 from apps.tools.result_summaries import summarize_tool_run_result
@@ -16,7 +17,7 @@ from apps.tools.services import (
     sanitize_builder_text,
 )
 
-from .models import AdminChatDecision, AdminChatMessage, AdminChatSession, AdminChatToolRequest
+from .models import AdminChatDecision, AdminChatMessage, AdminChatReportDraft, AdminChatSession, AdminChatToolRequest
 
 
 MAX_MESSAGE_LENGTH = 4000
@@ -45,6 +46,11 @@ def _require_portal_account_user(user):
 def _require_chat_writer(user):
     _require_portal_account_user(user)
     if user.role not in {User.CustomerRole.OWNER, User.CustomerRole.OPERATOR}:
+        raise PermissionDenied
+
+
+def _require_matrix_admin(user):
+    if not user or not user.is_authenticated or not user.is_staff:
         raise PermissionDenied
 
 
@@ -210,6 +216,144 @@ def _format_summary_response(context):
         f"findings={_section_count(context, 'findings_summary')}, "
         f"reports={_section_count(context, 'reports_summary')}."
     )
+
+
+def _technical_report_sections(context):
+    server = context.get("server_summary") or {}
+    baseline = context.get("baseline_summary") or {}
+    findings = context.get("findings_summary") or []
+    tool_runs = context.get("recent_tool_runs") or []
+    sections = [
+        {
+            "section_type": ReportSection.SectionType.SUMMARY,
+            "title": "Technical summary",
+            "body": (
+                f"Server status: {server.get('status') or 'unknown'}. "
+                f"Agent: {server.get('agent_status') or 'unknown'}. "
+                f"Latest baseline: {baseline.get('status') or 'not available'}."
+            ),
+            "data": {
+                "server_name": server.get("name", ""),
+                "server_status": server.get("status", ""),
+                "agent_status": server.get("agent_status", ""),
+                "baseline_status": baseline.get("status", ""),
+                "profile_key": baseline.get("profile_key", ""),
+            },
+        }
+    ]
+    sections.append(
+        {
+            "section_type": ReportSection.SectionType.TOOLS_EXECUTED,
+            "title": "Recent tool activity",
+            "body": "Recent read-only tool runs summarized from safe context.",
+            "data": {
+                "tool_runs": [
+                    {
+                        "tool_key": item.get("tool_key", ""),
+                        "tool_name": item.get("tool_name", ""),
+                        "status": item.get("status", ""),
+                        "result_summary": item.get("result_summary", ""),
+                        "finished_at": item.get("finished_at", ""),
+                    }
+                    for item in tool_runs[:10]
+                ]
+            },
+        }
+    )
+    sections.append(
+        {
+            "section_type": ReportSection.SectionType.FINDINGS,
+            "title": "Findings snapshot",
+            "body": f"{len(findings[:10])} safe finding summary row(s) included.",
+            "data": {
+                "findings": [
+                    {
+                        "title": item.get("title", ""),
+                        "severity": item.get("severity", ""),
+                        "status": item.get("status", ""),
+                        "evidence_summary": item.get("evidence_summary", ""),
+                    }
+                    for item in findings[:10]
+                ]
+            },
+        }
+    )
+    sections.append(
+        {
+            "section_type": ReportSection.SectionType.DEVELOPER_NOTES,
+            "title": "Draft notes",
+            "body": (
+                "This draft is based on redacted safe context only. Raw ToolRun output, AgentJob output, logs, "
+                "and environment data are intentionally excluded."
+            ),
+            "data": {"safe_context_only": True},
+        }
+    )
+    return sections
+
+
+def _customer_report_sections(context):
+    server = context.get("server_summary") or {}
+    findings = context.get("findings_summary") or []
+    open_findings = [item for item in findings if item.get("status") == "open"]
+    sections = [
+        {
+            "section_type": ReportSection.SectionType.SUMMARY,
+            "title": "Customer summary",
+            "body": (
+                f"Server {server.get('name') or 'selected server'} is currently {server.get('status') or 'under review'}. "
+                f"There are {len(open_findings)} open finding(s) in the current safe summary."
+            ),
+            "data": {
+                "server_name": server.get("name", ""),
+                "server_status": server.get("status", ""),
+                "open_findings": len(open_findings),
+            },
+        },
+        {
+            "section_type": ReportSection.SectionType.FINDINGS,
+            "title": "Customer-visible findings",
+            "body": "High-level safe findings summary only.",
+            "data": {
+                "findings": [
+                    {
+                        "title": item.get("title", ""),
+                        "severity": item.get("severity", ""),
+                        "status": item.get("status", ""),
+                    }
+                    for item in findings[:8]
+                ]
+            },
+        },
+        {
+            "section_type": ReportSection.SectionType.RECOMMENDATIONS,
+            "title": "Recommended next review",
+            "body": (
+                "Advisory only: review the summarized findings and confirm priorities in the normal operational workflow. "
+                "No automated action is performed from this report."
+            ),
+            "data": {"advisory_only": True},
+        },
+    ]
+    return sections
+
+
+def _report_draft_content(session, report_type, context):
+    server_summary = context.get("server_summary") or {}
+    server_name = server_summary.get("name") or (session.server.name if session.server_id else "selected scope")
+    if report_type == AdminChatReportDraft.DraftType.TECHNICAL_INTERNAL:
+        return {
+            "title": f"Technical internal report for {server_name}",
+            "summary": (
+                "Technical internal draft generated from safe context with read-only tool summaries and current findings."
+            ),
+            "sections": _technical_report_sections(context),
+        }
+    return {
+        "title": f"Customer summary for {server_name}",
+        "summary": "Customer-facing draft generated from safe context using high-level redacted summaries only.",
+        "sections": _customer_report_sections(context),
+    }
 
 
 def _deterministic_response(intent, context):
@@ -484,3 +628,129 @@ def create_tool_build_request_from_chat(
         reasoning_summary="Chat-created command_template proposal stored for Matrix Admin review only.",
     )
     return build_request, proposal
+
+
+def create_chat_report_draft(*, user, session, report_type, message=None):
+    _require_chat_writer(user)
+    if not user_can_write_chat(user, session):
+        raise PermissionDenied
+    if session.status != AdminChatSession.Status.OPEN:
+        raise ValidationError("Chat session is archived.")
+    if report_type not in AdminChatReportDraft.DraftType.values:
+        raise ValidationError("Unsupported chat report type.")
+    context = build_safe_context(account=session.account, user=user, server=session.server)
+    safe_context = redact_json(context)
+    content = _report_draft_content(session, report_type, safe_context)
+    draft = AdminChatReportDraft.objects.create(
+        session=session,
+        message=message,
+        created_by=user,
+        report_type=report_type,
+        status=AdminChatReportDraft.Status.PENDING_REVIEW,
+        title_redacted=_safe_text(content["title"], limit=255),
+        summary_redacted=_safe_text(content["summary"], limit=MAX_RESPONSE_LENGTH),
+        sections_redacted=redact_json(content["sections"]),
+        source_snapshot_redacted=redact_json(
+            {
+                "context_version": safe_context.get("context_version"),
+                "server_id": str(session.server_id) if session.server_id else "",
+                "application_id": str(session.application_id) if session.application_id else "",
+                "report_type": report_type,
+            }
+        ),
+    )
+    AdminChatMessage.objects.create(
+        session=session,
+        sender_type=AdminChatMessage.SenderType.SYSTEM,
+        body_redacted=f"Report draft created: {draft.report_type}",
+        metadata_redacted={
+            "source": "chat_report_draft",
+            "report_draft_id": str(draft.id),
+            "status": draft.status,
+        },
+    )
+    AdminChatDecision.objects.create(
+        session=session,
+        decision_type=AdminChatDecision.DecisionType.REPORT_REQUEST,
+        input_context_redacted=redact_json(
+            {
+                "report_type": report_type,
+                "server_id": str(session.server_id) if session.server_id else "",
+                "application_id": str(session.application_id) if session.application_id else "",
+            }
+        ),
+        output_json_redacted=redact_json(
+            {
+                "report_draft_id": str(draft.id),
+                "status": draft.status,
+                "title": draft.title_redacted,
+            }
+        ),
+        reasoning_summary="Deterministic chat report draft created from safe context for Matrix Admin review.",
+    )
+    return draft
+
+
+def review_chat_report_draft(draft, *, reviewer, decision, notes=""):
+    _require_matrix_admin(reviewer)
+    if decision not in {AdminChatReportDraft.Status.APPROVED, AdminChatReportDraft.Status.REJECTED}:
+        raise ValidationError("Unsupported report draft review decision.")
+    draft.status = decision
+    draft.reviewed_by = reviewer
+    draft.reviewed_at = timezone.now()
+    draft.review_notes_redacted = _safe_text(notes, limit=1000)
+    draft.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_notes_redacted", "updated_at"])
+    AdminChatDecision.objects.create(
+        session=draft.session,
+        decision_type=AdminChatDecision.DecisionType.REPORT_REQUEST,
+        input_context_redacted={"report_draft_id": str(draft.id), "report_type": draft.report_type},
+        output_json_redacted={"status": draft.status, "reviewed_by": str(reviewer.id)},
+        reasoning_summary="Matrix Admin reviewed chat report draft before conversion.",
+    )
+    return draft
+
+
+def convert_chat_report_draft(draft, *, reviewer):
+    _require_matrix_admin(reviewer)
+    if draft.status != AdminChatReportDraft.Status.APPROVED:
+        raise ValidationError("Only approved report drafts can be converted.")
+    report = Report.objects.create(
+        account=draft.session.account,
+        server=draft.session.server,
+        application=draft.session.application,
+        generated_by=reviewer,
+        report_type=draft.report_type,
+        title=draft.title_redacted,
+        summary_redacted=draft.summary_redacted,
+        source_snapshot_redacted=redact_json(
+            {
+                **(draft.source_snapshot_redacted or {}),
+                "chat_session_id": str(draft.session_id),
+                "chat_report_draft_id": str(draft.id),
+                "reviewed_by": str(reviewer.id),
+            }
+        ),
+        generated_at=timezone.now(),
+    )
+    for index, section in enumerate(draft.sections_redacted or [], start=1):
+        ReportSection.objects.create(
+            report=report,
+            section_type=section.get("section_type") or ReportSection.SectionType.SUMMARY,
+            title=_safe_text(section.get("title", ""), limit=255),
+            body_redacted=_safe_text(section.get("body", ""), limit=8000),
+            data_redacted=redact_json(section.get("data", {})),
+            order=index * 10,
+        )
+    draft.status = AdminChatReportDraft.Status.CONVERTED
+    draft.converted_report = report
+    draft.reviewed_by = reviewer
+    draft.reviewed_at = timezone.now()
+    draft.save(update_fields=["status", "converted_report", "reviewed_by", "reviewed_at", "updated_at"])
+    AdminChatDecision.objects.create(
+        session=draft.session,
+        decision_type=AdminChatDecision.DecisionType.REPORT_REQUEST,
+        input_context_redacted={"report_draft_id": str(draft.id), "report_type": draft.report_type},
+        output_json_redacted={"status": draft.status, "report_id": str(report.id), "report_type": report.report_type},
+        reasoning_summary="Approved chat report draft converted to final report with redacted sections only.",
+    )
+    return report

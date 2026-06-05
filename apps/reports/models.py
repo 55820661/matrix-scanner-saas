@@ -23,6 +23,8 @@ class Report(TimeStampedModel):
         DIAGNOSTIC = "diagnostic_report", "Diagnostic report"
         SERVER_HEALTH = "server_health_summary", "Server health summary"
         FINDINGS = "findings_summary", "Findings summary"
+        TECHNICAL_INTERNAL = "technical_internal", "Technical/internal"
+        CUSTOMER_SUMMARY = "customer_summary", "Customer summary"
 
     class Status(models.TextChoices):
         GENERATED = "generated", "Generated"

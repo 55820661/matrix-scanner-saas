@@ -8,10 +8,11 @@ from django.urls import reverse_lazy
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.models import User
-from apps.ai_chat.models import AdminChatSession
+from apps.ai_chat.models import AdminChatReportDraft, AdminChatSession
 from apps.ai_chat.services import (
     add_user_message_and_response,
     approve_tool_request,
+    create_chat_report_draft,
     create_chat_session,
     create_tool_build_request_from_chat,
     create_tool_request,
@@ -424,8 +425,10 @@ def chat_session_detail(request, session_id):
             "chat_messages": session.messages.order_by("created_at"),
             "tool_requests": session.tool_requests.select_related("tool_definition", "tool_run").order_by("-created_at"),
             "tool_build_requests": session.tool_build_requests.prefetch_related("proposals").order_by("-created_at"),
+            "report_drafts": session.report_drafts.select_related("converted_report").order_by("-created_at"),
             "available_tools": (session.context_snapshot_redacted or {}).get("available_tools", []),
             "can_write": user_can_write_chat(request.user, session),
+            "chat_report_types": AdminChatReportDraft.DraftType.choices,
         },
     )
 
@@ -471,6 +474,21 @@ def chat_tool_build_create(request, session_id):
         expected_output_description=request.POST.get("expected_output_description", ""),
     )
     messages.success(request, "Tool builder proposal created for Matrix Admin review.")
+    return redirect("portal:chat_session_detail", session_id=session.id)
+
+
+@require_POST
+@portal_required
+def chat_report_draft_create(request, session_id):
+    session = get_object_or_404(scoped_chat_sessions(request), id=session_id)
+    if not user_can_write_chat(request.user, session):
+        raise PermissionDenied
+    create_chat_report_draft(
+        user=request.user,
+        session=session,
+        report_type=request.POST.get("report_type", ""),
+    )
+    messages.success(request, "Report draft created for Matrix Admin review.")
     return redirect("portal:chat_session_detail", session_id=session.id)
 
 

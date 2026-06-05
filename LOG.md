@@ -1656,3 +1656,40 @@ Verification:
 
 Testing note:
 - Full suite was run for Sprint C8 because this sprint touched tool execution, AgentJob-to-ToolRun result propagation, chat-visible security boundaries, and policy-backed customer tool execution.
+
+## 2026-06-05 - Sprint C9 Reports from Chat Start
+
+Intent:
+- Implement the approved `Sprint C9 - Reports from Chat`.
+
+Scope:
+- Add a safe draft/review flow for chat-generated reports.
+- Prefer `AdminChatReportDraft`.
+- Support separate `technical/internal` and `customer_summary` report drafts.
+- Keep all content deterministic, redacted, and based on safe summaries only.
+
+Out of scope:
+- Raw ToolRun or AgentJob output.
+- Raw logs or raw `.env`.
+- PDF export.
+- Live AI providers.
+- Telegram changes.
+
+Result:
+- Added `AdminChatReportDraft` as the review-first chat report model.
+- Added deterministic draft generation for `technical_internal` and `customer_summary`.
+- Added Matrix Admin review and conversion flow from chat draft to final `Report`.
+- Extended Portal chat with minimal report-draft creation and history visibility.
+- Kept all draft and final report content limited to safe summaries and redacted sections only.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations ai_chat reports` generated only the intended migrations.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c9_chat_reports --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c9_chat_reports tests.unit.test_admin_chat tests.unit.test_sprint11_reports --noinput` passed: 38 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 347 tests, 4 skipped.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `git diff --check` passed with line-ending warnings only.
+
+Testing note:
+- Full suite was run for Sprint C9 because this sprint changed report redaction, report visibility, review conversion, and Portal permissions around chat-generated reports.

@@ -45,6 +45,7 @@ urlpatterns = [
         name="chat_tool_request_approve",
     ),
     path("chat/<int:session_id>/tool-builder/create/", views.chat_tool_build_create, name="chat_tool_build_create"),
+    path("chat/<int:session_id>/reports/draft/", views.chat_report_draft_create, name="chat_report_draft_create"),
     path("reports/generate/", views.report_generate, name="report_generate"),
     path("reports/<int:report_id>/", views.report_detail, name="report_detail"),
     path("finding-groups/", views.finding_groups_list, name="finding_groups"),
