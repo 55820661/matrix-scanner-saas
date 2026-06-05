@@ -9,7 +9,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.models import User
 from apps.ai_chat.models import AdminChatSession
-from apps.ai_chat.services import add_user_message, create_chat_session, user_can_write_chat
+from apps.ai_chat.services import add_user_message_and_response, create_chat_session, user_can_write_chat
 from apps.applications.models import Application
 from apps.reports.models import FindingGroup, KnowledgeEntry, Report
 from apps.reports.services import (
@@ -402,8 +402,8 @@ def chat_session_detail(request, session_id):
     if request.method == "POST":
         if not user_can_write_chat(request.user, session):
             raise PermissionDenied
-        add_user_message(user=request.user, session=session, body=request.POST.get("body", ""), metadata={"source": "portal"})
-        messages.success(request, "Message saved.")
+        add_user_message_and_response(user=request.user, session=session, body=request.POST.get("body", ""), metadata={"source": "portal"})
+        messages.success(request, "Message saved and response generated.")
         return redirect("portal:chat_session_detail", session_id=session.id)
     return render(
         request,

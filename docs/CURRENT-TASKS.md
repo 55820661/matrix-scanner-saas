@@ -1957,3 +1957,46 @@ Verification:
 Completion status:
 - Sprint C3 implementation and verification are complete.
 - Full suite was run because this sprint changes Portal permissions, redaction-sensitive chat storage, and tenant-scoped access behavior.
+
+## Active Task - Sprint C4 Deterministic Chat Responder
+
+Task:
+- Implement the approved `Sprint C4 - Deterministic Chat Responder`.
+
+Scope:
+- Add deterministic responder logic inside the chat service layer.
+- Answer only from Safe Context.
+- Store assistant replies redacted.
+- Store response decision metadata in `AdminChatDecision`.
+- Keep Portal chat flow read-only with no tool execution.
+
+Out of scope:
+- Live AI provider calls.
+- Tool orchestration.
+- ToolRun or AgentJob creation.
+- Telegram.
+- Reports from chat.
+- Remediation/actions.
+
+Immediate next steps:
+- Add deterministic intent routing for status, findings, reports, tools, and general summary.
+- Wire Portal message POST to create an assistant response.
+- Add focused tests for deterministic replies, decision logging, redaction, and no execution side effects.
+
+Progress:
+- Added deterministic responder logic for status, findings, reports, available tools, and summary.
+- Wired Portal chat message POST to generate an assistant response after saving the user message.
+- Stored deterministic response decisions in `AdminChatDecision`.
+- Added focused tests for responder output, decision logging, redaction, and no ToolRun/AgentJob side effects.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --noinput` passed: 10 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint6_portal --noinput` passed: 16 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 310 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint C4 implementation and verification are complete.
+- Full suite was run because this sprint changes Portal chat behavior, decision logging, redaction-sensitive response storage, and permission-protected message flow.

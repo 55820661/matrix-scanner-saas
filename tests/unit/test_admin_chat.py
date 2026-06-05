@@ -3,10 +3,11 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from apps.accounts.models import Account, User
-from apps.ai_chat.models import AdminChatMessage, AdminChatSession
-from apps.ai_chat.services import add_user_message, create_chat_session
+from apps.ai_chat.models import AdminChatDecision, AdminChatMessage, AdminChatSession
+from apps.ai_chat.services import add_user_message, add_user_message_and_response, create_chat_session
 from apps.applications.models import Application
-from apps.servers.models import AgentJob, Server
+from apps.reports.models import Report
+from apps.servers.models import AgentJob, Finding, Server
 from apps.tools.models import ToolRun
 
 
@@ -85,12 +86,14 @@ class AdminChatTests(TestCase):
             reverse("portal:chat_session_detail", args=[session.id]),
             {"body": "Please check api_key=secret-value"},
         )
-        message = AdminChatMessage.objects.get(session=session)
+        user_message = AdminChatMessage.objects.get(session=session, sender_type=AdminChatMessage.SenderType.USER)
+        assistant_message = AdminChatMessage.objects.get(session=session, sender_type=AdminChatMessage.SenderType.ASSISTANT)
 
         self.assertEqual(detail_response.status_code, 302)
-        self.assertEqual(message.sender_type, AdminChatMessage.SenderType.USER)
-        self.assertIn("[REDACTED]", message.body_redacted)
-        self.assertNotIn("secret-value", message.body_redacted)
+        self.assertIn("[REDACTED]", user_message.body_redacted)
+        self.assertNotIn("secret-value", user_message.body_redacted)
+        self.assertNotEqual(assistant_message.body_redacted, "")
+        self.assertEqual(AdminChatDecision.objects.filter(session=session).count(), 1)
 
     def test_viewer_can_view_but_cannot_start_or_send(self):
         session = create_chat_session(user=self.owner, title="View only", server_id=self.server.id)
@@ -141,7 +144,52 @@ class AdminChatTests(TestCase):
     def test_chat_does_not_create_toolrun_or_agentjob(self):
         session = create_chat_session(user=self.owner, title="No execution", server_id=self.server.id)
 
-        add_user_message(user=self.owner, session=session, body="Check services")
+        add_user_message_and_response(user=self.owner, session=session, body="Check services")
 
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+
+    def test_deterministic_finding_response_logs_redacted_decision(self):
+        Finding.objects.create(
+            account=self.account,
+            server=self.server,
+            title="token=raw-secret exposed",
+            severity="critical",
+            evidence_summary="token=raw-secret",
+            fingerprint="chat-finding-1",
+        )
+        session = create_chat_session(user=self.owner, title="Findings", server_id=self.server.id)
+
+        _, assistant_message = add_user_message_and_response(user=self.owner, session=session, body="Any critical findings?")
+        decision = AdminChatDecision.objects.get(session=session)
+
+        self.assertIn("Findings in safe context", assistant_message.body_redacted)
+        self.assertIn("[REDACTED]", assistant_message.body_redacted)
+        self.assertNotIn("raw-secret", str(decision.input_context_redacted))
+        self.assertNotIn("raw-secret", str(decision.output_json_redacted))
+        self.assertEqual(decision.decision_type, AdminChatDecision.DecisionType.ANSWER)
+
+    def test_deterministic_report_response_uses_safe_reports(self):
+        Report.objects.create(
+            account=self.account,
+            server=self.server,
+            report_type=Report.ReportType.SERVER_HEALTH,
+            title="Server Health",
+            summary_redacted="password=[REDACTED]",
+        )
+        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+
+        _, assistant_message = add_user_message_and_response(user=self.owner, session=session, body="Show report summary")
+
+        self.assertIn("Reports in safe context", assistant_message.body_redacted)
+        self.assertIn("Server Health", assistant_message.body_redacted)
+        self.assertNotIn("password=secret", assistant_message.body_redacted)
+
+    def test_deterministic_tools_response_does_not_execute(self):
+        session = create_chat_session(user=self.owner, title="Tools", server_id=self.server.id)
+
+        _, assistant_message = add_user_message_and_response(user=self.owner, session=session, body="What tools are available?")
+
+        self.assertIn("tools", assistant_message.body_redacted.lower())
         self.assertEqual(ToolRun.objects.count(), 0)
         self.assertEqual(AgentJob.objects.count(), 0)

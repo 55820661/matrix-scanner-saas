@@ -1487,3 +1487,35 @@ Verification:
 
 Testing note:
 - Full suite was run for Sprint C3 because this sprint changes Portal permissions, redaction-sensitive chat storage, and tenant-scoped access behavior.
+
+## 2026-06-05 - Sprint C4 Deterministic Chat Responder Start
+
+Intent:
+- Implement the approved `Sprint C4 - Deterministic Chat Responder`.
+
+Scope:
+- Add deterministic context-only chat responses for status, summaries, findings, reports, and available tools.
+- Store response decisions in `AdminChatDecision`.
+- Store assistant replies as redacted `AdminChatMessage` records.
+- Rebuild safe context when responding and store only capped/redacted decision output.
+
+Out of scope:
+- Live AI provider calls, tool execution, ToolRun/AgentJob creation, Telegram, report generation from chat, and remediation/actions.
+
+Result:
+- Added deterministic intent routing for status, findings, reports, available tools, and general summary questions.
+- Added context-only assistant response generation using `build_safe_context()`.
+- Added `AdminChatDecision` logging for deterministic answer decisions.
+- Updated Portal chat message POST to save the user message and generate an assistant response.
+- Kept C4 free of live AI, ToolRun creation, AgentJob creation, Telegram, and remediation behavior.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --noinput` passed: 10 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint6_portal --noinput` passed: 16 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 310 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Testing note:
+- Full suite was run for Sprint C4 because this sprint changes Portal chat behavior, decision logging, redaction-sensitive response storage, and permission-protected message flow.

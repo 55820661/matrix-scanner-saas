@@ -7,11 +7,12 @@ from apps.applications.models import Application
 from apps.core.redaction import redact_json, redact_secrets
 from apps.servers.models import Server
 
-from .models import AdminChatMessage, AdminChatSession
+from .models import AdminChatDecision, AdminChatMessage, AdminChatSession
 
 
 MAX_MESSAGE_LENGTH = 4000
 MAX_TITLE_LENGTH = 160
+MAX_RESPONSE_LENGTH = 3000
 
 
 def _safe_text(value, *, limit):
@@ -110,3 +111,144 @@ def add_user_message(*, user, session, body, metadata=None):
     session.last_message_at = message.created_at
     session.save(update_fields=["last_message_at", "updated_at"])
     return message
+
+
+def _detect_intent(question):
+    normalized = (question or "").lower()
+    if any(word in normalized for word in ("finding", "risk", "issue", "critical", "high")):
+        return "findings"
+    if any(word in normalized for word in ("report", "summary report", "health report")):
+        return "reports"
+    if any(word in normalized for word in ("tool", "check", "scan", "available")):
+        return "available_tools"
+    if any(word in normalized for word in ("status", "health", "baseline", "service", "server")):
+        return "status"
+    return "summary"
+
+
+def _section_count(context, key):
+    value = context.get(key)
+    if isinstance(value, list):
+        return len(value)
+    if value:
+        return 1
+    return 0
+
+
+def _format_status_response(context):
+    server = context.get("server_summary") or {}
+    baseline = context.get("baseline_summary") or {}
+    risk = context.get("risk_summary") or {}
+    return (
+        f"Server status: {server.get('status') or 'not selected'}. "
+        f"Agent status: {server.get('agent_status') or 'unknown'}. "
+        f"Latest baseline: {baseline.get('status') or 'not available'}. "
+        f"Open risk counts: {risk.get('finding_counts_by_severity') or {}}."
+    )
+
+
+def _format_findings_response(context):
+    findings = context.get("findings_summary") or []
+    if not findings:
+        return "No findings are present in the safe context."
+    lines = [
+        f"{finding.get('severity', 'info')}: {finding.get('title', 'Finding')} ({finding.get('status', 'open')})"
+        for finding in findings[:5]
+    ]
+    return "Findings in safe context: " + "; ".join(lines)
+
+
+def _format_reports_response(context):
+    reports = context.get("reports_summary") or []
+    if not reports:
+        return "No reports are present in the safe context."
+    lines = [
+        f"{report.get('report_type', 'report')}: {report.get('title', 'Untitled')} ({report.get('status', 'unknown')})"
+        for report in reports[:5]
+    ]
+    return "Reports in safe context: " + "; ".join(lines)
+
+
+def _format_tools_response(context):
+    tools = context.get("available_tools") or []
+    if not tools:
+        return "No tools are currently available to this role and server through policy."
+    keys = [tool.get("key", "tool") for tool in tools[:10]]
+    return "Available read-only tools through policy: " + ", ".join(keys)
+
+
+def _format_summary_response(context):
+    baseline = context.get("baseline_summary") or {}
+    return (
+        "Safe context summary: "
+        f"baseline={baseline.get('status') or 'not available'}, "
+        f"applications={_section_count(context, 'applications_summary')}, "
+        f"services={_section_count(context, 'services_summary')}, "
+        f"domains={_section_count(context, 'domains_summary')}, "
+        f"findings={_section_count(context, 'findings_summary')}, "
+        f"reports={_section_count(context, 'reports_summary')}."
+    )
+
+
+def _deterministic_response(intent, context):
+    if intent == "status":
+        return _format_status_response(context)
+    if intent == "findings":
+        return _format_findings_response(context)
+    if intent == "reports":
+        return _format_reports_response(context)
+    if intent == "available_tools":
+        return _format_tools_response(context)
+    return _format_summary_response(context)
+
+
+def respond_to_message(*, user, session, user_message):
+    if not user_can_write_chat(user, session):
+        raise PermissionDenied
+    context = build_safe_context(account=session.account, user=user, server=session.server)
+    safe_context = redact_json(context)
+    intent = _detect_intent(user_message.body_redacted)
+    response_body = _safe_text(_deterministic_response(intent, safe_context), limit=MAX_RESPONSE_LENGTH)
+    assistant_message = AdminChatMessage.objects.create(
+        session=session,
+        sender_type=AdminChatMessage.SenderType.ASSISTANT,
+        body_redacted=response_body,
+        metadata_redacted={"source": "deterministic_responder", "intent": intent},
+    )
+    decision_output = {
+        "intent": intent,
+        "response": response_body,
+        "context_version": safe_context.get("context_version"),
+        "section_counts": {
+            "applications": _section_count(safe_context, "applications_summary"),
+            "services": _section_count(safe_context, "services_summary"),
+            "domains": _section_count(safe_context, "domains_summary"),
+            "findings": _section_count(safe_context, "findings_summary"),
+            "reports": _section_count(safe_context, "reports_summary"),
+            "available_tools": _section_count(safe_context, "available_tools"),
+        },
+    }
+    AdminChatDecision.objects.create(
+        session=session,
+        decision_type=AdminChatDecision.DecisionType.ANSWER,
+        input_context_redacted=redact_json(
+            {
+                "message_id": str(user_message.id),
+                "question": user_message.body_redacted,
+                "context_version": safe_context.get("context_version"),
+                "server_id": str(session.server_id) if session.server_id else "",
+            }
+        ),
+        output_json_redacted=redact_json(decision_output),
+        reasoning_summary="Deterministic context-only response.",
+    )
+    session.context_snapshot_redacted = safe_context
+    session.last_message_at = assistant_message.created_at
+    session.save(update_fields=["context_snapshot_redacted", "last_message_at", "updated_at"])
+    return assistant_message
+
+
+def add_user_message_and_response(*, user, session, body, metadata=None):
+    user_message = add_user_message(user=user, session=session, body=body, metadata=metadata)
+    assistant_message = respond_to_message(user=user, session=session, user_message=user_message)
+    return user_message, assistant_message
