@@ -9,7 +9,13 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.models import User
 from apps.ai_chat.models import AdminChatSession
-from apps.ai_chat.services import add_user_message_and_response, create_chat_session, user_can_write_chat
+from apps.ai_chat.services import (
+    add_user_message_and_response,
+    approve_tool_request,
+    create_chat_session,
+    create_tool_request,
+    user_can_write_chat,
+)
 from apps.applications.models import Application
 from apps.reports.models import FindingGroup, KnowledgeEntry, Report
 from apps.reports.services import (
@@ -411,9 +417,34 @@ def chat_session_detail(request, session_id):
         {
             "session": session,
             "chat_messages": session.messages.order_by("created_at"),
+            "tool_requests": session.tool_requests.select_related("tool_definition", "tool_run").order_by("-created_at"),
+            "available_tools": (session.context_snapshot_redacted or {}).get("available_tools", []),
             "can_write": user_can_write_chat(request.user, session),
         },
     )
+
+
+@require_POST
+@portal_required
+def chat_tool_request_create(request, session_id):
+    session = get_object_or_404(scoped_chat_sessions(request), id=session_id)
+    if not user_can_write_chat(request.user, session):
+        raise PermissionDenied
+    create_tool_request(user=request.user, session=session, tool_key=request.POST.get("tool_key", ""))
+    messages.success(request, "Tool request created. Approval is required before execution.")
+    return redirect("portal:chat_session_detail", session_id=session.id)
+
+
+@require_POST
+@portal_required
+def chat_tool_request_approve(request, session_id, request_id):
+    session = get_object_or_404(scoped_chat_sessions(request), id=session_id)
+    if not user_can_write_chat(request.user, session):
+        raise PermissionDenied
+    tool_request = get_object_or_404(session.tool_requests.select_related("tool_definition"), id=request_id)
+    approve_tool_request(user=request.user, tool_request=tool_request)
+    messages.success(request, "Tool request approved and queued.")
+    return redirect("portal:chat_session_detail", session_id=session.id)
 
 
 @portal_required

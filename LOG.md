@@ -1519,3 +1519,37 @@ Verification:
 
 Testing note:
 - Full suite was run for Sprint C4 because this sprint changes Portal chat behavior, decision logging, redaction-sensitive response storage, and permission-protected message flow.
+
+## 2026-06-05 - Sprint C5 Tool Orchestrator MVP Start
+
+Intent:
+- Implement the approved `Sprint C5 - Tool Orchestrator MVP`.
+
+Scope:
+- Add chat tool request model and service flow.
+- Allow owner/operator to request and approve existing available read-only tools only.
+- Route execution only through `create_tool_run_job()` so ToolDefinition, ToolPolicy, PlanTool, ToolRun, and AgentJob checks remain authoritative.
+- Keep MVP params empty only to avoid arbitrary parameter submission in C5.
+- Add focused tests for policy denial, plan denial, approval permissions, and no direct AgentJob creation.
+
+Out of scope:
+- Command/script template execution, live AI, arbitrary params, new tools, report generation, Telegram, remediation/actions, and direct AgentJob creation.
+
+Result:
+- Added `AdminChatToolRequest`.
+- Added request and approval services for available chat tools.
+- Approval calls existing `create_tool_run_job()` only, preserving ToolDefinition, ToolPolicy, PlanTool, ToolRun, and AgentJob enforcement.
+- Added minimal Portal UI for requesting and approving tools from server-scoped chat sessions.
+- Kept C5 parameterless for chat tool requests and did not add command/script template execution.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --noinput` passed: 16 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected after the intended migration was created.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint6_portal tests.unit.test_sprint4_tools_policy --noinput` passed: 31 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 316 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Testing note:
+- Full suite was run for Sprint C5 because this sprint touches the ToolRun/AgentJob execution path and permission/policy enforcement.
+- An initial regression command used a non-existent test module name; it was corrected to `tests.unit.test_sprint4_tools_policy` and rerun successfully.

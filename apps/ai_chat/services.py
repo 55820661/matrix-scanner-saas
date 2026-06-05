@@ -6,8 +6,10 @@ from apps.ai_context.services import build_safe_context
 from apps.applications.models import Application
 from apps.core.redaction import redact_json, redact_secrets
 from apps.servers.models import Server
+from apps.tools.models import ToolDefinition, ToolRun
+from apps.tools.services import ToolPolicyDenied, create_tool_run_job, redacted_json
 
-from .models import AdminChatDecision, AdminChatMessage, AdminChatSession
+from .models import AdminChatDecision, AdminChatMessage, AdminChatSession, AdminChatToolRequest
 
 
 MAX_MESSAGE_LENGTH = 4000
@@ -252,3 +254,89 @@ def add_user_message_and_response(*, user, session, body, metadata=None):
     user_message = add_user_message(user=user, session=session, body=body, metadata=metadata)
     assistant_message = respond_to_message(user=user, session=session, user_message=user_message)
     return user_message, assistant_message
+
+
+def _available_tool_keys_for_session(user, session):
+    context = build_safe_context(account=session.account, user=user, server=session.server)
+    return {tool.get("key") for tool in context.get("available_tools", []) if tool.get("key")}
+
+
+def create_tool_request(*, user, session, tool_key, params=None, message=None):
+    _require_chat_writer(user)
+    if not user_can_write_chat(user, session):
+        raise PermissionDenied
+    if session.status != AdminChatSession.Status.OPEN:
+        raise ValidationError("Chat session is archived.")
+    if not session.server_id:
+        raise ValidationError("A server-scoped chat session is required before requesting a tool.")
+    params = params or {}
+    if params:
+        raise ValidationError("Chat tool requests do not accept parameters in C5.")
+    if tool_key not in _available_tool_keys_for_session(user, session):
+        raise ValidationError("Tool is not available to this role, plan, policy, and server.")
+    try:
+        tool_definition = ToolDefinition.objects.get(key=tool_key)
+    except ToolDefinition.DoesNotExist as exc:
+        raise ValidationError("Tool is not registered.") from exc
+    if not tool_definition.is_enabled_for_mvp:
+        raise ValidationError("Only enabled read-only tools can be requested from chat.")
+    request = AdminChatToolRequest.objects.create(
+        session=session,
+        message=message,
+        tool_definition=tool_definition,
+        params_redacted=redacted_json(params),
+        status=AdminChatToolRequest.Status.SUGGESTED,
+    )
+    AdminChatDecision.objects.create(
+        session=session,
+        decision_type=AdminChatDecision.DecisionType.TOOL_REQUEST,
+        input_context_redacted={"tool_key": redact_secrets(tool_key), "params": redacted_json(params)},
+        output_json_redacted={"status": request.status, "tool_request_id": str(request.id)},
+        reasoning_summary="Tool request created from available Safe Context tools; approval is required before execution.",
+    )
+    return request
+
+
+def approve_tool_request(*, user, tool_request):
+    _require_chat_writer(user)
+    session = tool_request.session
+    if not user_can_write_chat(user, session):
+        raise PermissionDenied
+    if tool_request.status != AdminChatToolRequest.Status.SUGGESTED:
+        raise ValidationError("Only suggested tool requests can be approved.")
+    if not session.server_id:
+        raise ValidationError("Tool request is not server-scoped.")
+    params = tool_request.params_redacted or {}
+    try:
+        tool_run, _job = create_tool_run_job(
+            account=session.account,
+            server=session.server,
+            tool_key=tool_request.tool_definition.key,
+            params=params,
+            requested_by=user,
+            requested_by_type=ToolRun.RequestedByType.USER,
+        )
+    except ToolPolicyDenied as exc:
+        tool_request.status = AdminChatToolRequest.Status.FAILED
+        tool_request.error_summary = _safe_text(str(exc), limit=500)
+        tool_request.save(update_fields=["status", "error_summary", "updated_at"])
+        raise
+    tool_request.status = AdminChatToolRequest.Status.QUEUED
+    tool_request.tool_run = tool_run
+    tool_request.approved_by = user
+    tool_request.approved_at = timezone.now()
+    tool_request.save(update_fields=["status", "tool_run", "approved_by", "approved_at", "updated_at"])
+    AdminChatMessage.objects.create(
+        session=session,
+        sender_type=AdminChatMessage.SenderType.SYSTEM,
+        body_redacted=f"Tool request queued: {tool_request.tool_definition.key}",
+        metadata_redacted={"source": "tool_orchestrator", "tool_request_id": str(tool_request.id), "tool_run_id": str(tool_run.id)},
+    )
+    AdminChatDecision.objects.create(
+        session=session,
+        decision_type=AdminChatDecision.DecisionType.TOOL_REQUEST,
+        input_context_redacted={"tool_request_id": str(tool_request.id), "tool_key": tool_request.tool_definition.key},
+        output_json_redacted={"status": tool_request.status, "tool_run_id": str(tool_run.id)},
+        reasoning_summary="Approved chat tool request queued through create_tool_run_job.",
+    )
+    return tool_run

@@ -6,6 +6,7 @@ from apps.accounts.models import Account
 from apps.applications.models import Application
 from apps.core.models import TimeStampedModel
 from apps.servers.models import Server
+from apps.tools.models import ToolDefinition, ToolRun
 
 
 class AdminChatSession(TimeStampedModel):
@@ -89,3 +90,46 @@ class AdminChatDecision(TimeStampedModel):
 
     def __str__(self):
         return f"{self.decision_type} decision for {self.session_id}"
+
+
+class AdminChatToolRequest(TimeStampedModel):
+    class Status(models.TextChoices):
+        SUGGESTED = "suggested", "Suggested"
+        APPROVED = "approved", "Approved"
+        QUEUED = "queued", "Queued"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    session = models.ForeignKey(AdminChatSession, on_delete=models.CASCADE, related_name="tool_requests")
+    message = models.ForeignKey(AdminChatMessage, on_delete=models.SET_NULL, related_name="tool_requests", null=True, blank=True)
+    tool_definition = models.ForeignKey(ToolDefinition, on_delete=models.PROTECT, related_name="chat_tool_requests")
+    params_redacted = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUGGESTED)
+    tool_run = models.ForeignKey(ToolRun, on_delete=models.SET_NULL, related_name="chat_tool_requests", null=True, blank=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="approved_chat_tool_requests",
+        null=True,
+        blank=True,
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    error_summary = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["session", "status", "created_at"]),
+            models.Index(fields=["tool_definition", "status"]),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.session_id and self.tool_run_id and self.tool_run.account_id != self.session.account_id:
+            errors["tool_run"] = "ToolRun must belong to the chat account."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.tool_definition.key} request for {self.session_id} ({self.status})"

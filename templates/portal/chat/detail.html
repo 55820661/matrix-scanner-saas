@@ -37,7 +37,61 @@
         <button type="submit">Save message</button>
       </form>
     </div>
-  {% else %}
+
+    <div class="card">
+      <h2>Tool requests</h2>
+      {% if session.server %}
+        <form method="post" action="{% url 'portal:chat_tool_request_create' session.id %}">
+          {% csrf_token %}
+          <label for="tool_key">Available tool</label>
+          <select id="tool_key" name="tool_key">
+            {% for tool in available_tools %}
+              <option value="{{ tool.key }}">{{ tool.key }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit">Request tool</button>
+        </form>
+      {% else %}
+        <p class="muted">Tool requests require a server-scoped chat session.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Requested tools</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>Status</th>
+          <th>ToolRun</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for request in tool_requests %}
+          <tr>
+            <td>{{ request.tool_definition.key }}</td>
+            <td>{{ request.status }}</td>
+            <td>{{ request.tool_run.id|default:"-" }}</td>
+            <td>
+              {% if can_write and request.status == "suggested" %}
+                <form method="post" action="{% url 'portal:chat_tool_request_approve' session.id request.id %}">
+                  {% csrf_token %}
+                  <button type="submit">Approve</button>
+                </form>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4">No tool requests yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if not can_write %}
     <p class="muted">Your role can view this chat but cannot add messages.</p>
   {% endif %}
 {% endblock %}

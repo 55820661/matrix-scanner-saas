@@ -38,6 +38,12 @@ urlpatterns = [
     path("chat/", views.chat_sessions, name="chat_sessions"),
     path("chat/start/", views.chat_session_start, name="chat_session_start"),
     path("chat/<int:session_id>/", views.chat_session_detail, name="chat_session_detail"),
+    path("chat/<int:session_id>/tools/request/", views.chat_tool_request_create, name="chat_tool_request_create"),
+    path(
+        "chat/<int:session_id>/tools/<int:request_id>/approve/",
+        views.chat_tool_request_approve,
+        name="chat_tool_request_approve",
+    ),
     path("reports/generate/", views.report_generate, name="report_generate"),
     path("reports/<int:report_id>/", views.report_detail, name="report_detail"),
     path("finding-groups/", views.finding_groups_list, name="finding_groups"),

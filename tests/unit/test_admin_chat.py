@@ -1,14 +1,26 @@
-from django.core.exceptions import PermissionDenied
+from datetime import timedelta
+
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.accounts.models import Account, User
-from apps.ai_chat.models import AdminChatDecision, AdminChatMessage, AdminChatSession
-from apps.ai_chat.services import add_user_message, add_user_message_and_response, create_chat_session
+from apps.ai_chat.models import AdminChatDecision, AdminChatMessage, AdminChatSession, AdminChatToolRequest
+from apps.ai_chat.services import (
+    add_user_message,
+    add_user_message_and_response,
+    approve_tool_request,
+    create_chat_session,
+    create_tool_request,
+)
 from apps.applications.models import Application
+from apps.plans.models import Plan
 from apps.reports.models import Report
-from apps.servers.models import AgentJob, Finding, Server
-from apps.tools.models import ToolRun
+from apps.servers.models import AgentJob, Finding, ScannerAgent, Server
+from apps.subscriptions.models import Subscription
+from apps.tools.models import PlanTool, ToolDefinition, ToolPolicy, ToolRun, ToolTemplate
+from apps.tools.services import ToolPolicyDenied
 
 
 class AdminChatTests(TestCase):
@@ -44,6 +56,21 @@ class AdminChatTests(TestCase):
         )
         self.server = Server.objects.create(account=self.account, name="Production", status=Server.Status.ACTIVE)
         self.other_server = Server.objects.create(account=self.other_account, name="Other", status=Server.Status.ACTIVE)
+        self.plan = Plan.objects.create(name="Pilot", max_servers=5, max_applications=20, max_users=5)
+        self.subscription = Subscription.objects.create(
+            account=self.account,
+            plan=self.plan,
+            status=Subscription.Status.ACTIVE,
+            current_period_start=timezone.now() - timedelta(days=1),
+            current_period_end=timezone.now() + timedelta(days=30),
+        )
+        self.agent = ScannerAgent.objects.create(
+            account=self.account,
+            server=self.server,
+            token_hash="agent-token-hash",
+            status=ScannerAgent.Status.ACTIVE,
+            registered_at=timezone.now(),
+        )
         self.application = Application.objects.create(
             account=self.account,
             server=self.server,
@@ -54,6 +81,38 @@ class AdminChatTests(TestCase):
 
     def login(self, user):
         self.client.force_login(user)
+
+    def create_tool(self, *, key="chat_safe_tool", plan_enabled=True, allow_customer=True, risk_level=ToolDefinition.RiskLevel.READ_ONLY):
+        template = ToolTemplate.objects.create(
+            key=f"{key}_template",
+            name=f"{key} template",
+            runtime_handler_key=key,
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+            output_schema={"summary": "object"},
+            is_active=True,
+        )
+        definition = ToolDefinition.objects.create(
+            template=template,
+            key=key,
+            name=key,
+            status=ToolDefinition.Status.ENABLED,
+            risk_level=risk_level,
+            input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+            default_params={},
+            timeout_seconds=30,
+            max_output_bytes=4096,
+        )
+        policy = ToolPolicy.objects.create(
+            tool_definition=definition,
+            allow_customer_run=allow_customer,
+            allow_admin_run=True,
+            allow_agent_run=True,
+            allowed_roles=[User.CustomerRole.OWNER, User.CustomerRole.OPERATOR],
+            allowed_server_statuses=[Server.Status.ACTIVE],
+            is_active=True,
+        )
+        plan_tool = PlanTool.objects.create(plan=self.plan, tool_definition=definition, is_enabled=plan_enabled)
+        return definition, policy, plan_tool
 
     def test_owner_can_create_chat_session_with_redacted_snapshot(self):
         session = create_chat_session(
@@ -191,5 +250,87 @@ class AdminChatTests(TestCase):
         _, assistant_message = add_user_message_and_response(user=self.owner, session=session, body="What tools are available?")
 
         self.assertIn("tools", assistant_message.body_redacted.lower())
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+
+    def test_owner_can_request_and_approve_available_tool(self):
+        definition, _policy, _plan_tool = self.create_tool()
+        session = create_chat_session(user=self.owner, title="Tool request", server_id=self.server.id)
+
+        tool_request = create_tool_request(user=self.owner, session=session, tool_key=definition.key)
+        tool_run = approve_tool_request(user=self.owner, tool_request=tool_request)
+        tool_request.refresh_from_db()
+
+        self.assertEqual(tool_request.status, AdminChatToolRequest.Status.QUEUED)
+        self.assertEqual(tool_request.tool_run, tool_run)
+        self.assertEqual(tool_request.approved_by, self.owner)
+        self.assertEqual(ToolRun.objects.count(), 1)
+        self.assertEqual(AgentJob.objects.count(), 1)
+        self.assertEqual(tool_run.agent_job.tool_key, definition.key)
+        self.assertEqual(tool_run.requested_by_type, ToolRun.RequestedByType.USER)
+
+    def test_unavailable_tool_request_is_rejected_before_toolrun(self):
+        definition, _policy, plan_tool = self.create_tool(key="disabled_plan_tool", plan_enabled=False)
+        session = create_chat_session(user=self.owner, title="Tool request", server_id=self.server.id)
+
+        with self.assertRaises(ValidationError):
+            create_tool_request(user=self.owner, session=session, tool_key=definition.key)
+
+        self.assertEqual(AdminChatToolRequest.objects.count(), 0)
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+        self.assertFalse(plan_tool.is_enabled)
+
+    def test_tool_policy_denial_blocks_before_job_on_approval(self):
+        definition, policy, _plan_tool = self.create_tool(key="policy_denied_tool")
+        session = create_chat_session(user=self.owner, title="Tool request", server_id=self.server.id)
+        tool_request = create_tool_request(user=self.owner, session=session, tool_key=definition.key)
+        policy.allow_customer_run = False
+        policy.save(update_fields=["allow_customer_run", "updated_at"])
+
+        with self.assertRaises(ToolPolicyDenied):
+            approve_tool_request(user=self.owner, tool_request=tool_request)
+        tool_request.refresh_from_db()
+
+        self.assertEqual(tool_request.status, AdminChatToolRequest.Status.FAILED)
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+
+    def test_plan_tool_denial_blocks_before_job_on_approval(self):
+        definition, _policy, plan_tool = self.create_tool(key="plan_denied_tool")
+        session = create_chat_session(user=self.owner, title="Tool request", server_id=self.server.id)
+        tool_request = create_tool_request(user=self.owner, session=session, tool_key=definition.key)
+        plan_tool.is_enabled = False
+        plan_tool.save(update_fields=["is_enabled", "updated_at"])
+
+        with self.assertRaises(ToolPolicyDenied):
+            approve_tool_request(user=self.owner, tool_request=tool_request)
+
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+
+    def test_viewer_cannot_approve_tool_request(self):
+        definition, _policy, _plan_tool = self.create_tool(key="viewer_denied_tool")
+        session = create_chat_session(user=self.owner, title="Tool request", server_id=self.server.id)
+        tool_request = create_tool_request(user=self.owner, session=session, tool_key=definition.key)
+
+        with self.assertRaises(PermissionDenied):
+            approve_tool_request(user=self.viewer, tool_request=tool_request)
+
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+
+    def test_chat_tool_request_rejects_params_and_write_risk_tools(self):
+        definition, _policy, _plan_tool = self.create_tool(
+            key="write_risk_tool",
+            risk_level=ToolDefinition.RiskLevel.WRITE_ACTION,
+        )
+        session = create_chat_session(user=self.owner, title="Tool request", server_id=self.server.id)
+
+        with self.assertRaises(ValidationError):
+            create_tool_request(user=self.owner, session=session, tool_key=definition.key, params={"path": "/tmp"})
+        with self.assertRaises(ValidationError):
+            create_tool_request(user=self.owner, session=session, tool_key=definition.key)
+
         self.assertEqual(ToolRun.objects.count(), 0)
         self.assertEqual(AgentJob.objects.count(), 0)

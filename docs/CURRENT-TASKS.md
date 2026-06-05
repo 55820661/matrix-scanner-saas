@@ -2000,3 +2000,49 @@ Verification:
 Completion status:
 - Sprint C4 implementation and verification are complete.
 - Full suite was run because this sprint changes Portal chat behavior, decision logging, redaction-sensitive response storage, and permission-protected message flow.
+
+## Active Task - Sprint C5 Tool Orchestrator MVP
+
+Task:
+- Implement the approved `Sprint C5 - Tool Orchestrator MVP`.
+
+Scope:
+- Add `AdminChatToolRequest`.
+- Allow chat to request existing available read-only tools only.
+- Require owner/operator approval before execution.
+- Execute only through existing `create_tool_run_job()`.
+- Ensure ToolPolicy and PlanTool denial happen before ToolRun/AgentJob creation.
+- Keep C5 params empty-only.
+
+Out of scope:
+- Command/script templates.
+- Live AI.
+- Arbitrary params.
+- New tool creation.
+- Report generation from chat.
+- Telegram.
+- Remediation/actions.
+
+Immediate next steps:
+- Add tool request model/migration.
+- Add request/approve services.
+- Add minimal Portal request/approve UI.
+- Add focused tests for allowed and denied execution paths.
+
+Progress:
+- Added `AdminChatToolRequest` and migration.
+- Added chat tool request and approval services.
+- Added minimal Portal request/approve UI.
+- Added focused tests for available tool execution, ToolPolicy denial, PlanTool denial, viewer denial, params rejection, and write-risk rejection.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --noinput` passed: 16 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected after the intended migration was created.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint6_portal tests.unit.test_sprint4_tools_policy --noinput` passed: 31 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 316 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint C5 implementation and verification are complete.
+- Full suite was run because this sprint touches the ToolRun/AgentJob execution path and permission/policy enforcement.
