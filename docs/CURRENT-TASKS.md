@@ -2093,3 +2093,44 @@ Verification:
 Completion status:
 - Sprint C6 implementation and verification are complete.
 - Full suite was run because this sprint changes runtime, job execution payloads, and security enforcement.
+
+## Active Task - Sprint C7 Tool Builder from Chat
+
+Task:
+- Implement the approved `Sprint C7 - Tool Builder from Chat`.
+
+Scope:
+- Allow owner/operator chat users to create `ToolBuildRequest` and `ToolBuildProposal`.
+- Restrict chat proposals to `command_template` only.
+- Keep proposals inactive and review-only.
+- Add validator coverage for argv-only, allowlisted binaries, and blocked dangerous content.
+- Add chat/session traceability for builder requests.
+
+Out of scope:
+- Tool execution.
+- ToolRun or AgentJob creation.
+- Automatic enablement.
+- `script_template`.
+- Runtime-handler code generation.
+- Live AI.
+- Telegram.
+- Remediation/actions.
+
+Progress:
+- Added `command_template` request metadata and chat trace fields to `ToolBuildRequest`.
+- Added chat service flow to create builder requests/proposals.
+- Extended Tool Builder validator and converter for `command_template`.
+- Added minimal Portal chat UI for builder proposals.
+- Added focused tests for chat builder flow and existing Tool Builder compatibility.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint10_tool_builder --noinput` passed: 18 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --noinput` passed: 19 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected after intended migration.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat tests.unit.test_sprint10_tool_builder tests.unit.test_sprint_c6_command_templates --noinput` passed: 45 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint C7 implementation and verification are complete.
+- Full suite was not run because C7 stayed in the proposal layer and did not modify runtime execution semantics directly.

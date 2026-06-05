@@ -33,7 +33,76 @@ class ToolBuildValidationError(Exception):
 
 ACTIVE_SUBSCRIPTION_STATUSES = {Subscription.Status.ACTIVE, Subscription.Status.TRIAL}
 ALLOWED_BUILDER_HANDLER_KEYS = set(BASELINE_TOOL_KEYS)
+ALLOWED_COMMAND_TEMPLATE_BINARIES = {
+    "apachectl",
+    "awk",
+    "cut",
+    "df",
+    "du",
+    "find",
+    "grep",
+    "journalctl",
+    "ls",
+    "nginx",
+    "ps",
+    "sed",
+    "sort",
+    "ss",
+    "stat",
+    "systemctl",
+    "uniq",
+    "wc",
+}
 DEFAULT_COMMAND_BLOCKED_TOKENS = (";", "&&", "||", "|", ">", "<", "`", "$", "\n", "\r")
+DEFAULT_BUILDER_BLOCKED_TOKENS = list(DEFAULT_COMMAND_BLOCKED_TOKENS)
+FORBIDDEN_COMMAND_TEMPLATE_PARTS = {
+    ".env",
+    "2>",
+    "apt",
+    "apt-get",
+    "chmod",
+    "chown",
+    "composer install",
+    "cp ",
+    "curl ",
+    "delete",
+    "destructive",
+    "dnf",
+    "docker rm",
+    "install ",
+    "less",
+    "ln ",
+    "mkdir",
+    "more",
+    "mv ",
+    "npm install",
+    "passwd",
+    "pip install",
+    "private_key",
+    "reboot",
+    "reload",
+    "remediation",
+    "remove",
+    "restart",
+    "rm ",
+    "scp",
+    "service ",
+    "shutdown",
+    "sudo",
+    "systemctl disable",
+    "systemctl enable",
+    "systemctl reload",
+    "systemctl restart",
+    "systemctl start",
+    "systemctl stop",
+    "tee ",
+    "truncate",
+    "useradd",
+    "usermod",
+    "wget ",
+    "write",
+    "yum",
+}
 FORBIDDEN_BUILDER_FIELD_PARTS = (
     "command",
     "shell",
@@ -51,6 +120,7 @@ FORBIDDEN_BUILDER_FIELD_PARTS = (
     "remediation",
     "destructive",
 )
+BUILDER_SAFE_CONFIG_KEYS = {"allowed_binaries", "blocked_tokens", "command_argv_template"}
 
 
 def audit_policy_denied(*, account, actor_user=None, tool_key="", reason="", server=None):
@@ -323,7 +393,25 @@ def sanitize_builder_text(value, *, limit=4000):
 
 
 def sanitize_builder_json(value):
-    return redact_json(value or {})
+    def _sanitize(nested, parent_key=""):
+        if isinstance(nested, dict):
+            sanitized = {}
+            for key, child in nested.items():
+                normalized = str(key).lower()
+                if normalized in BUILDER_SAFE_CONFIG_KEYS:
+                    sanitized[key] = _sanitize(child, parent_key=normalized)
+                elif any(part in normalized for part in ("password", "secret", "token", "api_key", "apikey", "app_key", "private_key", "authorization", "bearer", "credential")):
+                    sanitized[key] = "[REDACTED]"
+                else:
+                    sanitized[key] = _sanitize(child, parent_key=normalized)
+            return sanitized
+        if isinstance(nested, list):
+            return [_sanitize(item, parent_key=parent_key) for item in nested]
+        if isinstance(nested, str):
+            return redact_secrets(nested)
+        return nested
+
+    return _sanitize(value or {})
 
 
 def contains_forbidden_builder_key(value):
@@ -355,12 +443,62 @@ def default_builder_policy():
 def build_definition_payload_from_request(build_request):
     tool_key = build_request.desired_tool_key.strip().lower().replace(" ", "_")
     handler_key = build_request.desired_handler_key.strip()
+    execution_type = build_request.desired_execution_type or ToolTemplate.ExecutionType.RUNTIME_HANDLER
+    if execution_type == ToolTemplate.ExecutionType.COMMAND_TEMPLATE:
+        template_key = f"{tool_key}_template"
+        command_argv_template = sanitize_builder_json(build_request.command_argv_template or [])
+        allowed_binaries = sanitize_builder_json(build_request.allowed_binaries or [])
+        blocked_tokens = sanitize_builder_json(build_request.blocked_tokens or DEFAULT_BUILDER_BLOCKED_TOKENS)
+        return {
+            "template": {
+                "key": template_key,
+                "name": build_request.title.strip(),
+                "description": build_request.description_redacted,
+                "runtime_handler_key": "",
+                "execution_type": ToolTemplate.ExecutionType.COMMAND_TEMPLATE,
+                "command_argv_template": command_argv_template,
+                "allowed_binaries": allowed_binaries,
+                "blocked_tokens": blocked_tokens,
+                "input_schema": {"fields": {}},
+                "output_schema": {
+                    "type": "object",
+                    "expected_output_description": sanitize_builder_text(
+                        build_request.expected_output_description_redacted,
+                        limit=500,
+                    ),
+                },
+                "default_timeout_seconds": 30,
+                "default_max_output_bytes": 65536,
+                "is_active": True,
+            },
+            "definition": {
+                "key": tool_key,
+                "name": build_request.title.strip(),
+                "description": build_request.description_redacted,
+                "status": ToolDefinition.Status.DRAFT,
+                "risk_level": ToolDefinition.RiskLevel.READ_ONLY,
+                "execution_type": ToolTemplate.ExecutionType.COMMAND_TEMPLATE,
+                "category": "custom_read_only",
+                "input_schema": {"fields": {}},
+                "default_params": {},
+                "command_argv_template": command_argv_template,
+                "allowed_binaries": allowed_binaries,
+                "blocked_tokens": blocked_tokens,
+                "timeout_seconds": 30,
+                "max_output_bytes": 65536,
+                "requires_path_policy": False,
+                "allowed_path_prefixes": [],
+                "blocked_path_prefixes": ["/etc/shadow", "/root", "/home/*/.ssh"],
+                "redaction_rules": ["password", "secret", "token", "api_key", "private_key", "authorization"],
+            },
+        }
     return {
         "template": {
             "key": handler_key,
             "name": build_request.title.strip(),
             "description": build_request.description_redacted,
             "runtime_handler_key": handler_key,
+            "execution_type": ToolTemplate.ExecutionType.RUNTIME_HANDLER,
             "input_schema": {"fields": {}},
             "output_schema": {"type": "object"},
             "default_timeout_seconds": 30,
@@ -373,6 +511,7 @@ def build_definition_payload_from_request(build_request):
             "description": build_request.description_redacted,
             "status": ToolDefinition.Status.DRAFT,
             "risk_level": ToolDefinition.RiskLevel.READ_ONLY,
+            "execution_type": ToolTemplate.ExecutionType.RUNTIME_HANDLER,
             "category": "custom_read_only",
             "input_schema": {"fields": {}},
             "default_params": {},
@@ -439,19 +578,57 @@ def validate_builder_schema(schema, errors):
             errors.append("Unsupported parameter type.")
 
 
+def validate_command_template_proposal(template_data, definition_data, errors):
+    argv = definition_data.get("command_argv_template") or template_data.get("command_argv_template") or []
+    if not isinstance(argv, list) or not argv or not all(isinstance(part, str) and part.strip() for part in argv):
+        errors.append("Command template must be a non-empty argv list.")
+        return
+    if any(re.search(r"[;&|`<>]", part) or "\n" in part or "\r" in part for part in argv):
+        errors.append("Command template must remain argv-only without shell operators or redirects.")
+    allowed_binaries = definition_data.get("allowed_binaries") or template_data.get("allowed_binaries") or []
+    if not isinstance(allowed_binaries, list) or not allowed_binaries:
+        errors.append("Command template proposals must declare allowed binaries.")
+    blocked_tokens = definition_data.get("blocked_tokens") or template_data.get("blocked_tokens") or []
+    if not isinstance(blocked_tokens, list) or not blocked_tokens:
+        errors.append("Command template proposals must declare blocked tokens.")
+    binary = str(argv[0]).strip()
+    binary_name = binary.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    if binary not in ALLOWED_COMMAND_TEMPLATE_BINARIES and binary_name not in ALLOWED_COMMAND_TEMPLATE_BINARIES:
+        errors.append("Command binary is not allowlisted for chat proposals.")
+    for part in argv:
+        normalized = str(part).lower()
+        if redact_secrets(part) != part:
+            errors.append("Command template must not embed secret-like values.")
+            break
+        if any(token in normalized for token in FORBIDDEN_COMMAND_TEMPLATE_PARTS):
+            errors.append("Command template contains forbidden destructive, write, shell, package, restart, or secret-reading content.")
+            break
+    for binary in allowed_binaries:
+        normalized = str(binary).strip()
+        if normalized not in ALLOWED_COMMAND_TEMPLATE_BINARIES:
+            errors.append("Allowed binaries list contains a non-allowlisted binary.")
+            break
+
+
 def validate_tool_build_proposal(proposal, *, actor_user=None):
     errors = []
     data = proposal.proposed_definition or {}
     template_data = data.get("template") or {}
     definition_data = data.get("definition") or {}
     policy_data = proposal.proposed_policy or {}
+    execution_type = definition_data.get("execution_type") or template_data.get("execution_type") or ToolTemplate.ExecutionType.RUNTIME_HANDLER
 
-    handler_key = template_data.get("runtime_handler_key")
-    if handler_key not in ALLOWED_BUILDER_HANDLER_KEYS:
-        errors.append("Unknown runtime handler key.")
+    if execution_type == ToolTemplate.ExecutionType.RUNTIME_HANDLER:
+        handler_key = template_data.get("runtime_handler_key")
+        if handler_key not in ALLOWED_BUILDER_HANDLER_KEYS:
+            errors.append("Unknown runtime handler key.")
+    elif execution_type == ToolTemplate.ExecutionType.COMMAND_TEMPLATE:
+        validate_command_template_proposal(template_data, definition_data, errors)
+    else:
+        errors.append("Only runtime_handler or command_template proposals are allowed.")
     if definition_data.get("risk_level") != ToolDefinition.RiskLevel.READ_ONLY:
         errors.append("Only read-only tool proposals are allowed.")
-    if contains_forbidden_builder_key(data):
+    if execution_type == ToolTemplate.ExecutionType.RUNTIME_HANDLER and contains_forbidden_builder_key(data):
         errors.append("Shell, code, command, write, install, restart, remediation, or destructive fields are not allowed.")
     if not definition_data.get("timeout_seconds"):
         errors.append("Timeout is required.")
@@ -553,7 +730,11 @@ def convert_tool_build_proposal(proposal, *, actor_user=None, target_status=Tool
             defaults={
                 "name": template_data.get("name", template_data["key"]),
                 "description": template_data.get("description", ""),
-                "runtime_handler_key": template_data["runtime_handler_key"],
+                "runtime_handler_key": template_data.get("runtime_handler_key", ""),
+                "execution_type": template_data.get("execution_type", ToolTemplate.ExecutionType.RUNTIME_HANDLER),
+                "command_argv_template": template_data.get("command_argv_template", []),
+                "allowed_binaries": template_data.get("allowed_binaries", []),
+                "blocked_tokens": template_data.get("blocked_tokens", []),
                 "input_schema": template_data.get("input_schema", {}),
                 "output_schema": template_data.get("output_schema", {}),
                 "default_timeout_seconds": template_data.get("default_timeout_seconds", 30),
@@ -568,9 +749,13 @@ def convert_tool_build_proposal(proposal, *, actor_user=None, target_status=Tool
             description=definition_data.get("description", ""),
             status=target_status,
             risk_level=ToolDefinition.RiskLevel.READ_ONLY,
+            execution_type=definition_data.get("execution_type", ToolTemplate.ExecutionType.RUNTIME_HANDLER),
             category=definition_data.get("category", ""),
             input_schema=definition_data.get("input_schema", {}),
             default_params=definition_data.get("default_params", {}),
+            command_argv_template=definition_data.get("command_argv_template", []),
+            allowed_binaries=definition_data.get("allowed_binaries", []),
+            blocked_tokens=definition_data.get("blocked_tokens", []),
             timeout_seconds=definition_data["timeout_seconds"],
             max_output_bytes=definition_data["max_output_bytes"],
             requires_path_policy=definition_data.get("requires_path_policy", False),

@@ -206,10 +206,33 @@ class ToolBuildRequest(TimeStampedModel):
         null=True,
         blank=True,
     )
+    source_chat_session = models.ForeignKey(
+        "ai_chat.AdminChatSession",
+        on_delete=models.SET_NULL,
+        related_name="tool_build_requests",
+        null=True,
+        blank=True,
+    )
+    source_chat_message = models.ForeignKey(
+        "ai_chat.AdminChatMessage",
+        on_delete=models.SET_NULL,
+        related_name="tool_build_requests",
+        null=True,
+        blank=True,
+    )
     title = models.CharField(max_length=160)
     description_redacted = models.TextField(blank=True)
     desired_tool_key = models.CharField(max_length=120)
     desired_handler_key = models.CharField(max_length=120)
+    desired_execution_type = models.CharField(
+        max_length=30,
+        choices=ToolTemplate.ExecutionType.choices,
+        default=ToolTemplate.ExecutionType.RUNTIME_HANDLER,
+    )
+    command_argv_template = models.JSONField(default=list, blank=True)
+    allowed_binaries = models.JSONField(default=list, blank=True)
+    blocked_tokens = models.JSONField(default=list, blank=True)
+    expected_output_description_redacted = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     validation_summary = models.JSONField(default=dict, blank=True)
 

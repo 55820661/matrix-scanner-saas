@@ -11,6 +11,7 @@ from apps.ai_chat.services import (
     add_user_message,
     add_user_message_and_response,
     approve_tool_request,
+    create_tool_build_request_from_chat,
     create_chat_session,
     create_tool_request,
 )
@@ -21,6 +22,7 @@ from apps.servers.models import AgentJob, Finding, ScannerAgent, Server
 from apps.subscriptions.models import Subscription
 from apps.tools.models import PlanTool, ToolDefinition, ToolPolicy, ToolRun, ToolTemplate
 from apps.tools.services import ToolPolicyDenied
+from apps.tools.models import ToolBuildProposal, ToolBuildRequest
 
 
 class AdminChatTests(TestCase):
@@ -332,5 +334,65 @@ class AdminChatTests(TestCase):
         with self.assertRaises(ValidationError):
             create_tool_request(user=self.owner, session=session, tool_key=definition.key)
 
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+
+    def test_owner_can_create_command_template_tool_build_proposal_from_chat(self):
+        session = create_chat_session(user=self.owner, title="Build tool", server_id=self.server.id)
+
+        build_request, proposal = create_tool_build_request_from_chat(
+            user=self.owner,
+            session=session,
+            title="Apache 5xx summary",
+            desired_tool_key="apache_5xx_summary",
+            description="Create a safe Apache summary tool.",
+            command_argv_template=["apachectl", "-S"],
+            allowed_binaries=["apachectl"],
+            blocked_tokens=[";", "&&", "||", "|", ">", "<", "`", "$"],
+            expected_output_description="Safe summary counters only.",
+        )
+
+        self.assertEqual(build_request.source_chat_session, session)
+        self.assertEqual(build_request.desired_execution_type, "command_template")
+        self.assertEqual(proposal.status, ToolBuildProposal.Status.PENDING_REVIEW)
+        self.assertEqual(proposal.proposed_definition["definition"]["execution_type"], "command_template")
+        self.assertFalse(proposal.proposed_policy["is_active"])
+        self.assertEqual(ToolDefinition.objects.filter(status=ToolDefinition.Status.ENABLED, key="apache_5xx_summary").count(), 0)
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+
+    def test_viewer_cannot_create_tool_build_proposal_from_chat(self):
+        session = create_chat_session(user=self.owner, title="Build tool", server_id=self.server.id)
+
+        with self.assertRaises(PermissionDenied):
+            create_tool_build_request_from_chat(
+                user=self.viewer,
+                session=session,
+                title="Blocked proposal",
+                desired_tool_key="blocked_tool",
+                command_argv_template=["apachectl", "-S"],
+                allowed_binaries=["apachectl"],
+            )
+
+        self.assertEqual(ToolBuildRequest.objects.count(), 0)
+        self.assertEqual(ToolBuildProposal.objects.count(), 0)
+
+    def test_dangerous_command_template_from_chat_is_rejected_and_not_executed(self):
+        session = create_chat_session(user=self.owner, title="Build tool", server_id=self.server.id)
+
+        build_request, proposal = create_tool_build_request_from_chat(
+            user=self.owner,
+            session=session,
+            title="Restart nginx",
+            desired_tool_key="restart_nginx",
+            command_argv_template=["systemctl", "restart", "nginx"],
+            allowed_binaries=["systemctl"],
+            blocked_tokens=[";", "&&", "||", "|", ">", "<", "`", "$"],
+            expected_output_description="Would restart nginx.",
+        )
+
+        self.assertEqual(build_request.status, ToolBuildRequest.Status.PROPOSED)
+        self.assertEqual(proposal.status, ToolBuildProposal.Status.VALIDATION_FAILED)
+        self.assertTrue(any("forbidden" in error.lower() for error in proposal.validation_errors))
         self.assertEqual(ToolRun.objects.count(), 0)
         self.assertEqual(AgentJob.objects.count(), 0)

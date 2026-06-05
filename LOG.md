@@ -1587,3 +1587,36 @@ Verification:
 
 Testing note:
 - Full suite was run for Sprint C6 because this sprint changes runtime, job execution payloads, and security enforcement.
+
+## 2026-06-05 - Sprint C7 Tool Builder from Chat Start
+
+Intent:
+- Implement the approved `Sprint C7 - Tool Builder from Chat`.
+
+Scope:
+- Allow chat to create `ToolBuildRequest` and `ToolBuildProposal` for `command_template` only.
+- Keep proposals draft/review-only and inactive.
+- Add safe validation for argv-only command template proposals.
+- Link chat-created builder requests back to the originating session/message.
+
+Out of scope:
+- Tool execution, ToolRun creation, AgentJob creation, automatic enablement, `script_template`, runtime-handler code generation, live AI, Telegram, and remediation/actions.
+
+Result:
+- Extended `ToolBuildRequest` with `command_template` proposal metadata and optional chat trace fields.
+- Added chat service flow to create `ToolBuildRequest` and `ToolBuildProposal` from Portal chat.
+- Extended Tool Builder generator, validator, and converter to support safe `command_template` proposals without breaking existing `runtime_handler` behavior.
+- Added minimal chat UI for creating tool builder proposals and viewing their status.
+- Kept proposals inactive and review-only; no ToolRun or AgentJob is created by this flow.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint10_tool_builder --noinput` passed: 18 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --noinput` passed: 19 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected after intended migration.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat tests.unit.test_sprint10_tool_builder tests.unit.test_sprint_c6_command_templates --noinput` passed: 45 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Testing note:
+- Full suite was not run for Sprint C7 because this sprint did not change runtime execution semantics or agent/job security paths directly.
+- Focused regression was run against chat, tool builder, and C6 command-template validation/runtime compatibility.

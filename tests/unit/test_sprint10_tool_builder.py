@@ -52,6 +52,28 @@ class Sprint10ToolBuilderTests(TestCase):
             desired_handler_key=handler,
         )
 
+    def make_command_request(
+        self,
+        *,
+        key="apache_5xx_summary",
+        argv=None,
+        allowed_binaries=None,
+        blocked_tokens=None,
+        description="Count Apache 5xx responses safely.",
+    ):
+        return ToolBuildRequest.objects.create(
+            requested_by=self.admin,
+            title="Apache 5xx summary",
+            description_redacted=description,
+            desired_tool_key=key,
+            desired_handler_key="",
+            desired_execution_type="command_template",
+            command_argv_template=argv or ["apachectl", "-S"],
+            allowed_binaries=allowed_binaries or ["apachectl"],
+            blocked_tokens=blocked_tokens or [";", "&&", "||", "|", ">", "<", "`", "$"],
+            expected_output_description_redacted="Returns safe counters and summary only.",
+        )
+
     def make_proposal(self, **definition_overrides):
         build_request = self.make_request()
         proposal = generate_tool_build_proposal(build_request, actor_user=self.admin)
@@ -195,3 +217,45 @@ class Sprint10ToolBuilderTests(TestCase):
 
         with self.assertRaises(ToolBuildValidationError):
             convert_tool_build_proposal(proposal, actor_user=self.admin)
+
+    def test_command_template_proposal_is_generated_and_stays_inactive(self):
+        build_request = self.make_command_request()
+
+        proposal = generate_tool_build_proposal(build_request, actor_user=self.admin)
+
+        self.assertEqual(proposal.status, ToolBuildProposal.Status.PENDING_REVIEW)
+        self.assertEqual(proposal.proposed_definition["definition"]["execution_type"], "command_template")
+        self.assertEqual(proposal.proposed_definition["definition"]["command_argv_template"], ["apachectl", "-S"])
+        self.assertEqual(proposal.proposed_definition["definition"]["allowed_binaries"], ["apachectl"])
+        self.assertFalse(proposal.proposed_policy["is_active"])
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+
+    def test_command_template_rejects_dangerous_delete_restart_install_patterns(self):
+        build_request = self.make_command_request(argv=["systemctl", "restart", "nginx"], allowed_binaries=["systemctl"])
+
+        proposal = generate_tool_build_proposal(build_request, actor_user=self.admin)
+
+        self.assertEqual(proposal.status, ToolBuildProposal.Status.VALIDATION_FAILED)
+        self.assertTrue(any("forbidden" in error.lower() for error in proposal.validation_errors))
+
+    def test_command_template_rejects_shell_free_form_command(self):
+        build_request = self.make_command_request(argv=["apachectl && rm -rf /"], allowed_binaries=["apachectl"])
+
+        proposal = generate_tool_build_proposal(build_request, actor_user=self.admin)
+
+        self.assertEqual(proposal.status, ToolBuildProposal.Status.VALIDATION_FAILED)
+        self.assertTrue(any("argv-only" in error.lower() or "allowlisted" in error.lower() for error in proposal.validation_errors))
+
+    def test_command_template_can_convert_to_draft_definition_only(self):
+        proposal = generate_tool_build_proposal(self.make_command_request(key="apache_status_summary"), actor_user=self.admin)
+        review_tool_build_proposal(proposal, reviewer=self.admin, decision=ToolBuildReview.Decision.APPROVED)
+
+        tool_definition = convert_tool_build_proposal(proposal, actor_user=self.admin)
+
+        self.assertEqual(tool_definition.status, ToolDefinition.Status.DRAFT)
+        self.assertEqual(tool_definition.execution_type, "command_template")
+        self.assertEqual(tool_definition.command_argv_template, ["apachectl", "-S"])
+        self.assertFalse(tool_definition.policy.is_active)
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)

@@ -111,10 +111,20 @@ class ToolBuildProposalInline(admin.TabularInline):
 
 @admin.register(ToolBuildRequest)
 class ToolBuildRequestAdmin(admin.ModelAdmin):
-    list_display = ("desired_tool_key", "title", "desired_handler_key", "status", "requested_by", "created_at")
-    list_filter = ("status", "desired_handler_key", "created_at")
+    list_display = ("desired_tool_key", "title", "desired_execution_type", "desired_handler_key", "status", "requested_by", "source_chat_session", "created_at")
+    list_filter = ("status", "desired_execution_type", "desired_handler_key", "created_at")
     search_fields = ("desired_tool_key", "desired_handler_key", "title", "description_redacted")
-    readonly_fields = ("validation_summary", "created_at", "updated_at")
+    readonly_fields = (
+        "source_chat_session",
+        "source_chat_message",
+        "command_argv_template",
+        "allowed_binaries",
+        "blocked_tokens",
+        "expected_output_description_redacted",
+        "validation_summary",
+        "created_at",
+        "updated_at",
+    )
     inlines = (ToolBuildProposalInline,)
     actions = ("generate_proposal",)
 

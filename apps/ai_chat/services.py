@@ -6,8 +6,14 @@ from apps.ai_context.services import build_safe_context
 from apps.applications.models import Application
 from apps.core.redaction import redact_json, redact_secrets
 from apps.servers.models import Server
-from apps.tools.models import ToolDefinition, ToolRun
-from apps.tools.services import ToolPolicyDenied, create_tool_run_job, redacted_json
+from apps.tools.models import ToolBuildProposal, ToolBuildRequest, ToolDefinition, ToolRun, ToolTemplate
+from apps.tools.services import (
+    ToolPolicyDenied,
+    create_tool_run_job,
+    generate_tool_build_proposal,
+    redacted_json,
+    sanitize_builder_text,
+)
 
 from .models import AdminChatDecision, AdminChatMessage, AdminChatSession, AdminChatToolRequest
 
@@ -340,3 +346,75 @@ def approve_tool_request(*, user, tool_request):
         reasoning_summary="Approved chat tool request queued through create_tool_run_job.",
     )
     return tool_run
+
+
+def create_tool_build_request_from_chat(
+    *,
+    user,
+    session,
+    title,
+    desired_tool_key,
+    command_argv_template,
+    allowed_binaries,
+    blocked_tokens=None,
+    description="",
+    expected_output_description="",
+    message=None,
+):
+    _require_chat_writer(user)
+    if not user_can_write_chat(user, session):
+        raise PermissionDenied
+    if session.status != AdminChatSession.Status.OPEN:
+        raise ValidationError("Chat session is archived.")
+    build_request = ToolBuildRequest.objects.create(
+        requested_by=user,
+        source_chat_session=session,
+        source_chat_message=message,
+        title=sanitize_builder_text(title, limit=160),
+        description_redacted=sanitize_builder_text(description),
+        desired_tool_key=desired_tool_key,
+        desired_handler_key="",
+        desired_execution_type=ToolTemplate.ExecutionType.COMMAND_TEMPLATE,
+        command_argv_template=redact_json(command_argv_template or []),
+        allowed_binaries=redact_json(allowed_binaries or []),
+        blocked_tokens=redact_json(blocked_tokens or []),
+        expected_output_description_redacted=sanitize_builder_text(expected_output_description, limit=500),
+        status=ToolBuildRequest.Status.DRAFT,
+    )
+    proposal = generate_tool_build_proposal(build_request, actor_user=user)
+    AdminChatMessage.objects.create(
+        session=session,
+        sender_type=AdminChatMessage.SenderType.SYSTEM,
+        body_redacted=f"Tool builder proposal created: {build_request.desired_tool_key}",
+        metadata_redacted={
+            "source": "tool_builder_chat",
+            "tool_build_request_id": str(build_request.id),
+            "tool_build_proposal_id": str(proposal.id),
+            "status": proposal.status,
+        },
+    )
+    AdminChatDecision.objects.create(
+        session=session,
+        decision_type=AdminChatDecision.DecisionType.TOOL_BUILD_REQUEST,
+        input_context_redacted=redact_json(
+            {
+                "title": title,
+                "desired_tool_key": desired_tool_key,
+                "execution_type": ToolTemplate.ExecutionType.COMMAND_TEMPLATE,
+                "command_argv_template": command_argv_template or [],
+                "allowed_binaries": allowed_binaries or [],
+                "blocked_tokens": blocked_tokens or [],
+                "expected_output_description": expected_output_description,
+            }
+        ),
+        output_json_redacted=redact_json(
+            {
+                "tool_build_request_id": str(build_request.id),
+                "tool_build_proposal_id": str(proposal.id),
+                "proposal_status": proposal.status,
+                "validation_errors": proposal.validation_errors,
+            }
+        ),
+        reasoning_summary="Chat-created command_template proposal stored for Matrix Admin review only.",
+    )
+    return build_request, proposal

@@ -55,6 +55,29 @@
         <p class="muted">Tool requests require a server-scoped chat session.</p>
       {% endif %}
     </div>
+
+    <div class="card">
+      <h2>Tool builder proposal</h2>
+      <p class="muted">Creates a draft command-template proposal for Matrix Admin review only. It does not run or enable a tool.</p>
+      <form method="post" action="{% url 'portal:chat_tool_build_create' session.id %}">
+        {% csrf_token %}
+        <label for="build_title">Title</label>
+        <input id="build_title" name="title" placeholder="Apache 5xx summary">
+        <label for="desired_tool_key">Tool key</label>
+        <input id="desired_tool_key" name="desired_tool_key" placeholder="apache_5xx_summary">
+        <label for="description">Description</label>
+        <textarea id="description" name="description" rows="3" style="width:100%; box-sizing:border-box"></textarea>
+        <label for="command_argv_template">Command argv template, one argument per line</label>
+        <textarea id="command_argv_template" name="command_argv_template" rows="6" style="width:100%; box-sizing:border-box"></textarea>
+        <label for="allowed_binaries">Allowed binaries, one per line</label>
+        <textarea id="allowed_binaries" name="allowed_binaries" rows="3" style="width:100%; box-sizing:border-box"></textarea>
+        <label for="blocked_tokens">Blocked tokens, one per line</label>
+        <textarea id="blocked_tokens" name="blocked_tokens" rows="3" style="width:100%; box-sizing:border-box"></textarea>
+        <label for="expected_output_description">Expected output description</label>
+        <textarea id="expected_output_description" name="expected_output_description" rows="3" style="width:100%; box-sizing:border-box"></textarea>
+        <button type="submit">Create proposal</button>
+      </form>
+    </div>
   {% endif %}
 
   <div class="card">
@@ -87,6 +110,36 @@
           </tr>
         {% empty %}
           <tr><td colspan="4">No tool requests yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Tool builder requests</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Tool key</th>
+          <th>Execution type</th>
+          <th>Status</th>
+          <th>Proposal status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for build_request in tool_build_requests %}
+          <tr>
+            <td>{{ build_request.desired_tool_key }}</td>
+            <td>{{ build_request.desired_execution_type }}</td>
+            <td>{{ build_request.status }}</td>
+            <td>
+              {% with proposal=build_request.proposals.first %}
+                {% if proposal %}{{ proposal.status }}{% else %}-{% endif %}
+              {% endwith %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4">No tool builder requests yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>
