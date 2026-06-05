@@ -2,6 +2,31 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## Active Task - Sprint C2 Safe Context Builder MVP
+
+Task:
+- Execute Sprint C2 from the approved corrected Matrix Scanner SaaS roadmap.
+
+Scope:
+- Add a dedicated `apps/ai_context` app/service that builds safe, versioned, capped JSON context.
+- Include safe summaries for account, server, latest baseline, applications, services, domains, log sources, findings, reports, knowledge, recommendations, recent ToolRuns, available tools, and risk summary where available.
+- Enforce account scoping and role-aware visibility.
+- Include `available_tools` metadata respecting ToolPolicy and PlanTool.
+- Add tests for account scoping, redaction, raw output exclusion, output caps, and available tool policy filtering.
+
+Out of scope:
+- Live AI provider calls.
+- Chat models/UI.
+- Tool execution.
+- Direct AgentJob access.
+- Raw logs, raw `.env`, credentials, tokens, raw AgentJob result, or raw ToolRun output.
+- Moving to Sprint C3.
+
+Immediate next steps:
+- Inspect relevant models and tool policy services.
+- Implement context builder and tests.
+- Run Sprint C2 validation.
+
 ## Active Task - Sprint C1.5 Remote Bootstrap Runtime Completion
 
 Task:
@@ -1849,3 +1874,40 @@ Out of scope:
 - Migrations.
 - Tests.
 - Server execution.
+
+## Active Task - Sprint C2 Safe Context Builder MVP
+
+Task:
+- Implement the approved `Sprint C2 - Safe Context Builder MVP`.
+
+Scope:
+- Add a dedicated safe context builder app under `apps.ai_context`.
+- Build deterministic, versioned, capped, redacted JSON context for later chat/planner use.
+- Include safe summaries for account/server/baseline/applications/services/domains/logs/findings/reports/knowledge/recommendations.
+- Include recent ToolRun metadata without raw output.
+- Include available tool metadata based on enabled ToolDefinition, ToolPolicy, PlanTool, subscription, role, and server status.
+- Enforce tenant scope and viewer read-only limitations.
+
+Out of scope:
+- Chat data model/UI.
+- Live AI provider calls.
+- Tool execution or direct AgentJob creation.
+- Telegram changes.
+- Remediation/actions.
+- Report redesign.
+
+Progress:
+- Added `apps.ai_context` and registered it in settings.
+- Added `build_safe_context()` service.
+- Added focused tests for scoping, redaction, raw output exclusion, role-aware tools, caps, and safe summaries.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_safe_context_builder --noinput` passed: 6 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 300 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint C2 implementation and verification are complete.
+- Full suite was run because this sprint changes security-sensitive redaction/permissions/context behavior.

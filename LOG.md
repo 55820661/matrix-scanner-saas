@@ -2,6 +2,24 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-05 - Sprint C2 Safe Context Builder MVP Start
+
+Intent:
+- Execute Sprint C2 from the approved corrected Matrix Scanner SaaS roadmap.
+
+Scope:
+- Add dedicated `apps/ai_context` safe context builder.
+- Build versioned, redacted, summarized, capped JSON context.
+- Include `available_tools` metadata respecting ToolPolicy and PlanTool.
+- Add focused tests for scoping, redaction, raw output exclusion, caps, and tool policy filtering.
+
+Out of scope:
+- Live AI provider calls, chat UI/models, tool execution, direct AgentJob access, raw outputs/secrets, and Sprint C3 implementation.
+
+Testing note:
+- Per updated instruction, use focused Sprint tests by default.
+- C2 touches redaction/permissions context, so full suite may be used as a security regression gate if needed and will be reported explicitly.
+
 ## 2026-06-05 - Sprint C1.5 Remote Bootstrap Runtime Completion Start
 
 Intent:
@@ -1402,3 +1420,35 @@ Result:
 Verification:
 - `git diff --check` passed with line-ending warnings only.
 - No code, migrations, tests, runtime/service/model changes, or server execution were performed.
+
+## 2026-06-05 - Sprint C2 Safe Context Builder MVP Start
+
+Intent:
+- Implement the approved `Sprint C2 - Safe Context Builder MVP`.
+
+Scope:
+- Add a dedicated `apps.ai_context` app.
+- Add a deterministic safe context builder service that returns versioned, capped, redacted JSON.
+- Include safe account, server, baseline, applications, services, domains, logs, findings, reports, knowledge, recommendations, recent ToolRun metadata, risk summary, and available tools metadata.
+- Enforce tenant scope, role-aware tool availability, ToolPolicy/PlanTool checks, and no raw output exposure.
+- Add focused unit tests.
+
+Out of scope:
+- Chat UI/models, live AI providers, tool execution, direct AgentJob creation, Telegram behavior, remediation/actions, and report redesign.
+
+Result:
+- Added `apps.ai_context` with `build_safe_context()`.
+- Registered `apps.ai_context` in `INSTALLED_APPS`.
+- Safe context output now includes `context_version`, metadata, capped summaries, recent ToolRun metadata without raw results, and policy-aware available tool metadata.
+- Added redaction and tenant-scope safeguards before returning context.
+- Added focused tests for account scoping, redaction, raw output exclusion, tool availability, caps, and safe summary fields.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_safe_context_builder --noinput` passed: 6 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 300 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Testing note:
+- Full suite was run for Sprint C2 because this sprint touches security-sensitive redaction, permissions, and tenant-scoped context behavior.
