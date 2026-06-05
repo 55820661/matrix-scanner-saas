@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.applications",
     "apps.audit",
     "apps.ai_context",
+    "apps.ai_chat",
     "apps.telegram_integration",
     "apps.diagnostics",
     "apps.reports",

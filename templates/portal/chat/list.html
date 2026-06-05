@@ -1,0 +1,61 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Chat - Matrix Scanner Portal{% endblock %}
+
+{% block content %}
+  <h1>Chat</h1>
+
+  {% if can_start_chat %}
+    <div class="card">
+      <h2>New chat</h2>
+      <form method="post" action="{% url 'portal:chat_session_start' %}">
+        {% csrf_token %}
+        <label for="title">Title</label>
+        <input id="title" name="title" placeholder="Server status review">
+        <label for="server_id">Server</label>
+        <select id="server_id" name="server_id">
+          <option value="">Any server</option>
+          {% for server in servers %}
+            <option value="{{ server.id }}">{{ server.name }}</option>
+          {% endfor %}
+        </select>
+        <label for="application_id">Application</label>
+        <select id="application_id" name="application_id">
+          <option value="">Any application</option>
+          {% for application in applications %}
+            <option value="{{ application.id }}">{{ application.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Start chat</button>
+      </form>
+    </div>
+  {% else %}
+    <p class="muted">Your role can view chat history but cannot start active chat flows.</p>
+  {% endif %}
+
+  <h2>Sessions</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Server</th>
+        <th>Application</th>
+        <th>Status</th>
+        <th>Last message</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for session in sessions %}
+        <tr>
+          <td><a href="{% url 'portal:chat_session_detail' session.id %}">{{ session.title_redacted|default:"Chat session" }}</a></td>
+          <td>{{ session.server.name|default:"-" }}</td>
+          <td>{{ session.application.name|default:"-" }}</td>
+          <td>{{ session.status }}</td>
+          <td>{{ session.last_message_at|default:session.created_at }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">No chat sessions yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

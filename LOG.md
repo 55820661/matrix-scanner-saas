@@ -1452,3 +1452,38 @@ Verification:
 
 Testing note:
 - Full suite was run for Sprint C2 because this sprint touches security-sensitive redaction, permissions, and tenant-scoped context behavior.
+
+## 2026-06-05 - Sprint C3 Admin Chat Data Model and Read-only UI Start
+
+Intent:
+- Implement the approved `Sprint C3 - Admin Chat Data Model and Read-only UI`.
+
+Scope:
+- Add dedicated `apps.ai_chat` app.
+- Add `AdminChatSession`, `AdminChatMessage`, and `AdminChatDecision` models.
+- Add Portal read-only/basic chat screens for account-scoped owner/operator use.
+- Store redacted messages and metadata only.
+- Prevent tool execution, ToolRun creation, AgentJob creation, live AI calls, and Telegram behavior.
+- Add focused tests for permissions, tenant scope, redaction, and no execution side effects.
+
+Out of scope:
+- Deterministic responder logic, live AI provider calls, tool orchestration, reports from chat, Telegram, remediation/actions, and any direct AgentJob creation.
+
+Result:
+- Added dedicated `apps.ai_chat` app.
+- Added `AdminChatSession`, `AdminChatMessage`, and `AdminChatDecision` models with redacted fields and account/server/application scope validation.
+- Added Django Admin registration for review of redacted chat records.
+- Added Portal chat list/detail/start/message routes and templates.
+- Owner/operator can start sessions and save user messages; viewer can view but cannot start or post.
+- Chat MVP stores user messages only and creates no ToolRun or AgentJob.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --noinput` passed: 7 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected after the intended migration was created.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint6_portal --noinput` passed: 16 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 307 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Testing note:
+- Full suite was run for Sprint C3 because this sprint changes Portal permissions, redaction-sensitive chat storage, and tenant-scoped access behavior.

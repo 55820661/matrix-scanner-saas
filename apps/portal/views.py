@@ -8,6 +8,8 @@ from django.urls import reverse_lazy
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.models import User
+from apps.ai_chat.models import AdminChatSession
+from apps.ai_chat.services import add_user_message, create_chat_session, user_can_write_chat
 from apps.applications.models import Application
 from apps.reports.models import FindingGroup, KnowledgeEntry, Report
 from apps.reports.services import (
@@ -89,6 +91,10 @@ def scoped_reports(request):
 
 def scoped_finding_groups(request):
     return FindingGroup.objects.select_related("server", "application", "latest_finding").filter(account=account_for(request))
+
+
+def scoped_chat_sessions(request):
+    return AdminChatSession.objects.select_related("server", "application", "user").filter(account=account_for(request))
 
 
 def can_generate_reports(user):
@@ -356,6 +362,56 @@ def reports_list(request):
             "baseline_scans": BaselineScan.objects.filter(account=account_for(request)).select_related("server").order_by("-created_at")[:20],
             "can_generate": can_generate_reports(request.user),
             "knowledge_entries": visible_knowledge_for_account(account_for(request))[:10],
+        },
+    )
+
+
+@portal_required
+def chat_sessions(request):
+    sessions = scoped_chat_sessions(request).order_by("-last_message_at", "-created_at")
+    return render(
+        request,
+        "portal/chat/list.html",
+        {
+            "sessions": sessions,
+            "servers": scoped_servers(request).order_by("name"),
+            "applications": scoped_applications(request).order_by("name"),
+            "can_start_chat": request.user.role in {User.CustomerRole.OWNER, User.CustomerRole.OPERATOR},
+        },
+    )
+
+
+@require_POST
+@portal_required
+def chat_session_start(request):
+    if request.user.role not in {User.CustomerRole.OWNER, User.CustomerRole.OPERATOR}:
+        raise PermissionDenied
+    session = create_chat_session(
+        user=request.user,
+        title=request.POST.get("title", ""),
+        server_id=request.POST.get("server_id") or None,
+        application_id=request.POST.get("application_id") or None,
+    )
+    messages.success(request, "Chat session created.")
+    return redirect("portal:chat_session_detail", session_id=session.id)
+
+
+@portal_required
+def chat_session_detail(request, session_id):
+    session = get_object_or_404(scoped_chat_sessions(request), id=session_id)
+    if request.method == "POST":
+        if not user_can_write_chat(request.user, session):
+            raise PermissionDenied
+        add_user_message(user=request.user, session=session, body=request.POST.get("body", ""), metadata={"source": "portal"})
+        messages.success(request, "Message saved.")
+        return redirect("portal:chat_session_detail", session_id=session.id)
+    return render(
+        request,
+        "portal/chat/detail.html",
+        {
+            "session": session,
+            "chat_messages": session.messages.order_by("created_at"),
+            "can_write": user_can_write_chat(request.user, session),
         },
     )
 

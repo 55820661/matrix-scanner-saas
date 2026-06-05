@@ -1,0 +1,43 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Chat Session - Matrix Scanner Portal{% endblock %}
+
+{% block content %}
+  <div class="actions">
+    <a class="button secondary" href="{% url 'portal:chat_sessions' %}">Back to chat</a>
+  </div>
+
+  <h1>{{ session.title_redacted|default:"Chat session" }}</h1>
+  <p class="muted">
+    Status: {{ session.status }}
+    {% if session.server %} | Server: {{ session.server.name }}{% endif %}
+    {% if session.application %} | Application: {{ session.application.name }}{% endif %}
+  </p>
+
+  <div class="card">
+    <h2>Messages</h2>
+    {% for message in chat_messages %}
+      <div class="card">
+        <strong>{{ message.sender_type }}</strong>
+        <p>{{ message.body_redacted }}</p>
+        <p class="muted">{{ message.created_at }}</p>
+      </div>
+    {% empty %}
+      <p class="muted">No messages yet.</p>
+    {% endfor %}
+  </div>
+
+  {% if can_write %}
+    <div class="card">
+      <h2>Add message</h2>
+      <form method="post">
+        {% csrf_token %}
+        <label for="body">Message</label>
+        <textarea id="body" name="body" rows="5" style="width:100%; box-sizing:border-box"></textarea>
+        <button type="submit">Save message</button>
+      </form>
+    </div>
+  {% else %}
+    <p class="muted">Your role can view this chat but cannot add messages.</p>
+  {% endif %}
+{% endblock %}

@@ -1911,3 +1911,49 @@ Verification:
 Completion status:
 - Sprint C2 implementation and verification are complete.
 - Full suite was run because this sprint changes security-sensitive redaction/permissions/context behavior.
+
+## Active Task - Sprint C3 Admin Chat Data Model and Read-only UI
+
+Task:
+- Implement the approved `Sprint C3 - Admin Chat Data Model and Read-only UI`.
+
+Scope:
+- Add `apps.ai_chat`.
+- Add `AdminChatSession`, `AdminChatMessage`, and `AdminChatDecision`.
+- Add a minimal Portal chat list/detail/create/message path for owner/operator.
+- Allow viewer read-only access where applicable but prevent active chat sends.
+- Scope all chat data to the user's account.
+- Store only redacted body/metadata/context snapshots.
+
+Out of scope:
+- Deterministic assistant responses.
+- Live AI providers.
+- Tool execution, ToolRun creation, or AgentJob creation.
+- Telegram integration.
+- Reports from chat.
+- Remediation/actions.
+
+Immediate next steps:
+- Inspect Portal routing/view conventions.
+- Add models and migration.
+- Add focused tests for permissions, redaction, tenant isolation, and no execution side effects.
+
+Progress:
+- Added `apps.ai_chat` with chat session, message, and decision models.
+- Added migration for the new chat models.
+- Added redacted chat service helpers for session creation and user message storage.
+- Added Portal chat list, start, detail, and message save routes.
+- Added Portal templates and navigation entry for Chat.
+- Added focused C3 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --noinput` passed: 7 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected after the intended migration was created.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint6_portal --noinput` passed: 16 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 307 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint C3 implementation and verification are complete.
+- Full suite was run because this sprint changes Portal permissions, redaction-sensitive chat storage, and tenant-scoped access behavior.
