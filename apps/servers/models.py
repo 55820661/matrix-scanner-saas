@@ -149,6 +149,7 @@ class AgentJob(TimeStampedModel):
     result = models.JSONField(null=True, blank=True)
     error_message = models.TextField(blank=True)
     max_output_bytes = models.PositiveIntegerField(default=65536)
+    execution_payload = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["created_at"]

@@ -2046,3 +2046,50 @@ Verification:
 Completion status:
 - Sprint C5 implementation and verification are complete.
 - Full suite was run because this sprint touches the ToolRun/AgentJob execution path and permission/policy enforcement.
+
+## Active Task - Sprint C6 Safe Command Execution Runtime
+
+Task:
+- Implement the approved `Sprint C6 - Safe Command Execution Runtime`.
+
+Scope:
+- Add `command_template` metadata support to ToolTemplate/ToolDefinition.
+- Add a safe AgentJob execution payload for command-template jobs.
+- Add runtime command-template executor using argv-only safe execution.
+- Keep existing runtime handlers supported.
+- Add focused tests for command-template security and runtime behavior.
+
+Out of scope:
+- `script_template`.
+- Shell execution.
+- Arbitrary commands.
+- Tool Builder integration.
+- New tool activation.
+- Telegram.
+- Live AI.
+- Remediation/actions.
+
+Immediate next steps:
+- Add model fields and migration.
+- Add command-template payload construction in `create_tool_run_job()`.
+- Add runtime command-template executor.
+- Add focused tests and run security regression checks.
+
+Progress:
+- Added command-template metadata fields to ToolTemplate and ToolDefinition.
+- Added `AgentJob.execution_payload`.
+- Added command-template payload building in `create_tool_run_job()`.
+- Added runtime command-template execution with argv-only safe execution.
+- Added focused C6 tests.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c6_command_templates --noinput` passed: 8 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected after intended migrations.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint4_tools_policy tests.unit.test_sprint2_agent_foundation tests.unit.test_sprint3_bootstrap tests.unit.test_phase2_systemd_discovery --noinput` passed: 54 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 324 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint C6 implementation and verification are complete.
+- Full suite was run because this sprint changes runtime, job execution payloads, and security enforcement.

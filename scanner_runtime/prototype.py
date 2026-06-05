@@ -5,6 +5,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .baseline_tools import BASELINE_TOOL_KEYS, SYSTEMD_SERVICES_DISCOVERY_TOOL_KEY, collect_systemd_services, execute_baseline_tool
+from .command_templates import CommandTemplateRuntimeError, execute_command_template_payload
 from .gunicorn_uvicorn_discovery import (
     GUNICORN_UVICORN_SERVICES_DISCOVERY_TOOL_KEY,
     collect_gunicorn_uvicorn_services,
@@ -77,6 +78,13 @@ def poll_one_job(base_url, agent_token):
 
 
 def execute_job(job):
+    execution_payload = job.get("execution_payload") or {}
+    if execution_payload.get("execution_type") == "command_template":
+        try:
+            return execute_command_template_payload(execution_payload)
+        except CommandTemplateRuntimeError as exc:
+            return {"status": "rejected", "output": {}, "error": str(exc)}
+
     tool_key = job.get("tool_key")
     if tool_key == SYSTEM_IDENTITY_TOOL_KEY:
         try:

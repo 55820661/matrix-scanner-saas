@@ -33,6 +33,7 @@ class ToolBuildValidationError(Exception):
 
 ACTIVE_SUBSCRIPTION_STATUSES = {Subscription.Status.ACTIVE, Subscription.Status.TRIAL}
 ALLOWED_BUILDER_HANDLER_KEYS = set(BASELINE_TOOL_KEYS)
+DEFAULT_COMMAND_BLOCKED_TOKENS = (";", "&&", "||", "|", ">", "<", "`", "$", "\n", "\r")
 FORBIDDEN_BUILDER_FIELD_PARTS = (
     "command",
     "shell",
@@ -87,6 +88,98 @@ def active_subscription_for(account):
         .order_by("-created_at")
         .first()
     )
+
+
+def _deny_command_template(account, reason, *, actor_user=None, tool_key="", server=None):
+    deny(account, reason, actor_user=actor_user, tool_key=tool_key, server=server)
+
+
+def _render_command_arg(arg, params):
+    rendered = arg
+    for key, value in params.items():
+        if isinstance(value, bool):
+            safe_value = "true" if value else "false"
+        elif isinstance(value, (str, int, float)):
+            safe_value = str(value)
+        elif value is None:
+            safe_value = ""
+        else:
+            raise ToolParamValidationError("Command template parameters must be scalar values.")
+        rendered = rendered.replace("{" + str(key) + "}", safe_value)
+    if "{" in rendered or "}" in rendered:
+        raise ToolParamValidationError("Command template contains unresolved placeholders.")
+    return rendered
+
+
+def build_execution_payload(tool_definition, validated_params, *, account, server, actor_user=None):
+    execution_type = tool_definition.execution_type or ToolTemplate.ExecutionType.RUNTIME_HANDLER
+    if execution_type == ToolTemplate.ExecutionType.RUNTIME_HANDLER:
+        return {
+            "execution_type": ToolTemplate.ExecutionType.RUNTIME_HANDLER,
+            "runtime_handler_key": tool_definition.template.runtime_handler_key,
+        }
+    if execution_type == ToolTemplate.ExecutionType.SCRIPT_TEMPLATE:
+        _deny_command_template(
+            account,
+            "Script template execution is deferred.",
+            actor_user=actor_user,
+            tool_key=tool_definition.key,
+            server=server,
+        )
+    if execution_type != ToolTemplate.ExecutionType.COMMAND_TEMPLATE:
+        _deny_command_template(
+            account,
+            "Unsupported tool execution type.",
+            actor_user=actor_user,
+            tool_key=tool_definition.key,
+            server=server,
+        )
+
+    template = tool_definition.command_argv_template or tool_definition.template.command_argv_template
+    if not isinstance(template, list) or not template or not all(isinstance(part, str) and part for part in template):
+        _deny_command_template(
+            account,
+            "Command template must be a non-empty argv list.",
+            actor_user=actor_user,
+            tool_key=tool_definition.key,
+            server=server,
+        )
+    blocked_tokens = tuple(tool_definition.blocked_tokens or tool_definition.template.blocked_tokens or DEFAULT_COMMAND_BLOCKED_TOKENS)
+    allowed_binaries = tool_definition.allowed_binaries or tool_definition.template.allowed_binaries
+    argv = []
+    try:
+        for part in template:
+            rendered = _render_command_arg(part, validated_params)
+            if any(token and token in rendered for token in blocked_tokens):
+                raise ToolParamValidationError("Command template contains a blocked token.")
+            if redact_secrets(rendered) != rendered:
+                raise ToolParamValidationError("Command template rendered a secret-like value.")
+            argv.append(rendered)
+    except ToolParamValidationError as exc:
+        _deny_command_template(
+            account,
+            str(exc),
+            actor_user=actor_user,
+            tool_key=tool_definition.key,
+            server=server,
+        )
+
+    binary = argv[0]
+    binary_name = binary.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    if allowed_binaries and binary not in allowed_binaries and binary_name not in allowed_binaries:
+        _deny_command_template(
+            account,
+            "Command binary is not allowlisted.",
+            actor_user=actor_user,
+            tool_key=tool_definition.key,
+            server=server,
+        )
+    return {
+        "execution_type": ToolTemplate.ExecutionType.COMMAND_TEMPLATE,
+        "argv": argv,
+        "timeout_seconds": tool_definition.timeout_seconds,
+        "max_output_bytes": tool_definition.max_output_bytes,
+    }
 
 
 def redacted_json(value):
@@ -175,6 +268,14 @@ def create_tool_run_job(*, account, server, tool_key, params=None, requested_by=
     if not agent.is_active_for_api:
         deny(account, "Scanner agent is not active.", actor_user=requested_by, tool_key=tool_key, server=server)
 
+    execution_payload = build_execution_payload(
+        tool_definition,
+        validated_params,
+        account=account,
+        server=server,
+        actor_user=requested_by,
+    )
+
     with transaction.atomic():
         tool_run = ToolRun.objects.create(
             account=account,
@@ -196,6 +297,7 @@ def create_tool_run_job(*, account, server, tool_key, params=None, requested_by=
             tool_key=tool_definition.key,
             params=validated_params,
             max_output_bytes=tool_definition.max_output_bytes,
+            execution_payload=execution_payload,
         )
         tool_run.agent_job = job
         tool_run.status = ToolRun.Status.QUEUED

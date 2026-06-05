@@ -9,10 +9,19 @@ from apps.servers.models import AgentJob, ScannerAgent, Server
 
 
 class ToolTemplate(TimeStampedModel):
+    class ExecutionType(models.TextChoices):
+        RUNTIME_HANDLER = "runtime_handler", "Runtime handler"
+        COMMAND_TEMPLATE = "command_template", "Command template"
+        SCRIPT_TEMPLATE = "script_template", "Script template"
+
     key = models.CharField(max_length=120, unique=True)
     name = models.CharField(max_length=160)
     description = models.TextField(blank=True)
     runtime_handler_key = models.CharField(max_length=120)
+    execution_type = models.CharField(max_length=30, choices=ExecutionType.choices, default=ExecutionType.RUNTIME_HANDLER)
+    command_argv_template = models.JSONField(default=list, blank=True)
+    allowed_binaries = models.JSONField(default=list, blank=True)
+    blocked_tokens = models.JSONField(default=list, blank=True)
     input_schema = models.JSONField(default=dict, blank=True)
     output_schema = models.JSONField(default=dict, blank=True)
     default_timeout_seconds = models.PositiveIntegerField(default=30)
@@ -49,9 +58,17 @@ class ToolDefinition(TimeStampedModel):
     description = models.TextField(blank=True)
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.DRAFT)
     risk_level = models.CharField(max_length=30, choices=RiskLevel.choices, default=RiskLevel.READ_ONLY)
+    execution_type = models.CharField(
+        max_length=30,
+        choices=ToolTemplate.ExecutionType.choices,
+        default=ToolTemplate.ExecutionType.RUNTIME_HANDLER,
+    )
     category = models.CharField(max_length=80, blank=True)
     input_schema = models.JSONField(default=dict, blank=True)
     default_params = models.JSONField(default=dict, blank=True)
+    command_argv_template = models.JSONField(default=list, blank=True)
+    allowed_binaries = models.JSONField(default=list, blank=True)
+    blocked_tokens = models.JSONField(default=list, blank=True)
     timeout_seconds = models.PositiveIntegerField(default=30)
     max_output_bytes = models.PositiveIntegerField(default=65536)
     requires_path_policy = models.BooleanField(default=False)

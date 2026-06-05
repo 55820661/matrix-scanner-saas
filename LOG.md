@@ -1553,3 +1553,37 @@ Verification:
 Testing note:
 - Full suite was run for Sprint C5 because this sprint touches the ToolRun/AgentJob execution path and permission/policy enforcement.
 - An initial regression command used a non-existent test module name; it was corrected to `tests.unit.test_sprint4_tools_policy` and rerun successfully.
+
+## 2026-06-05 - Sprint C6 Safe Command Execution Runtime Start
+
+Intent:
+- Implement the approved `Sprint C6 - Safe Command Execution Runtime`.
+
+Scope:
+- Add command-template execution metadata to tool registry models.
+- Add safe AgentJob execution payload for command-template jobs.
+- Execute command templates in runtime using argv-only `safe_exec` with `shell=False`.
+- Enforce allowed binaries, blocked tokens, timeout, output cap, redaction, exit code, execution time, and truncated flag.
+- Keep runtime-handler tools supported.
+
+Out of scope:
+- `script_template`, shell execution, arbitrary commands, new tool activation, Tool Builder integration, Telegram, live AI, remediation/actions, and report changes.
+
+Result:
+- Added `execution_type`, command argv template, allowed binaries, and blocked tokens to ToolTemplate and ToolDefinition.
+- Added `AgentJob.execution_payload` for runtime-safe execution metadata.
+- Added command-template payload construction in `create_tool_run_job()`.
+- Added runtime `command_templates` executor using `safe_exec.run_fixed_command(..., shell=False)`.
+- Enhanced `safe_exec` with execution time and optional truncation metadata while preserving old behavior by default.
+- Kept `script_template` denied and runtime-handler tools supported.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c6_command_templates --noinput` passed: 8 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected after intended migrations.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint4_tools_policy tests.unit.test_sprint2_agent_foundation tests.unit.test_sprint3_bootstrap tests.unit.test_phase2_systemd_discovery --noinput` passed: 54 tests.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 324 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Testing note:
+- Full suite was run for Sprint C6 because this sprint changes runtime, job execution payloads, and security enforcement.
