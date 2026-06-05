@@ -2,6 +2,41 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-05 - Sprint C1.5 Remote Bootstrap Runtime Completion Start
+
+Intent:
+- Execute Sprint C1.5 from the approved corrected Matrix Scanner SaaS roadmap.
+
+Scope:
+- Update Remote Bootstrap so the installed bundle is a real polling Runtime/Agent rather than registration/heartbeat only.
+- Reuse existing bootstrap foundation and tests.
+- Preserve Matrix Admin-only bootstrap, `/opt/matrix_scanner`, and `matrix-scanner-agent.service`.
+- Ensure generated config includes `base_url`, `registration_token` or `agent_token`, `poll_interval_seconds`, and `runtime_mode`.
+
+Out of scope:
+- Portal/customer bootstrap, new raw shell/arbitrary commands, remediation/write/destructive actions, server/VM execution, and Sprint C2 implementation.
+
+Result:
+- Updated bootstrap archive generation to package the current `scanner_runtime` modules.
+- Replaced the generated heartbeat-only `agent_service.py` with a polling runtime service using `scanner_runtime.prototype`.
+- The generated runtime service now supports registration, heartbeat, polling, allowlisted AgentJob execution, and job result submission.
+- Added `runtime_mode = polling_agent` to the generated bootstrap config.
+- Preserved `/opt/matrix_scanner` and `matrix-scanner-agent.service`.
+- Added focused tests for runtime archive contents, config shape, and systemd service target.
+- Added Sprint C1.5 report to `docs/planning/تقارير التنفيذ.md`.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint3_bootstrap --noinput` passed: 13 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 294 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Sprint C1.5 is complete.
+- Proceed to `Sprint C2 - Safe Context Builder MVP` after the C1.5 commit if no untracked official files remain.
+- No Portal/customer bootstrap, raw shell/arbitrary command expansion, remediation/write/destructive behavior, server/VM execution, or Sprint C2 implementation was performed.
+
 ## 2026-06-05 - Sprint C1 Current State and Documentation Alignment Start
 
 Intent:

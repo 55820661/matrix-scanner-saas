@@ -2,6 +2,52 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## Active Task - Sprint C1.5 Remote Bootstrap Runtime Completion
+
+Task:
+- Execute Sprint C1.5 from the approved corrected Matrix Scanner SaaS roadmap.
+
+Scope:
+- Update Remote Bootstrap so the installed bundle is a real polling Runtime/Agent, not registration/heartbeat only.
+- Reuse existing bootstrap models, services, admin, credentials, TTL, cleanup, fixed command templates, and tests.
+- Preserve Matrix Admin-only bootstrap.
+- Preserve install path `/opt/matrix_scanner` and service name `matrix-scanner-agent.service`.
+- Ensure generated config contains `base_url`, `registration_token` or `agent_token`, `poll_interval_seconds`, and `runtime_mode`.
+- Add/update tests for runtime config, systemd service target, polling/job execution support in the bundle, credential cleanup, and raw command rejection.
+
+Out of scope:
+- Portal/customer bootstrap.
+- New raw shell or arbitrary commands.
+- Tool philosophy changes.
+- Remediation/write/destructive actions.
+- Server or VM execution.
+- Moving to Sprint C2.
+
+Immediate next steps:
+- Inspect current bootstrap bundle and runtime executor.
+- Patch only bootstrap runtime bundle/install flow as needed.
+- Update focused bootstrap tests.
+- Run Sprint C1.5 validation.
+
+Progress:
+- Updated bootstrap runtime archive generation to package the current `scanner_runtime` modules.
+- Replaced the heartbeat-only generated `agent_service.py` behavior with a polling runtime service that registers, heartbeats, polls, executes allowlisted jobs through `scanner_runtime.prototype`, and submits results.
+- Added `runtime_mode = polling_agent` to the generated bootstrap config.
+- Preserved `/opt/matrix_scanner` and `matrix-scanner-agent.service`.
+- Added focused tests for runtime archive contents, polling runtime service behavior markers, generated config shape, and systemd service target.
+- Added Sprint C1.5 report to `docs/planning/تقارير التنفيذ.md`.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint3_bootstrap --noinput` passed: 13 tests.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test --noinput` passed: 294 tests, 4 skipped.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Sprint C1.5 implementation is complete within the approved scope.
+- No Portal/customer bootstrap, raw shell/arbitrary command expansion, remediation/write/destructive behavior, server/VM execution, or Sprint C2 work was added.
+
 ## Active Task - Sprint C1 Current State and Documentation Alignment
 
 Task:

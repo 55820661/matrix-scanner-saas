@@ -1,4 +1,6 @@
 import json
+import io
+import tarfile
 from datetime import timedelta
 
 from django.core.exceptions import PermissionDenied
@@ -9,6 +11,7 @@ from apps.accounts.models import Account, User
 from apps.audit.models import AuditLog
 from apps.bootstrap.models import AgentInstallation, BootstrapCredential, BootstrapSession, BootstrapStep
 from apps.bootstrap.policy import BootstrapPolicyError, reject_raw_command, render_command
+from apps.bootstrap.runtime_bundle import SERVICE_FILE, build_runtime_archive
 from apps.bootstrap.services import BootstrapError, create_bootstrap_session, run_bootstrap_session
 from apps.core.tokens import hash_token
 from apps.servers.models import AgentJob, BaselineScan, ScannerAgent, Server
@@ -91,13 +94,13 @@ class Sprint3BootstrapTests(TestCase):
                 "status": ScannerAgent.Status.ACTIVE,
                 "registered_at": now,
                 "last_seen_at": now,
-                "agent_version": "sprint3-bootstrap-runtime",
+                "agent_version": "sprint2-prototype",
             },
         )
         agent.account = session.account
         agent.status = ScannerAgent.Status.ACTIVE
         agent.last_seen_at = now
-        agent.agent_version = "sprint3-bootstrap-runtime"
+        agent.agent_version = "sprint2-prototype"
         agent.save()
         return agent
 
@@ -222,6 +225,30 @@ class Sprint3BootstrapTests(TestCase):
         uploaded_config = json.loads(config_upload[1].decode("utf-8"))
         self.assertEqual(uploaded_config["base_url"], "https://scanner.example.test")
         self.assertIn("registration_token", uploaded_config)
+        self.assertEqual(uploaded_config["runtime_mode"], "polling_agent")
+        self.assertEqual(uploaded_config["poll_interval_seconds"], 30)
+
+    def test_runtime_archive_contains_polling_runtime(self):
+        archive_data = build_runtime_archive()
+
+        with tarfile.open(fileobj=io.BytesIO(archive_data), mode="r:gz") as archive:
+            names = set(archive.getnames())
+            agent_service = archive.extractfile("scanner_runtime/agent_service.py").read().decode("utf-8")
+
+        self.assertIn("scanner_runtime/prototype.py", names)
+        self.assertIn("scanner_runtime/baseline_tools.py", names)
+        self.assertIn("scanner_runtime/safe_exec.py", names)
+        self.assertIn("scanner_runtime/agent_service.py", names)
+        self.assertIn("poll_execute_submit_once", agent_service)
+        self.assertIn("runtime_mode", agent_service)
+        self.assertNotIn("sprint3-bootstrap-runtime", agent_service)
+
+    def test_systemd_service_points_to_installed_runtime_agent_service(self):
+        self.assertIn("WorkingDirectory=/opt/matrix_scanner", SERVICE_FILE)
+        self.assertIn(
+            "ExecStart=/usr/bin/python3 /opt/matrix_scanner/scanner_runtime/agent_service.py --config /opt/matrix_scanner/config.json",
+            SERVICE_FILE,
+        )
 
     def test_paramiko_mocked_ssh_failure_marks_failed_and_cleans_credentials(self):
         session = self._create_session()

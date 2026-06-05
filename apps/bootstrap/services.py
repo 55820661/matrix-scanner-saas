@@ -292,6 +292,7 @@ def run_bootstrap_session(session, *, ssh_client_cls=ParamikoSSHClient, heartbea
                 "base_url": settings.PUBLIC_BASE_URL,
                 "registration_token": raw_registration_token,
                 "poll_interval_seconds": 30,
+                "runtime_mode": "polling_agent",
             }
             _upload_runtime_files(ssh, config)
             _run_step(session, ssh, step_key="scanner_code_deploy", template_key="scanner_archive_extract")
