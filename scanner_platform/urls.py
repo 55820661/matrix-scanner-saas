@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
+    path("admin/internal-chat/", include("apps.ai_chat.urls")),
     path("admin/", admin.site.urls),
     path("api/agent/", include("apps.servers.urls")),
     path("telegram/", include("apps.telegram_integration.urls")),

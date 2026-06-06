@@ -56,10 +56,10 @@ class AdminChatReportDraftInline(admin.TabularInline):
 
 @admin.register(AdminChatSession)
 class AdminChatSessionAdmin(admin.ModelAdmin):
-    list_display = ("id", "account", "server", "application", "status", "title_redacted", "last_message_at", "created_at")
-    list_filter = ("status", "account", "server")
+    list_display = ("id", "channel", "account", "server", "application", "status", "title_redacted", "last_message_at", "created_at")
+    list_filter = ("channel", "status", "account", "server")
     search_fields = ("title_redacted", "account__name", "server__name", "application__name")
-    readonly_fields = ("context_snapshot_redacted", "last_message_at", "created_at", "updated_at")
+    readonly_fields = ("channel", "context_snapshot_redacted", "last_message_at", "created_at", "updated_at")
     inlines = [AdminChatMessageInline, AdminChatDecisionInline, AdminChatToolRequestInline, AdminChatReportDraftInline]
 
 

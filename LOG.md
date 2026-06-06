@@ -1723,3 +1723,51 @@ Verification:
 Testing note:
 - Full suite was not run for this fix because the change stayed inside chat-report rendering and conversion output formatting.
 - Focused regression was run against chat reports, admin chat, and report services because this fix touched report redaction presentation and conversion output only.
+
+## 2026-06-06 - Sprint C10.5 Chat Responsibility Split Start
+
+Intent:
+- Implement the approved corrective sprint that separates Matrix Admin internal chat from Customer Portal chat.
+
+Scope:
+- Add a clear internal/admin versus portal/customer distinction in chat sessions and services.
+- Remove Tool Builder creation from Portal chat.
+- Keep Portal chat limited to safe context, approved read-only tool requests, and self-service customer-safe reports.
+- Add a minimal staff-only internal chat UI that reuses existing `apps.ai_chat` logic for messages, tool builder proposals, and internal reports.
+- Preserve existing policy-backed ToolRun/AgentJob execution flow and manual report approval flow for sensitive/manual cases.
+
+Out of scope:
+- Live AI providers.
+- Telegram.
+- Remediation/write/destructive tools.
+- Raw logs, raw `.env`, credentials, raw ToolRun output, or raw AgentJob output.
+- Runtime/tool execution policy changes beyond existing approved paths.
+
+Testing note:
+- Run focused regressions for admin chat, portal chat, tool builder, reports, and tool result summary.
+- Escalate to full suite because this sprint changes permissions, report conversion behavior, and chat-visible execution flows.
+
+Result:
+- Added explicit `portal_customer` versus `admin_internal` chat session channels.
+- Removed Tool Builder creation paths from Portal chat UI and routing.
+- Added a staff-only internal chat UI under `/admin/internal-chat/`.
+- Restricted chat Tool Builder proposal creation to internal admin chat only.
+- Kept Portal chat limited to safe context, approved read-only tool requests, and immediate customer-safe reports.
+- Added immediate safe chat report conversion for Portal customer summaries and Matrix Admin internal reports.
+- Preserved the manual draft review/conversion flow for internal review cases.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations ai_chat` created the intended migration for `AdminChatSession.channel`.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no extra changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c10_5_chat_split --keepdb --noinput` passed: 5 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c9_chat_reports --keepdb --noinput` passed: 12 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint10_tool_builder --keepdb --noinput` passed: 18 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint6_portal --keepdb --noinput` passed: 16 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `.\.venv\Scripts\python.exe manage.py test --keepdb --noinput` passed: 356 tests, 4 skipped.
+
+Remaining:
+- Sprint C10.5 is complete within the approved scope.
+- No live AI, Telegram, remediation/write/destructive tools, raw outputs, or policy bypasses were added.

@@ -7,6 +7,8 @@ from apps.accounts.models import Account, User
 from apps.ai_chat.models import AdminChatDecision, AdminChatMessage, AdminChatReportDraft
 from apps.ai_chat.services import (
     convert_chat_report_draft,
+    create_admin_chat_session,
+    create_chat_report,
     create_chat_report_draft,
     create_chat_session,
     review_chat_report_draft,
@@ -147,10 +149,16 @@ class SprintC9ChatReportsTests(TestCase):
         )
 
     def test_owner_can_create_technical_report_draft_without_final_report(self):
-        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id, application_id=self.application.id)
+        session = create_admin_chat_session(
+            user=self.admin,
+            account_id=self.account.id,
+            title="Reports",
+            server_id=self.server.id,
+            application_id=self.application.id,
+        )
 
         draft = create_chat_report_draft(
-            user=self.owner,
+            user=self.admin,
             session=session,
             report_type=AdminChatReportDraft.DraftType.TECHNICAL_INTERNAL,
         )
@@ -172,15 +180,20 @@ class SprintC9ChatReportsTests(TestCase):
         )
 
     def test_customer_and_technical_drafts_are_distinct(self):
-        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+        session = create_admin_chat_session(
+            user=self.admin,
+            account_id=self.account.id,
+            title="Reports",
+            server_id=self.server.id,
+        )
 
         technical = create_chat_report_draft(
-            user=self.owner,
+            user=self.admin,
             session=session,
             report_type=AdminChatReportDraft.DraftType.TECHNICAL_INTERNAL,
         )
         customer = create_chat_report_draft(
-            user=self.owner,
+            user=self.admin,
             session=session,
             report_type=AdminChatReportDraft.DraftType.CUSTOMER_SUMMARY,
         )
@@ -189,8 +202,13 @@ class SprintC9ChatReportsTests(TestCase):
         self.assertNotEqual(technical.title_redacted, customer.title_redacted)
         self.assertNotEqual(str(technical.sections_redacted), str(customer.sections_redacted))
 
-    def test_viewer_cannot_create_report_draft(self):
-        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+    def test_non_admin_cannot_create_manual_report_draft(self):
+        session = create_admin_chat_session(
+            user=self.admin,
+            account_id=self.account.id,
+            title="Reports",
+            server_id=self.server.id,
+        )
 
         with self.assertRaises(PermissionDenied):
             create_chat_report_draft(
@@ -202,9 +220,14 @@ class SprintC9ChatReportsTests(TestCase):
         self.assertEqual(AdminChatReportDraft.objects.count(), 0)
 
     def test_matrix_admin_review_and_convert_required_for_final_report(self):
-        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+        session = create_admin_chat_session(
+            user=self.admin,
+            account_id=self.account.id,
+            title="Reports",
+            server_id=self.server.id,
+        )
         draft = create_chat_report_draft(
-            user=self.owner,
+            user=self.admin,
             session=session,
             report_type=AdminChatReportDraft.DraftType.CUSTOMER_SUMMARY,
         )
@@ -222,9 +245,14 @@ class SprintC9ChatReportsTests(TestCase):
         self.assertEqual(report.sections.count(), len(draft.sections_redacted))
 
     def test_customer_summary_final_report_sections_are_human_readable_only(self):
-        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+        session = create_admin_chat_session(
+            user=self.admin,
+            account_id=self.account.id,
+            title="Reports",
+            server_id=self.server.id,
+        )
         draft = create_chat_report_draft(
-            user=self.owner,
+            user=self.admin,
             session=session,
             report_type=AdminChatReportDraft.DraftType.CUSTOMER_SUMMARY,
         )
@@ -243,9 +271,14 @@ class SprintC9ChatReportsTests(TestCase):
         self.assertIn("No automated action is performed from this report.", rendered_body)
 
     def test_technical_internal_final_report_sections_are_readable_not_raw_payloads(self):
-        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+        session = create_admin_chat_session(
+            user=self.admin,
+            account_id=self.account.id,
+            title="Reports",
+            server_id=self.server.id,
+        )
         draft = create_chat_report_draft(
-            user=self.owner,
+            user=self.admin,
             session=session,
             report_type=AdminChatReportDraft.DraftType.TECHNICAL_INTERNAL,
         )
@@ -267,9 +300,14 @@ class SprintC9ChatReportsTests(TestCase):
         self.assertIn("- apache_5xx_summary: succeeded", rendered_body)
 
     def test_non_admin_cannot_review_or_convert(self):
-        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+        session = create_admin_chat_session(
+            user=self.admin,
+            account_id=self.account.id,
+            title="Reports",
+            server_id=self.server.id,
+        )
         draft = create_chat_report_draft(
-            user=self.owner,
+            user=self.admin,
             session=session,
             report_type=AdminChatReportDraft.DraftType.TECHNICAL_INTERNAL,
         )
@@ -279,27 +317,43 @@ class SprintC9ChatReportsTests(TestCase):
         with self.assertRaises(PermissionDenied):
             convert_chat_report_draft(draft, reviewer=self.owner)
 
-    def test_portal_owner_can_create_draft_and_viewer_cannot_post(self):
+    def test_portal_owner_can_create_customer_report_without_admin_review_and_viewer_cannot_post(self):
         session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
         self.client.force_login(self.owner)
         owner_response = self.client.post(
-            reverse("portal:chat_report_draft_create", args=[session.id]),
-            {"report_type": AdminChatReportDraft.DraftType.CUSTOMER_SUMMARY},
+            reverse("portal:chat_report_create", args=[session.id]),
         )
         self.assertEqual(owner_response.status_code, 302)
         self.assertEqual(AdminChatReportDraft.objects.count(), 1)
+        draft = AdminChatReportDraft.objects.get()
+        self.assertEqual(draft.status, AdminChatReportDraft.Status.CONVERTED)
+        self.assertIsNotNone(draft.converted_report)
 
         self.client.force_login(self.viewer)
         viewer_response = self.client.post(
-            reverse("portal:chat_report_draft_create", args=[session.id]),
-            {"report_type": AdminChatReportDraft.DraftType.CUSTOMER_SUMMARY},
+            reverse("portal:chat_report_create", args=[session.id]),
         )
         self.assertEqual(viewer_response.status_code, 403)
 
-    def test_converted_report_is_account_scoped_in_portal(self):
+    def test_portal_cannot_create_technical_internal_report(self):
         session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+
+        with self.assertRaises(ValidationError):
+            create_chat_report(
+                user=self.owner,
+                session=session,
+                report_type=AdminChatReportDraft.DraftType.TECHNICAL_INTERNAL,
+            )
+
+    def test_converted_report_is_account_scoped_in_portal(self):
+        session = create_admin_chat_session(
+            user=self.admin,
+            account_id=self.account.id,
+            title="Reports",
+            server_id=self.server.id,
+        )
         draft = create_chat_report_draft(
-            user=self.owner,
+            user=self.admin,
             session=session,
             report_type=AdminChatReportDraft.DraftType.TECHNICAL_INTERNAL,
         )
@@ -312,9 +366,14 @@ class SprintC9ChatReportsTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_rejected_draft_cannot_convert(self):
-        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+        session = create_admin_chat_session(
+            user=self.admin,
+            account_id=self.account.id,
+            title="Reports",
+            server_id=self.server.id,
+        )
         draft = create_chat_report_draft(
-            user=self.owner,
+            user=self.admin,
             session=session,
             report_type=AdminChatReportDraft.DraftType.CUSTOMER_SUMMARY,
         )
@@ -323,9 +382,9 @@ class SprintC9ChatReportsTests(TestCase):
         with self.assertRaises(ValidationError):
             convert_chat_report_draft(draft, reviewer=self.admin)
 
-    def test_chat_detail_shows_report_draft_history(self):
+    def test_chat_detail_shows_report_history(self):
         session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
-        create_chat_report_draft(
+        create_chat_report(
             user=self.owner,
             session=session,
             report_type=AdminChatReportDraft.DraftType.CUSTOMER_SUMMARY,
@@ -334,6 +393,6 @@ class SprintC9ChatReportsTests(TestCase):
 
         response = self.client.get(reverse("portal:chat_session_detail", args=[session.id]))
 
-        self.assertContains(response, "Report draft history")
+        self.assertContains(response, "Chat report history")
         self.assertContains(response, "customer_summary")
-        self.assertContains(response, "pending_review")
+        self.assertContains(response, "converted")

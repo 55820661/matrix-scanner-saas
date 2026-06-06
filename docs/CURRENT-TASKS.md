@@ -2259,3 +2259,54 @@ Verification:
 Completion status:
 - Chat report rendering fix is complete.
 - Full suite was not run because the change stayed inside chat-report rendering and conversion presentation, not runtime or policy execution.
+
+## Active Task - Sprint C10.5 Chat Responsibility Split
+
+Task:
+- Implement the approved corrective sprint that separates Matrix Admin internal chat from Customer Portal chat responsibilities.
+
+Scope:
+- Add a clear internal/admin versus portal/customer distinction in `AdminChatSession`.
+- Remove Tool Builder proposal creation from Portal chat and block any Portal route that creates `ToolBuildRequest` or `ToolBuildProposal`.
+- Keep Portal chat limited to safe context, approved read-only tool requests, and self-service customer-safe reports.
+- Add a minimal staff-only internal chat UI that reuses `apps.ai_chat` services for messages, tool builder proposals, and internal reports.
+- Let internal Matrix Admin reports auto-convert safely without a separate waiting approval while keeping manual review flow available for sensitive/manual cases.
+
+Out of scope:
+- Live AI providers.
+- Telegram.
+- Remediation/write/destructive tools.
+- Raw logs, raw `.env`, credentials, raw ToolRun output, or raw AgentJob output.
+- New runtime/tool execution paths outside the existing policy-backed flow.
+
+Immediate next steps:
+- Inspect current `apps.ai_chat`, `apps.portal`, templates, and root/admin routing.
+- Add channel-aware chat session handling and internal staff-only views.
+- Remove Portal tool-builder creation UI/routes and switch Portal chat reports to self-service final reports.
+- Add focused regressions for portal/admin chat split, report safety, tool builder restrictions, and policy-backed tool requests.
+
+Progress:
+- Added `AdminChatSession.channel` with `portal_customer` and `admin_internal`.
+- Added staff-only internal chat routes and templates under `/admin/internal-chat/`.
+- Restricted Tool Builder chat proposal creation to internal admin chat only.
+- Removed Portal Tool Builder creation UI and route.
+- Switched Portal chat report generation to immediate customer-safe final report creation through the existing safe draft/content pipeline.
+- Added internal immediate report creation while preserving manual draft review/conversion flow.
+- Updated focused tests for Portal chat, internal chat, Tool Builder, and chat report behavior.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations ai_chat` created the intended migration.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no extra changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c10_5_chat_split --keepdb --noinput` passed: 5 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c9_chat_reports --keepdb --noinput` passed: 12 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint10_tool_builder --keepdb --noinput` passed: 18 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint6_portal --keepdb --noinput` passed: 16 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `.\.venv\Scripts\python.exe manage.py test --keepdb --noinput` passed: 356 tests, 4 skipped.
+
+Completion status:
+- Sprint C10.5 implementation and verification are complete.
+- Full suite was run because this sprint changed permissions, report conversion behavior, and chat-visible tool execution flows.
+- No live AI, Telegram, remediation/write/destructive tools, raw outputs, or policy bypasses were added.

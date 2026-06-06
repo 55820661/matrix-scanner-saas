@@ -11,6 +11,10 @@ from apps.tools.models import ToolDefinition, ToolRun
 
 
 class AdminChatSession(TimeStampedModel):
+    class Channel(models.TextChoices):
+        PORTAL_CUSTOMER = "portal_customer", "Portal customer"
+        ADMIN_INTERNAL = "admin_internal", "Admin internal"
+
     class Status(models.TextChoices):
         OPEN = "open", "Open"
         ARCHIVED = "archived", "Archived"
@@ -19,6 +23,7 @@ class AdminChatSession(TimeStampedModel):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name="admin_chat_sessions", null=True, blank=True)
     server = models.ForeignKey(Server, on_delete=models.SET_NULL, related_name="admin_chat_sessions", null=True, blank=True)
     application = models.ForeignKey(Application, on_delete=models.SET_NULL, related_name="admin_chat_sessions", null=True, blank=True)
+    channel = models.CharField(max_length=30, choices=Channel.choices, default=Channel.PORTAL_CUSTOMER)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
     title_redacted = models.CharField(max_length=255, blank=True)
     context_snapshot_redacted = models.JSONField(default=dict, blank=True)
@@ -27,7 +32,7 @@ class AdminChatSession(TimeStampedModel):
     class Meta:
         ordering = ["-last_message_at", "-created_at"]
         indexes = [
-            models.Index(fields=["account", "status", "last_message_at"]),
+            models.Index(fields=["account", "channel", "status", "last_message_at"]),
             models.Index(fields=["account", "created_at"]),
         ]
 

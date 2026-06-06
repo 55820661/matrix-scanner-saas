@@ -12,9 +12,8 @@ from apps.ai_chat.models import AdminChatReportDraft, AdminChatSession
 from apps.ai_chat.services import (
     add_user_message_and_response,
     approve_tool_request,
-    create_chat_report_draft,
-    create_chat_session,
-    create_tool_build_request_from_chat,
+    create_chat_report,
+    create_portal_chat_session,
     create_tool_request,
     user_can_write_chat,
 )
@@ -102,7 +101,10 @@ def scoped_finding_groups(request):
 
 
 def scoped_chat_sessions(request):
-    return AdminChatSession.objects.select_related("server", "application", "user").filter(account=account_for(request))
+    return (
+        AdminChatSession.objects.select_related("server", "application", "user")
+        .filter(account=account_for(request), channel=AdminChatSession.Channel.PORTAL_CUSTOMER)
+    )
 
 
 def _newline_list(value):
@@ -398,7 +400,7 @@ def chat_sessions(request):
 def chat_session_start(request):
     if request.user.role not in {User.CustomerRole.OWNER, User.CustomerRole.OPERATOR}:
         raise PermissionDenied
-    session = create_chat_session(
+    session = create_portal_chat_session(
         user=request.user,
         title=request.POST.get("title", ""),
         server_id=request.POST.get("server_id") or None,
@@ -424,11 +426,9 @@ def chat_session_detail(request, session_id):
             "session": session,
             "chat_messages": session.messages.order_by("created_at"),
             "tool_requests": session.tool_requests.select_related("tool_definition", "tool_run").order_by("-created_at"),
-            "tool_build_requests": session.tool_build_requests.prefetch_related("proposals").order_by("-created_at"),
             "report_drafts": session.report_drafts.select_related("converted_report").order_by("-created_at"),
             "available_tools": (session.context_snapshot_redacted or {}).get("available_tools", []),
             "can_write": user_can_write_chat(request.user, session),
-            "chat_report_types": AdminChatReportDraft.DraftType.choices,
         },
     )
 
@@ -458,37 +458,16 @@ def chat_tool_request_approve(request, session_id, request_id):
 
 @require_POST
 @portal_required
-def chat_tool_build_create(request, session_id):
+def chat_report_create(request, session_id):
     session = get_object_or_404(scoped_chat_sessions(request), id=session_id)
     if not user_can_write_chat(request.user, session):
         raise PermissionDenied
-    create_tool_build_request_from_chat(
+    create_chat_report(
         user=request.user,
         session=session,
-        title=request.POST.get("title", ""),
-        desired_tool_key=request.POST.get("desired_tool_key", ""),
-        command_argv_template=_newline_list(request.POST.get("command_argv_template", "")),
-        allowed_binaries=_newline_list(request.POST.get("allowed_binaries", "")),
-        blocked_tokens=_newline_list(request.POST.get("blocked_tokens", "")),
-        description=request.POST.get("description", ""),
-        expected_output_description=request.POST.get("expected_output_description", ""),
+        report_type=AdminChatReportDraft.DraftType.CUSTOMER_SUMMARY,
     )
-    messages.success(request, "Tool builder proposal created for Matrix Admin review.")
-    return redirect("portal:chat_session_detail", session_id=session.id)
-
-
-@require_POST
-@portal_required
-def chat_report_draft_create(request, session_id):
-    session = get_object_or_404(scoped_chat_sessions(request), id=session_id)
-    if not user_can_write_chat(request.user, session):
-        raise PermissionDenied
-    create_chat_report_draft(
-        user=request.user,
-        session=session,
-        report_type=request.POST.get("report_type", ""),
-    )
-    messages.success(request, "Report draft created for Matrix Admin review.")
+    messages.success(request, "Customer-safe report created.")
     return redirect("portal:chat_session_detail", session_id=session.id)
 
 

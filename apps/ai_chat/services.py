@@ -55,7 +55,11 @@ def _require_matrix_admin(user):
 
 
 def user_can_view_chat(user, session):
-    if not user or not user.is_authenticated or user.account_id is None:
+    if not user or not user.is_authenticated:
+        return False
+    if session.channel == AdminChatSession.Channel.ADMIN_INTERNAL:
+        return user.is_staff
+    if user.account_id is None:
         return False
     return user.account_id == session.account_id and user.role in {
         User.CustomerRole.OWNER,
@@ -65,42 +69,62 @@ def user_can_view_chat(user, session):
 
 
 def user_can_write_chat(user, session):
+    if session.channel == AdminChatSession.Channel.ADMIN_INTERNAL:
+        return bool(user and user.is_authenticated and user.is_staff)
     return user_can_view_chat(user, session) and user.role in {User.CustomerRole.OWNER, User.CustomerRole.OPERATOR}
 
 
-def _resolve_server(user, server_id):
+def _require_session_writer(user, session):
+    if session.channel == AdminChatSession.Channel.ADMIN_INTERNAL:
+        _require_matrix_admin(user)
+    else:
+        _require_chat_writer(user)
+    if not user_can_write_chat(user, session):
+        raise PermissionDenied
+
+
+def _resolve_server(account, server_id):
     if not server_id:
         return None
-    return Server.objects.filter(account=user.account, id=server_id).first()
+    return Server.objects.filter(account=account, id=server_id).first()
 
 
-def _resolve_application(user, application_id, server=None):
+def _resolve_application(account, application_id, server=None):
     if not application_id:
         return None
-    queryset = Application.objects.filter(account=user.account, id=application_id)
+    queryset = Application.objects.filter(account=account, id=application_id)
     if server:
         queryset = queryset.filter(server=server)
     return queryset.first()
 
 
-def create_chat_session(*, user, title="", server_id=None, application_id=None):
-    _require_chat_writer(user)
-    server = _resolve_server(user, server_id)
+def create_chat_session(*, user, title="", server_id=None, application_id=None, channel=AdminChatSession.Channel.PORTAL_CUSTOMER, account_id=None):
+    if channel == AdminChatSession.Channel.ADMIN_INTERNAL:
+        _require_matrix_admin(user)
+        account = Account.objects.filter(id=account_id, status=Account.Status.ACTIVE).first()
+        if account is None:
+            raise ValidationError("Selected account is not available.")
+    else:
+        _require_chat_writer(user)
+        account = user.account
+    server = _resolve_server(account, server_id)
     if server_id and server is None:
         raise ValidationError("Selected server is not available.")
-    application = _resolve_application(user, application_id, server=server)
+    application = _resolve_application(account, application_id, server=server)
     if application_id and application is None:
         raise ValidationError("Selected application is not available.")
     if application and server is None:
         server = application.server
 
-    title_redacted = _safe_text(title or "New chat", limit=MAX_TITLE_LENGTH)
-    context_snapshot = build_safe_context(account=user.account, user=user, server=server)
+    default_title = "New internal chat" if channel == AdminChatSession.Channel.ADMIN_INTERNAL else "New chat"
+    title_redacted = _safe_text(title or default_title, limit=MAX_TITLE_LENGTH)
+    context_snapshot = build_safe_context(account=account, user=user, server=server)
     session = AdminChatSession(
-        account=user.account,
+        account=account,
         user=user,
         server=server,
         application=application,
+        channel=channel,
         title_redacted=title_redacted,
         context_snapshot_redacted=redact_json(context_snapshot),
         last_message_at=timezone.now(),
@@ -110,10 +134,29 @@ def create_chat_session(*, user, title="", server_id=None, application_id=None):
     return session
 
 
+def create_portal_chat_session(*, user, title="", server_id=None, application_id=None):
+    return create_chat_session(
+        user=user,
+        title=title,
+        server_id=server_id,
+        application_id=application_id,
+        channel=AdminChatSession.Channel.PORTAL_CUSTOMER,
+    )
+
+
+def create_admin_chat_session(*, user, account_id, title="", server_id=None, application_id=None):
+    return create_chat_session(
+        user=user,
+        title=title,
+        server_id=server_id,
+        application_id=application_id,
+        channel=AdminChatSession.Channel.ADMIN_INTERNAL,
+        account_id=account_id,
+    )
+
+
 def add_user_message(*, user, session, body, metadata=None):
-    _require_chat_writer(user)
-    if not user_can_write_chat(user, session):
-        raise PermissionDenied
+    _require_session_writer(user, session)
     if session.status != AdminChatSession.Status.OPEN:
         raise ValidationError("Chat session is archived.")
     body_redacted = _safe_text(body, limit=MAX_MESSAGE_LENGTH)
@@ -427,9 +470,7 @@ def _available_tool_keys_for_session(user, session):
 
 
 def create_tool_request(*, user, session, tool_key, params=None, message=None):
-    _require_chat_writer(user)
-    if not user_can_write_chat(user, session):
-        raise PermissionDenied
+    _require_session_writer(user, session)
     if session.status != AdminChatSession.Status.OPEN:
         raise ValidationError("Chat session is archived.")
     if not session.server_id:
@@ -463,10 +504,8 @@ def create_tool_request(*, user, session, tool_key, params=None, message=None):
 
 
 def approve_tool_request(*, user, tool_request):
-    _require_chat_writer(user)
     session = tool_request.session
-    if not user_can_write_chat(user, session):
-        raise PermissionDenied
+    _require_session_writer(user, session)
     if tool_request.status != AdminChatToolRequest.Status.SUGGESTED:
         raise ValidationError("Only suggested tool requests can be approved.")
     if not session.server_id:
@@ -479,7 +518,9 @@ def approve_tool_request(*, user, tool_request):
             tool_key=tool_request.tool_definition.key,
             params=params,
             requested_by=user,
-            requested_by_type=ToolRun.RequestedByType.USER,
+            requested_by_type=ToolRun.RequestedByType.ADMIN
+            if session.channel == AdminChatSession.Channel.ADMIN_INTERNAL
+            else ToolRun.RequestedByType.USER,
         )
     except ToolPolicyDenied as exc:
         tool_request.status = AdminChatToolRequest.Status.FAILED
@@ -570,8 +611,8 @@ def create_tool_build_request_from_chat(
     expected_output_description="",
     message=None,
 ):
-    _require_chat_writer(user)
-    if not user_can_write_chat(user, session):
+    _require_session_writer(user, session)
+    if session.channel != AdminChatSession.Channel.ADMIN_INTERNAL:
         raise PermissionDenied
     if session.status != AdminChatSession.Status.OPEN:
         raise ValidationError("Chat session is archived.")
@@ -630,13 +671,25 @@ def create_tool_build_request_from_chat(
 
 
 def create_chat_report_draft(*, user, session, report_type, message=None):
-    _require_chat_writer(user)
-    if not user_can_write_chat(user, session):
+    _require_session_writer(user, session)
+    if session.channel != AdminChatSession.Channel.ADMIN_INTERNAL:
         raise PermissionDenied
     if session.status != AdminChatSession.Status.OPEN:
         raise ValidationError("Chat session is archived.")
     if report_type not in AdminChatReportDraft.DraftType.values:
         raise ValidationError("Unsupported chat report type.")
+    return _create_report_draft_record(
+        user=user,
+        session=session,
+        report_type=report_type,
+        message=message,
+        status=AdminChatReportDraft.Status.PENDING_REVIEW,
+        reasoning_summary="Deterministic chat report draft created from safe context for Matrix Admin review.",
+        system_message=f"Report draft created: {report_type}",
+    )
+
+
+def _create_report_draft_record(*, user, session, report_type, message=None, status, reasoning_summary, system_message):
     context = build_safe_context(account=session.account, user=user, server=session.server)
     safe_context = redact_json(context)
     content = _report_draft_content(session, report_type, safe_context)
@@ -661,7 +714,7 @@ def create_chat_report_draft(*, user, session, report_type, message=None):
     AdminChatMessage.objects.create(
         session=session,
         sender_type=AdminChatMessage.SenderType.SYSTEM,
-        body_redacted=f"Report draft created: {draft.report_type}",
+        body_redacted=_safe_text(system_message, limit=255),
         metadata_redacted={
             "source": "chat_report_draft",
             "report_draft_id": str(draft.id),
@@ -685,9 +738,35 @@ def create_chat_report_draft(*, user, session, report_type, message=None):
                 "title": draft.title_redacted,
             }
         ),
-        reasoning_summary="Deterministic chat report draft created from safe context for Matrix Admin review.",
+        reasoning_summary=reasoning_summary,
     )
     return draft
+
+
+def create_chat_report(*, user, session, report_type, message=None):
+    _require_session_writer(user, session)
+    if session.status != AdminChatSession.Status.OPEN:
+        raise ValidationError("Chat session is archived.")
+    if report_type not in AdminChatReportDraft.DraftType.values:
+        raise ValidationError("Unsupported chat report type.")
+    if session.channel == AdminChatSession.Channel.PORTAL_CUSTOMER and report_type != AdminChatReportDraft.DraftType.CUSTOMER_SUMMARY:
+        raise ValidationError("Portal chat can create customer summary reports only.")
+    draft = _create_report_draft_record(
+        user=user,
+        session=session,
+        report_type=report_type,
+        message=message,
+        status=AdminChatReportDraft.Status.APPROVED,
+        reasoning_summary="Safe chat report created for immediate conversion after safety validation.",
+        system_message=f"Report prepared: {report_type}",
+    )
+    note = (
+        "Portal self-service chat report auto-converted after safety validation."
+        if session.channel == AdminChatSession.Channel.PORTAL_CUSTOMER
+        else "Matrix Admin internal chat report auto-converted after safety validation."
+    )
+    report = _convert_chat_report_draft_record(draft, reviewer=user if user.is_staff else None, review_notes=note)
+    return draft, report
 
 
 def review_chat_report_draft(draft, *, reviewer, decision, notes=""):
@@ -713,6 +792,10 @@ def convert_chat_report_draft(draft, *, reviewer):
     _require_matrix_admin(reviewer)
     if draft.status != AdminChatReportDraft.Status.APPROVED:
         raise ValidationError("Only approved report drafts can be converted.")
+    return _convert_chat_report_draft_record(draft, reviewer=reviewer, review_notes="")
+
+
+def _convert_chat_report_draft_record(draft, *, reviewer=None, review_notes=""):
     report = Report.objects.create(
         account=draft.session.account,
         server=draft.session.server,
@@ -726,7 +809,7 @@ def convert_chat_report_draft(draft, *, reviewer):
                 **(draft.source_snapshot_redacted or {}),
                 "chat_session_id": str(draft.session_id),
                 "chat_report_draft_id": str(draft.id),
-                "reviewed_by": str(reviewer.id),
+                "reviewed_by": str(reviewer.id) if reviewer else "",
             }
         ),
         generated_at=timezone.now(),
@@ -739,12 +822,25 @@ def convert_chat_report_draft(draft, *, reviewer):
             body_redacted=_safe_text(section.get("body", ""), limit=8000),
             data_redacted=redact_json(section.get("data", {})),
             order=index * 10,
-        )
+    )
     draft.status = AdminChatReportDraft.Status.CONVERTED
     draft.converted_report = report
     draft.reviewed_by = reviewer
     draft.reviewed_at = timezone.now()
-    draft.save(update_fields=["status", "converted_report", "reviewed_by", "reviewed_at", "updated_at"])
+    if review_notes:
+        draft.review_notes_redacted = _safe_text(review_notes, limit=1000)
+        draft.save(
+            update_fields=[
+                "status",
+                "converted_report",
+                "reviewed_by",
+                "reviewed_at",
+                "review_notes_redacted",
+                "updated_at",
+            ]
+        )
+    else:
+        draft.save(update_fields=["status", "converted_report", "reviewed_by", "reviewed_at", "updated_at"])
     AdminChatDecision.objects.create(
         session=draft.session,
         decision_type=AdminChatDecision.DecisionType.REPORT_REQUEST,

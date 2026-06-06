@@ -11,6 +11,7 @@ from apps.ai_chat.services import (
     add_user_message,
     add_user_message_and_response,
     approve_tool_request,
+    create_admin_chat_session,
     create_tool_build_request_from_chat,
     create_chat_session,
     create_tool_request,
@@ -338,10 +339,15 @@ class AdminChatTests(TestCase):
         self.assertEqual(AgentJob.objects.count(), 0)
 
     def test_owner_can_create_command_template_tool_build_proposal_from_chat(self):
-        session = create_chat_session(user=self.owner, title="Build tool", server_id=self.server.id)
+        session = create_admin_chat_session(
+            user=self.staff,
+            account_id=self.account.id,
+            title="Build tool",
+            server_id=self.server.id,
+        )
 
         build_request, proposal = create_tool_build_request_from_chat(
-            user=self.owner,
+            user=self.staff,
             session=session,
             title="Apache 5xx summary",
             desired_tool_key="apache_5xx_summary",
@@ -362,7 +368,12 @@ class AdminChatTests(TestCase):
         self.assertEqual(AgentJob.objects.count(), 0)
 
     def test_viewer_cannot_create_tool_build_proposal_from_chat(self):
-        session = create_chat_session(user=self.owner, title="Build tool", server_id=self.server.id)
+        session = create_admin_chat_session(
+            user=self.staff,
+            account_id=self.account.id,
+            title="Build tool",
+            server_id=self.server.id,
+        )
 
         with self.assertRaises(PermissionDenied):
             create_tool_build_request_from_chat(
@@ -378,10 +389,15 @@ class AdminChatTests(TestCase):
         self.assertEqual(ToolBuildProposal.objects.count(), 0)
 
     def test_dangerous_command_template_from_chat_is_rejected_and_not_executed(self):
-        session = create_chat_session(user=self.owner, title="Build tool", server_id=self.server.id)
+        session = create_admin_chat_session(
+            user=self.staff,
+            account_id=self.account.id,
+            title="Build tool",
+            server_id=self.server.id,
+        )
 
         build_request, proposal = create_tool_build_request_from_chat(
-            user=self.owner,
+            user=self.staff,
             session=session,
             title="Restart nginx",
             desired_tool_key="restart_nginx",
@@ -396,3 +412,19 @@ class AdminChatTests(TestCase):
         self.assertTrue(any("forbidden" in error.lower() for error in proposal.validation_errors))
         self.assertEqual(ToolRun.objects.count(), 0)
         self.assertEqual(AgentJob.objects.count(), 0)
+
+    def test_portal_owner_cannot_create_tool_build_proposal_from_portal_chat(self):
+        session = create_chat_session(user=self.owner, title="Portal build", server_id=self.server.id)
+
+        with self.assertRaises(PermissionDenied):
+            create_tool_build_request_from_chat(
+                user=self.owner,
+                session=session,
+                title="Blocked portal proposal",
+                desired_tool_key="blocked_portal_tool",
+                command_argv_template=["apachectl", "-S"],
+                allowed_binaries=["apachectl"],
+            )
+
+        self.assertEqual(ToolBuildRequest.objects.count(), 0)
+        self.assertEqual(ToolBuildProposal.objects.count(), 0)
