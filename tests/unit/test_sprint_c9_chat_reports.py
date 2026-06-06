@@ -132,6 +132,7 @@ class SprintC9ChatReportsTests(TestCase):
             server=self.server,
             requested_by=self.admin,
             status=BaselineScan.Status.SUCCEEDED,
+            profile_key="debian_nginx_opt",
             summary={"services": 5, "domains": 2, "applications": 1, "findings": 1, "token": "abc123"},
         )
         Finding.objects.create(
@@ -219,6 +220,51 @@ class SprintC9ChatReportsTests(TestCase):
         self.assertEqual(draft.status, AdminChatReportDraft.Status.CONVERTED)
         self.assertEqual(draft.converted_report, report)
         self.assertEqual(report.sections.count(), len(draft.sections_redacted))
+
+    def test_customer_summary_final_report_sections_are_human_readable_only(self):
+        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+        draft = create_chat_report_draft(
+            user=self.owner,
+            session=session,
+            report_type=AdminChatReportDraft.DraftType.CUSTOMER_SUMMARY,
+        )
+        review_chat_report_draft(draft, reviewer=self.admin, decision=AdminChatReportDraft.Status.APPROVED)
+        report = convert_chat_report_draft(draft, reviewer=self.admin)
+
+        rendered_body = "\n".join(section.body_redacted for section in report.sections.order_by("order"))
+        rendered_data = "".join(str(section.data_redacted) for section in report.sections.order_by("order"))
+
+        self.assertNotIn("{", rendered_body)
+        self.assertNotIn("}", rendered_body)
+        for forbidden in ("server_name", "open_findings", "server_status", "advisory_only", "tool_runs"):
+            self.assertNotIn(forbidden, rendered_body)
+        self.assertEqual(rendered_data.replace("{}", "").strip(), "")
+        self.assertIn("The server is currently active.", rendered_body)
+        self.assertIn("No automated action is performed from this report.", rendered_body)
+
+    def test_technical_internal_final_report_sections_are_readable_not_raw_payloads(self):
+        session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)
+        draft = create_chat_report_draft(
+            user=self.owner,
+            session=session,
+            report_type=AdminChatReportDraft.DraftType.TECHNICAL_INTERNAL,
+        )
+        review_chat_report_draft(draft, reviewer=self.admin, decision=AdminChatReportDraft.Status.APPROVED)
+        report = convert_chat_report_draft(draft, reviewer=self.admin)
+
+        rendered_body = "\n".join(section.body_redacted for section in report.sections.order_by("order"))
+        rendered_data = "".join(str(section.data_redacted) for section in report.sections.order_by("order"))
+
+        self.assertNotIn("{'tool_runs'", rendered_body)
+        self.assertNotIn("{'findings'", rendered_body)
+        self.assertNotIn("stdout_redacted", rendered_body)
+        self.assertNotIn("raw-secret", rendered_body)
+        self.assertNotIn("supersecret", rendered_body)
+        self.assertEqual(rendered_data.replace("{}", "").strip(), "")
+        self.assertIn("Server status: active", rendered_body)
+        self.assertIn("Profile: debian_nginx_opt", rendered_body)
+        self.assertIn("Recent read-only tool activity:", rendered_body)
+        self.assertIn("- apache_5xx_summary: succeeded", rendered_body)
 
     def test_non_admin_cannot_review_or_convert(self):
         session = create_chat_session(user=self.owner, title="Reports", server_id=self.server.id)

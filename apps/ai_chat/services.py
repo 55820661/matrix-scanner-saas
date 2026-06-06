@@ -221,61 +221,33 @@ def _format_summary_response(context):
 def _technical_report_sections(context):
     server = context.get("server_summary") or {}
     baseline = context.get("baseline_summary") or {}
-    findings = context.get("findings_summary") or []
-    tool_runs = context.get("recent_tool_runs") or []
     sections = [
         {
             "section_type": ReportSection.SectionType.SUMMARY,
             "title": "Technical summary",
             "body": (
-                f"Server status: {server.get('status') or 'unknown'}. "
-                f"Agent: {server.get('agent_status') or 'unknown'}. "
-                f"Latest baseline: {baseline.get('status') or 'not available'}."
+                f"Server status: {server.get('status') or 'unknown'}\n"
+                f"Agent status: {server.get('agent_status') or 'unknown'}\n"
+                f"Latest baseline: {baseline.get('status') or 'not available'}\n"
+                f"Profile: {baseline.get('profile_key') or 'not available'}"
             ),
-            "data": {
-                "server_name": server.get("name", ""),
-                "server_status": server.get("status", ""),
-                "agent_status": server.get("agent_status", ""),
-                "baseline_status": baseline.get("status", ""),
-                "profile_key": baseline.get("profile_key", ""),
-            },
+            "data": {},
         }
     ]
     sections.append(
         {
             "section_type": ReportSection.SectionType.TOOLS_EXECUTED,
             "title": "Recent tool activity",
-            "body": "Recent read-only tool runs summarized from safe context.",
-            "data": {
-                "tool_runs": [
-                    {
-                        "tool_key": item.get("tool_key", ""),
-                        "tool_name": item.get("tool_name", ""),
-                        "status": item.get("status", ""),
-                        "result_summary": item.get("result_summary", ""),
-                        "finished_at": item.get("finished_at", ""),
-                    }
-                    for item in tool_runs[:10]
-                ]
-            },
+            "body": _technical_tool_activity_body(context),
+            "data": {},
         }
     )
     sections.append(
         {
             "section_type": ReportSection.SectionType.FINDINGS,
             "title": "Findings snapshot",
-            "body": f"{len(findings[:10])} safe finding summary row(s) included.",
-            "data": {
-                "findings": [
-                    {
-                        "title": item.get("title", ""),
-                        "severity": item.get("severity", ""),
-                        "status": item.get("status", ""),
-                        "evidence_summary": item.get("evidence_summary", ""),
-                    }
-                    for item in findings[:10]
-                ]
-            },
+            "body": _technical_findings_body(context),
+            "data": {},
         }
     )
     sections.append(
@@ -286,7 +258,7 @@ def _technical_report_sections(context):
                 "This draft is based on redacted safe context only. Raw ToolRun output, AgentJob output, logs, "
                 "and environment data are intentionally excluded."
             ),
-            "data": {"safe_context_only": True},
+            "data": {},
         }
     )
     return sections
@@ -301,29 +273,16 @@ def _customer_report_sections(context):
             "section_type": ReportSection.SectionType.SUMMARY,
             "title": "Customer summary",
             "body": (
-                f"Server {server.get('name') or 'selected server'} is currently {server.get('status') or 'under review'}. "
+                f"The server is currently {server.get('status') or 'under review'}. "
                 f"There are {len(open_findings)} open finding(s) in the current safe summary."
             ),
-            "data": {
-                "server_name": server.get("name", ""),
-                "server_status": server.get("status", ""),
-                "open_findings": len(open_findings),
-            },
+            "data": {},
         },
         {
             "section_type": ReportSection.SectionType.FINDINGS,
             "title": "Customer-visible findings",
-            "body": "High-level safe findings summary only.",
-            "data": {
-                "findings": [
-                    {
-                        "title": item.get("title", ""),
-                        "severity": item.get("severity", ""),
-                        "status": item.get("status", ""),
-                    }
-                    for item in findings[:8]
-                ]
-            },
+            "body": _customer_findings_body(context),
+            "data": {},
         },
         {
             "section_type": ReportSection.SectionType.RECOMMENDATIONS,
@@ -332,10 +291,50 @@ def _customer_report_sections(context):
                 "Advisory only: review the summarized findings and confirm priorities in the normal operational workflow. "
                 "No automated action is performed from this report."
             ),
-            "data": {"advisory_only": True},
+            "data": {},
         },
     ]
     return sections
+
+
+def _render_multiline_rows(rows, *, empty_text):
+    cleaned = [redact_secrets((row or "").strip()) for row in rows if (row or "").strip()]
+    return "\n".join(cleaned) if cleaned else empty_text
+
+
+def _technical_tool_activity_body(context):
+    tool_runs = context.get("recent_tool_runs") or []
+    lines = ["Recent read-only tool activity:"]
+    for item in tool_runs[:10]:
+        line = f"- {item.get('tool_key', 'tool')}: {item.get('status', 'unknown')}"
+        finished_at = item.get("finished_at") or ""
+        result_summary = item.get("result_summary") or ""
+        if finished_at:
+            line += f" at {finished_at}"
+        if result_summary:
+            line += f" - {result_summary}"
+        lines.append(line)
+    return _render_multiline_rows(lines, empty_text="No recent read-only tool activity is currently included.")
+
+
+def _technical_findings_body(context):
+    findings = context.get("findings_summary") or []
+    lines = []
+    for item in findings[:10]:
+        line = f"- {item.get('title', 'Finding')}: {item.get('severity', 'info')} ({item.get('status', 'open')})"
+        evidence = item.get("evidence_summary") or ""
+        if evidence:
+            line += f" - {evidence}"
+        lines.append(line)
+    return _render_multiline_rows(lines, empty_text="No safe finding summary rows are currently included.")
+
+
+def _customer_findings_body(context):
+    findings = context.get("findings_summary") or []
+    lines = []
+    for item in findings[:8]:
+        lines.append(f"- {item.get('title', 'Finding')}: {item.get('severity', 'info')} ({item.get('status', 'open')})")
+    return _render_multiline_rows(lines, empty_text="No customer-visible findings are currently listed in the safe summary.")
 
 
 def _report_draft_content(session, report_type, context):

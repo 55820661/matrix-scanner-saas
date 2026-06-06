@@ -1693,3 +1693,33 @@ Verification:
 
 Testing note:
 - Full suite was run for Sprint C9 because this sprint changed report redaction, report visibility, review conversion, and Portal permissions around chat-generated reports.
+
+## 2026-06-06 - Chat Report Rendering Fix Start
+
+Intent:
+- Apply a narrow fix so final chat-generated reports render readable summaries instead of raw dict/list payloads.
+
+Scope:
+- Limit changes to `technical_internal` and `customer_summary` chat report draft/report conversion rendering.
+- Keep report approval flow, tool execution, safe context schema, and policies unchanged.
+
+Out of scope:
+- ToolRun or AgentJob execution changes.
+- Safe Context schema changes.
+- Telegram, live AI, or migrations unless unexpectedly required.
+
+Result:
+- Reworked chat-report section generation so `technical_internal` and `customer_summary` use readable multiline summaries instead of dict/list payload bodies.
+- Removed structured payloads from chat-generated final report section `data_redacted` where they were only being shown as raw objects in Portal.
+- Kept technical detail available as readable lines for status, profile, findings, and recent tool activity.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c9_chat_reports --noinput` passed: 11 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c9_chat_reports tests.unit.test_admin_chat tests.unit.test_sprint11_reports --noinput` passed: 40 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Testing note:
+- Full suite was not run for this fix because the change stayed inside chat-report rendering and conversion output formatting.
+- Focused regression was run against chat reports, admin chat, and report services because this fix touched report redaction presentation and conversion output only.

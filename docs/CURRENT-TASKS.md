@@ -2221,3 +2221,41 @@ Verification:
 Completion status:
 - Sprint C9 implementation and verification are complete.
 - Full suite was run because C9 changed report redaction, report visibility, and review conversion behavior.
+
+## Active Task - Chat Report Rendering Fix
+
+Task:
+- Fix final chat-generated report rendering so `technical_internal` and `customer_summary` do not expose dict/list payloads in report sections.
+
+Scope:
+- Adjust chat report section generation and conversion output only.
+- Keep approval flow, ToolRun/AgentJob execution, Safe Context schema, and policies unchanged.
+
+Out of scope:
+- Tool execution changes.
+- AgentJob changes.
+- Telegram.
+- Live AI.
+- Migrations unless unexpectedly required.
+
+Next steps:
+- Replace raw structured section payloads with readable multiline summaries.
+- Ensure final chat-generated report sections store empty `data_redacted` where raw payloads are not needed.
+- Add focused tests plus the requested chat/report regression.
+
+Progress:
+- Replaced raw dict/list-style chat report section payloads with readable multiline summary text.
+- Cleared chat-generated final section `data_redacted` payloads where they were previously shown as raw objects in Portal.
+- Kept `technical_internal` readable with structured lines for server status, baseline profile, tool activity, and finding summaries.
+- Added focused tests for final `customer_summary` and `technical_internal` report rendering safety.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c9_chat_reports --noinput` passed: 11 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c9_chat_reports tests.unit.test_admin_chat tests.unit.test_sprint11_reports --noinput` passed: 40 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- Chat report rendering fix is complete.
+- Full suite was not run because the change stayed inside chat-report rendering and conversion presentation, not runtime or policy execution.
