@@ -2,233 +2,332 @@
 
 {% block title %}Internal Chat Session | {{ site_title|default:"Django site admin" }}{% endblock %}
 
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .chat-page {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(360px, 0.9fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .chat-shell,
+    .chat-sidebar section {
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      border-radius: 6px;
+      background: var(--body-bg, #fff);
+      overflow: hidden;
+    }
+    .chat-shell header,
+    .chat-sidebar h2 {
+      margin: 0;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--hairline-color, #d4d4d4);
+      background: var(--darkened-bg, #f8f8f8);
+    }
+    .chat-shell .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--hairline-color, #d4d4d4);
+      background: var(--body-bg, #fff);
+    }
+    .chat-shell .meta span {
+      padding: 5px 8px;
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      border-radius: 999px;
+      background: var(--darkened-bg, #f8f8f8);
+      color: var(--body-quiet-color, #666);
+    }
+    .chat-thread {
+      padding: 16px;
+      max-height: 70vh;
+      overflow: auto;
+      background: linear-gradient(to bottom, #fff, #fafafa);
+    }
+    .chat-bubble {
+      max-width: 82%;
+      margin: 0 0 12px;
+      padding: 12px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      background: #fff;
+    }
+    .chat-bubble.user {
+      margin-left: auto;
+      background: #eaf3ff;
+    }
+    .chat-bubble.assistant {
+      background: #f5f7fa;
+    }
+    .chat-bubble.system {
+      background: #fff7e6;
+    }
+    .chat-bubble strong {
+      display: block;
+      margin-bottom: 6px;
+      text-transform: capitalize;
+    }
+    .chat-compose {
+      padding: 16px;
+      border-top: 1px solid var(--hairline-color, #d4d4d4);
+      background: var(--body-bg, #fff);
+    }
+    .chat-sidebar {
+      display: grid;
+      gap: 16px;
+    }
+    .chat-sidebar .body {
+      padding: 14px 16px 16px;
+    }
+    .chat-sidebar .submit-row {
+      margin: 0;
+      padding: 10px 0 0;
+      background: transparent;
+      border: 0;
+    }
+    .chat-sidebar table {
+      width: 100%;
+    }
+    @media (max-width: 1180px) {
+      .chat-page {
+        grid-template-columns: 1fr;
+      }
+      .chat-thread {
+        max-height: none;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin_chat:sessions' %}">Internal Chat</a>
+    &rsaquo; {{ session.title_redacted|default:"Session" }}
+  </div>
+{% endblock %}
+
 {% block content %}
-  <p><a href="{% url 'admin_chat:sessions' %}">Back to internal chat</a></p>
-
-  <h1>{{ session.title_redacted|default:"Internal chat session" }}</h1>
-  <p>
-    Account: {{ session.account.name }}
-    {% if session.server %} | Server: {{ session.server.name }}{% endif %}
-    {% if session.application %} | Application: {{ session.application.name }}{% endif %}
-    | Status: {{ session.status }}
-  </p>
-
-  <div class="module aligned">
-    <h2>Messages</h2>
-    {% for message in chat_messages %}
-      <div class="form-row">
-        <strong>{{ message.sender_type }}</strong><br>
-        <div>{{ message.body_redacted|linebreaksbr }}</div>
-        <div class="help">{{ message.created_at }}</div>
+  <div class="chat-page">
+    <section class="chat-shell">
+      <header>
+        <h1 style="margin: 0;">{{ session.title_redacted|default:"Internal chat session" }}</h1>
+      </header>
+      <div class="meta">
+        <span>Account: {{ session.account.name }}</span>
+        {% if session.server %}<span>Server: {{ session.server.name }}</span>{% endif %}
+        {% if session.application %}<span>Application: {{ session.application.name }}</span>{% endif %}
+        <span>Status: {{ session.status }}</span>
       </div>
-    {% empty %}
-      <p>No messages yet.</p>
-    {% endfor %}
-  </div>
-
-  {% if can_write %}
-    <div class="module aligned">
-      <h2>Add message</h2>
-      <form method="post">
-        {% csrf_token %}
-        <div class="form-row">
-          <label for="body">Message</label>
-          <textarea id="body" name="body" rows="5" style="width: 100%; box-sizing: border-box;"></textarea>
+      <div class="chat-thread">
+        {% for message in chat_messages %}
+          <article class="chat-bubble {{ message.sender_type }}">
+            <strong>{{ message.sender_type }}</strong>
+            <div>{{ message.body_redacted|linebreaksbr }}</div>
+            <div class="help">{{ message.created_at }}</div>
+          </article>
+        {% empty %}
+          <p>No messages yet.</p>
+        {% endfor %}
+      </div>
+      {% if can_write %}
+        <div class="chat-compose">
+          <form method="post">
+            {% csrf_token %}
+            <div class="form-row">
+              <label for="body">Message</label>
+              <textarea id="body" name="body" rows="5" style="width: 100%; box-sizing: border-box;"></textarea>
+            </div>
+            <div class="submit-row">
+              <input type="submit" class="default" value="Send message">
+            </div>
+          </form>
         </div>
-        <div class="submit-row">
-          <input type="submit" class="default" value="Send">
-        </div>
-      </form>
-    </div>
-
-    <div class="module aligned">
-      <h2>Tool requests</h2>
-      {% if session.server %}
-        <form method="post" action="{% url 'admin_chat:tool_request_create' session.id %}">
-          {% csrf_token %}
-          <div class="form-row">
-            <label for="tool_key">Available tool</label>
-            <select id="tool_key" name="tool_key">
-              {% for tool in available_tools %}
-                <option value="{{ tool.key }}">{{ tool.key }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="submit-row">
-            <input type="submit" value="Request tool">
-          </div>
-        </form>
-      {% else %}
-        <p>Tool requests require a server-scoped chat session.</p>
       {% endif %}
-    </div>
+    </section>
 
-    <div class="module aligned">
-      <h2>Tool builder proposal</h2>
-      <p>Creates a draft command-template proposal for internal review only. It does not run or enable a tool.</p>
-      <form method="post" action="{% url 'admin_chat:tool_build_create' session.id %}">
-        {% csrf_token %}
-        <div class="form-row">
-          <label for="build_title">Title</label>
-          <input id="build_title" name="title" type="text" style="width: 28rem;">
+    <aside class="chat-sidebar">
+      <section>
+        <h2>Tool requests</h2>
+        <div class="body">
+          {% if can_write and session.server %}
+            <form method="post" action="{% url 'admin_chat:tool_request_create' session.id %}">
+              {% csrf_token %}
+              <div class="form-row">
+                <label for="tool_key">Available tool</label>
+                <select id="tool_key" name="tool_key" style="width: 100%;">
+                  {% for tool in available_tools %}
+                    <option value="{{ tool.key }}">{{ tool.key }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="submit-row">
+                <input type="submit" value="Request tool">
+              </div>
+            </form>
+          {% elif not session.server %}
+            <p>Tool requests require a server-scoped chat session.</p>
+          {% endif %}
+          <table id="result_list">
+            <thead>
+              <tr>
+                <th>Tool</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for request in tool_requests %}
+                <tr>
+                  <td>{{ request.tool_definition.key }}</td>
+                  <td>{{ request.status }}</td>
+                  <td>
+                    {% if can_write and request.status == "suggested" %}
+                      <form method="post" action="{% url 'admin_chat:tool_request_approve' session.id request.id %}">
+                        {% csrf_token %}
+                        <input type="submit" value="Approve">
+                      </form>
+                    {% else %}
+                      {{ request.tool_run.id|default:"-" }}
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="3">No tool requests yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
-        <div class="form-row">
-          <label for="desired_tool_key">Tool key</label>
-          <input id="desired_tool_key" name="desired_tool_key" type="text" style="width: 28rem;">
-        </div>
-        <div class="form-row">
-          <label for="description">Description</label>
-          <textarea id="description" name="description" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-        </div>
-        <div class="form-row">
-          <label for="command_argv_template">Command argv template, one argument per line</label>
-          <textarea id="command_argv_template" name="command_argv_template" rows="6" style="width: 100%; box-sizing: border-box;"></textarea>
-        </div>
-        <div class="form-row">
-          <label for="allowed_binaries">Allowed binaries, one per line</label>
-          <textarea id="allowed_binaries" name="allowed_binaries" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-        </div>
-        <div class="form-row">
-          <label for="blocked_tokens">Blocked tokens, one per line</label>
-          <textarea id="blocked_tokens" name="blocked_tokens" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-        </div>
-        <div class="form-row">
-          <label for="expected_output_description">Expected output description</label>
-          <textarea id="expected_output_description" name="expected_output_description" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-        </div>
-        <div class="submit-row">
-          <input type="submit" value="Create proposal">
-        </div>
-      </form>
-    </div>
+      </section>
 
-    <div class="module aligned">
-      <h2>Reports</h2>
-      <form method="post" action="{% url 'admin_chat:report_create' session.id %}">
-        {% csrf_token %}
-        <div class="form-row">
-          <label for="report_type">Immediate report type</label>
-          <select id="report_type" name="report_type">
-            {% for value, label in chat_report_types %}
-              <option value="{{ value }}">{{ label }}</option>
-            {% endfor %}
-          </select>
+      <section>
+        <h2>Tool Builder</h2>
+        <div class="body">
+          <p>Internal-only command-template proposals. No execution or enablement happens here.</p>
+          {% if can_write %}
+            <form method="post" action="{% url 'admin_chat:tool_build_create' session.id %}">
+              {% csrf_token %}
+              <div class="form-row">
+                <label for="build_title">Title</label>
+                <input id="build_title" name="title" type="text" style="width: 100%;">
+              </div>
+              <div class="form-row">
+                <label for="desired_tool_key">Tool key</label>
+                <input id="desired_tool_key" name="desired_tool_key" type="text" style="width: 100%;">
+              </div>
+              <div class="form-row">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
+              </div>
+              <div class="form-row">
+                <label for="command_argv_template">Command argv template, one argument per line</label>
+                <textarea id="command_argv_template" name="command_argv_template" rows="5" style="width: 100%; box-sizing: border-box;"></textarea>
+              </div>
+              <div class="form-row">
+                <label for="allowed_binaries">Allowed binaries, one per line</label>
+                <textarea id="allowed_binaries" name="allowed_binaries" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
+              </div>
+              <div class="form-row">
+                <label for="blocked_tokens">Blocked tokens, one per line</label>
+                <textarea id="blocked_tokens" name="blocked_tokens" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
+              </div>
+              <div class="form-row">
+                <label for="expected_output_description">Expected output description</label>
+                <textarea id="expected_output_description" name="expected_output_description" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
+              </div>
+              <div class="submit-row">
+                <input type="submit" value="Create proposal">
+              </div>
+            </form>
+          {% endif %}
+          <table id="result_list">
+            <thead>
+              <tr>
+                <th>Tool key</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for build_request in tool_build_requests %}
+                <tr>
+                  <td>{{ build_request.desired_tool_key }}</td>
+                  <td>
+                    {% with proposal=build_request.proposals.first %}
+                      {% if proposal %}{{ proposal.status }}{% else %}{{ build_request.status }}{% endif %}
+                    {% endwith %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="2">No tool builder requests yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
-        <div class="submit-row">
-          <input type="submit" class="default" value="Create final report">
-        </div>
-      </form>
-      <form method="post" action="{% url 'admin_chat:report_draft_create' session.id %}">
-        {% csrf_token %}
-        <div class="form-row">
-          <label for="draft_report_type">Manual review draft type</label>
-          <select id="draft_report_type" name="report_type">
-            {% for value, label in chat_report_types %}
-              <option value="{{ value }}">{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="submit-row">
-          <input type="submit" value="Create manual review draft">
-        </div>
-      </form>
-    </div>
-  {% endif %}
+      </section>
 
-  <div class="module">
-    <h2>Requested tools</h2>
-    <table id="result_list">
-      <thead>
-        <tr>
-          <th>Tool</th>
-          <th>Status</th>
-          <th>ToolRun</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for request in tool_requests %}
-          <tr>
-            <td>{{ request.tool_definition.key }}</td>
-            <td>{{ request.status }}</td>
-            <td>{{ request.tool_run.id|default:"-" }}</td>
-            <td>
-              {% if can_write and request.status == "suggested" %}
-                <form method="post" action="{% url 'admin_chat:tool_request_approve' session.id request.id %}">
-                  {% csrf_token %}
-                  <input type="submit" value="Approve">
-                </form>
-              {% else %}
-                -
-              {% endif %}
-            </td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="4">No tool requests yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="module">
-    <h2>Tool builder requests</h2>
-    <table id="result_list">
-      <thead>
-        <tr>
-          <th>Tool key</th>
-          <th>Execution type</th>
-          <th>Status</th>
-          <th>Proposal status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for build_request in tool_build_requests %}
-          <tr>
-            <td>{{ build_request.desired_tool_key }}</td>
-            <td>{{ build_request.desired_execution_type }}</td>
-            <td>{{ build_request.status }}</td>
-            <td>
-              {% with proposal=build_request.proposals.first %}
-                {% if proposal %}{{ proposal.status }}{% else %}-{% endif %}
-              {% endwith %}
-            </td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="4">No tool builder requests yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="module">
-    <h2>Report history</h2>
-    <table id="result_list">
-      <thead>
-        <tr>
-          <th>Type</th>
-          <th>Status</th>
-          <th>Title</th>
-          <th>Final report</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for draft in report_drafts %}
-          <tr>
-            <td>{{ draft.report_type }}</td>
-            <td>{{ draft.status }}</td>
-            <td>{{ draft.title_redacted }}</td>
-            <td>
-              {% if draft.converted_report %}
-                <a href="{% url 'admin:reports_report_change' draft.converted_report.id %}">{{ draft.converted_report.title }}</a>
-              {% else %}
-                -
-              {% endif %}
-            </td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="4">No report entries yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      <section>
+        <h2>Reports</h2>
+        <div class="body">
+          {% if can_write %}
+            <form method="post" action="{% url 'admin_chat:report_create' session.id %}">
+              {% csrf_token %}
+              <div class="form-row">
+                <label for="report_type">Immediate report type</label>
+                <select id="report_type" name="report_type" style="width: 100%;">
+                  {% for value, label in chat_report_types %}
+                    <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="submit-row">
+                <input type="submit" class="default" value="Create final report">
+              </div>
+            </form>
+            <form method="post" action="{% url 'admin_chat:report_draft_create' session.id %}">
+              {% csrf_token %}
+              <div class="form-row">
+                <label for="draft_report_type">Manual review draft type</label>
+                <select id="draft_report_type" name="report_type" style="width: 100%;">
+                  {% for value, label in chat_report_types %}
+                    <option value="{{ value }}">{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="submit-row">
+                <input type="submit" value="Create manual review draft">
+              </div>
+            </form>
+          {% endif %}
+          <table id="result_list">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Final report</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for draft in report_drafts %}
+                <tr>
+                  <td>{{ draft.report_type }}</td>
+                  <td>{{ draft.status }}</td>
+                  <td>
+                    {% if draft.converted_report %}
+                      <a href="{% url 'admin:reports_report_change' draft.converted_report.id %}">{{ draft.converted_report.title }}</a>
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="3">No report entries yet.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </aside>
   </div>
 {% endblock %}

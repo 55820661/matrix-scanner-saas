@@ -1,0 +1,28 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+  <div id="content-main">
+    <div class="app-ai-chat module">
+      <table>
+        <caption>
+          <a href="{% url 'admin_chat:sessions' %}" class="section" title="Open staff-only internal chat">
+            Internal Chat
+          </a>
+        </caption>
+        <tbody>
+          <tr class="model-internalchat">
+            <th scope="row">
+              <a href="{% url 'admin_chat:sessions' %}">Matrix Admin AI Chatbot</a>
+            </th>
+            <td>
+              Staff-only internal chat for safe context, approved read-only tool requests, tool proposals, and report generation.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+  </div>
+{% endblock %}

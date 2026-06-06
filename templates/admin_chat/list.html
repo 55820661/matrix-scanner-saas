@@ -2,75 +2,173 @@
 
 {% block title %}Internal Chat | {{ site_title|default:"Django site admin" }}{% endblock %}
 
-{% block content %}
-  <h1>Internal Chat</h1>
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .internal-chat-grid {
+      display: grid;
+      grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .internal-chat-hero {
+      margin: 0 0 16px;
+      padding: 16px 18px;
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      border-radius: 6px;
+      background: var(--darkened-bg, #f8f8f8);
+    }
+    .internal-chat-hero p {
+      margin: 6px 0 0;
+      color: var(--body-quiet-color, #666);
+    }
+    .internal-chat-panel,
+    .internal-chat-list {
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      border-radius: 6px;
+      background: var(--body-bg, #fff);
+      overflow: hidden;
+    }
+    .internal-chat-panel h2,
+    .internal-chat-list h2 {
+      margin: 0;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--hairline-color, #d4d4d4);
+      background: var(--darkened-bg, #f8f8f8);
+    }
+    .internal-chat-panel .body,
+    .internal-chat-list .body {
+      padding: 16px;
+    }
+    .internal-chat-panel .submit-row {
+      margin: 0;
+      padding: 12px 16px 16px;
+      border-top: 0;
+      background: transparent;
+    }
+    .internal-chat-meta {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 0 0 14px;
+    }
+    .internal-chat-meta div {
+      padding: 10px 12px;
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      border-radius: 6px;
+      background: var(--darkened-bg, #f8f8f8);
+    }
+    .internal-chat-meta strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+    @media (max-width: 1100px) {
+      .internal-chat-grid {
+        grid-template-columns: 1fr;
+      }
+      .internal-chat-meta {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+{% endblock %}
 
-  <div class="module aligned">
-    <h2>Start internal chat session</h2>
-    <form method="post" action="{% url 'admin_chat:session_start' %}">
-      {% csrf_token %}
-      <div class="form-row">
-        <label for="title">Title</label>
-        <input id="title" type="text" name="title" style="width: 28rem;">
-      </div>
-      <div class="form-row">
-        <label for="account_id">Account</label>
-        <select id="account_id" name="account_id" required>
-          <option value="">Select account</option>
-          {% for account in accounts %}
-            <option value="{{ account.id }}">{{ account.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-row">
-        <label for="server_id">Server</label>
-        <select id="server_id" name="server_id">
-          <option value="">Account-only scope</option>
-          {% for server in servers %}
-            <option value="{{ server.id }}">{{ server.account.name }} / {{ server.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-row">
-        <label for="application_id">Application</label>
-        <select id="application_id" name="application_id">
-          <option value="">No application</option>
-          {% for application in applications %}
-            <option value="{{ application.id }}">{{ application.account.name }} / {{ application.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="submit-row">
-        <input type="submit" class="default" value="Create internal chat">
-      </div>
-    </form>
+{% block content %}
+  <div class="internal-chat-hero">
+    <h1>Internal Chat</h1>
+    <p>Staff-only internal workspace for safe context review, approved read-only tools, tool proposals, and internal reports.</p>
   </div>
 
-  <div class="module">
-    <h2>Internal chat sessions</h2>
-    <table id="result_list">
-      <thead>
-        <tr>
-          <th>Title</th>
-          <th>Account</th>
-          <th>Server</th>
-          <th>Status</th>
-          <th>Last message</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for session in sessions %}
-          <tr>
-            <td><a href="{% url 'admin_chat:session_detail' session.id %}">{{ session.title_redacted }}</a></td>
-            <td>{{ session.account.name }}</td>
-            <td>{{ session.server.name|default:"-" }}</td>
-            <td>{{ session.status }}</td>
-            <td>{{ session.last_message_at|default:"-" }}</td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="5">No internal chat sessions yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="internal-chat-grid">
+    <section class="internal-chat-panel">
+      <h2>Start internal chat session</h2>
+      <div class="body">
+        <div class="internal-chat-meta">
+          <div>
+            <strong>Access</strong>
+            Staff only
+          </div>
+          <div>
+            <strong>Tool Builder</strong>
+            Internal only
+          </div>
+          <div>
+            <strong>Reports</strong>
+            Safe summaries only
+          </div>
+          <div>
+            <strong>Portal split</strong>
+            Portal tool builder hidden
+          </div>
+        </div>
+        <form method="post" action="{% url 'admin_chat:session_start' %}">
+          {% csrf_token %}
+          <div class="form-row">
+            <label for="title">Title</label>
+            <input id="title" type="text" name="title" style="width: 100%;">
+          </div>
+          <div class="form-row">
+            <label for="account_id">Account</label>
+            <select id="account_id" name="account_id" required style="width: 100%;">
+              <option value="">Select account</option>
+              {% for account in accounts %}
+                <option value="{{ account.id }}">{{ account.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="server_id">Server</label>
+            <select id="server_id" name="server_id" style="width: 100%;">
+              <option value="">Account-only scope</option>
+              {% for server in servers %}
+                <option value="{{ server.id }}">{{ server.account.name }} / {{ server.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="application_id">Application</label>
+            <select id="application_id" name="application_id" style="width: 100%;">
+              <option value="">No application</option>
+              {% for application in applications %}
+                <option value="{{ application.id }}">{{ application.account.name }} / {{ application.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="submit-row">
+            <input type="submit" class="default" value="Create internal chat">
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="internal-chat-list">
+      <h2>Recent internal sessions</h2>
+      <div class="body">
+        <table id="result_list">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Account</th>
+              <th>Server</th>
+              <th>Status</th>
+              <th>Last message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for session in sessions %}
+              <tr>
+                <th scope="row"><a href="{% url 'admin_chat:session_detail' session.id %}">{{ session.title_redacted }}</a></th>
+                <td>{{ session.account.name }}</td>
+                <td>{{ session.server.name|default:"-" }}</td>
+                <td>{{ session.status }}</td>
+                <td>{{ session.last_message_at|default:"-" }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5">No internal chat sessions yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 {% endblock %}

@@ -2310,3 +2310,41 @@ Completion status:
 - Sprint C10.5 implementation and verification are complete.
 - Full suite was run because this sprint changed permissions, report conversion behavior, and chat-visible tool execution flows.
 - No live AI, Telegram, remediation/write/destructive tools, raw outputs, or policy bypasses were added.
+
+## Active Task - C10.5-B Admin Internal Chat UX and Navigation Fix
+
+Task:
+- Improve Django Admin discoverability and internal-chat usability after C10.5.
+
+Scope:
+- Add a clear Internal Chat link inside Django Admin.
+- Refine internal chat list/detail templates using Django admin styling and simple local CSS only.
+- Verify Portal still has no Tool Builder and internal chat remains staff-only.
+
+Out of scope:
+- Live AI.
+- Telegram.
+- Tool Builder in Portal.
+- Runtime, policy, or orchestration changes except tiny view/template glue if necessary.
+
+Immediate next steps:
+- Add an Admin index entry for Internal Chat.
+- Improve the internal chat templates for session list, create form, message flow, tools, Tool Builder, and reports.
+- Add focused tests for admin visibility/access plus Portal/Admin split regression.
+
+Progress:
+- Added a visible `Internal Chat` module to Django Admin index.
+- Reworked the internal chat list template into a clearer admin workspace with session creation and recent sessions.
+- Reworked the internal chat detail template into a chat-style layout with separate areas for messages, tool requests, Tool Builder, and reports.
+- Preserved Portal chat without Tool Builder.
+- Preserved staff-only access for internal chat.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c10_5_chat_split tests.unit.test_admin_chat --keepdb --noinput` passed: 26 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.5-B implementation and verification are complete.
+- Full suite was not run because this hotfix stayed in admin navigation/templates plus focused access assertions, without changing execution, policy, or runtime behavior.

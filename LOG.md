@@ -1771,3 +1771,35 @@ Verification:
 Remaining:
 - Sprint C10.5 is complete within the approved scope.
 - No live AI, Telegram, remediation/write/destructive tools, raw outputs, or policy bypasses were added.
+
+## 2026-06-07 - C10.5-B Admin Internal Chat UX and Navigation Fix Start
+
+Intent:
+- Improve the discoverability and usability of the staff-only internal chat added in C10.5.
+
+Scope:
+- Add a clear Internal Chat entry point inside Django Admin.
+- Improve the internal chat templates so they read as a usable Matrix Admin chatbot surface.
+- Keep Portal chat without Tool Builder and keep internal chat staff-only.
+
+Out of scope:
+- Live AI.
+- Telegram.
+- Tool Builder restoration in Portal.
+- Business-logic expansion beyond minor view/template glue if strictly needed.
+
+Result:
+- Added a clear `Internal Chat` entry to the Django Admin index.
+- Reworked the internal chat list page into a clearer two-panel admin workspace.
+- Reworked the internal chat detail page into a chat-like layout with distinct sections for messages, tool requests, Tool Builder, and reports.
+- Preserved Portal chat without Tool Builder and kept internal chat staff-only.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c10_5_chat_split tests.unit.test_admin_chat --keepdb --noinput` passed: 26 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- C10.5-B is complete within the approved scope.
+- No live AI, Telegram, Tool Builder-in-Portal, runtime, or policy changes were introduced.

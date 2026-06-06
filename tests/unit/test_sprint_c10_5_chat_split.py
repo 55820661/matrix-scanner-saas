@@ -117,6 +117,7 @@ class SprintC105ChatSplitTests(TestCase):
     def test_staff_can_open_internal_chat_and_create_internal_session(self):
         self.client.force_login(self.admin)
 
+        admin_index_response = self.client.get(reverse("admin:index"))
         list_response = self.client.get(reverse("admin_chat:sessions"))
         start_response = self.client.post(
             reverse("admin_chat:session_start"),
@@ -124,10 +125,20 @@ class SprintC105ChatSplitTests(TestCase):
         )
 
         session = AdminChatSession.objects.get(channel=AdminChatSession.Channel.ADMIN_INTERNAL)
+        self.assertContains(admin_index_response, "Internal Chat")
         self.assertEqual(list_response.status_code, 200)
+        self.assertContains(list_response, "Staff-only internal workspace")
         self.assertEqual(start_response.status_code, 302)
         self.assertEqual(session.account, self.account)
         self.assertEqual(session.server, self.server)
+
+    def test_non_staff_cannot_open_internal_chat(self):
+        self.client.force_login(self.owner)
+
+        response = self.client.get(reverse("admin_chat:sessions"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/admin/login/", response["Location"])
 
     def test_admin_chat_can_create_tool_build_request_and_proposal(self):
         self.client.force_login(self.admin)
@@ -140,6 +151,7 @@ class SprintC105ChatSplitTests(TestCase):
             last_message_at=timezone.now(),
         )
 
+        detail_response = self.client.get(reverse("admin_chat:session_detail", args=[session.id]))
         response = self.client.post(
             reverse("admin_chat:tool_build_create", args=[session.id]),
             {
@@ -154,6 +166,7 @@ class SprintC105ChatSplitTests(TestCase):
         )
 
         session.refresh_from_db()
+        self.assertContains(detail_response, "Tool Builder")
         self.assertEqual(response.status_code, 302)
         self.assertEqual(session.tool_build_requests.count(), 1)
         proposal = session.tool_build_requests.first().proposals.first()
