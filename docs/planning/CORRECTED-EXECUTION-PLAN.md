@@ -20,61 +20,44 @@
 
 ## 2. الوضع الحالي المختصر
 
-الموجود ويجب البناء عليه:
+الحالة الموثقة في 2026-06-20:
 
-- SaaS Core يعمل: accounts, users, roles, plans, subscriptions, servers, applications, audit.
-- Agent foundation يعمل: registration, heartbeat, polling, job result submission.
-- Runtime موجود كـ Python polling agent ويدعم handlers متعددة حاليا، ويجب تطويره لاحقا ليكون safe command execution runtime للأدوات المبنية كـ command templates.
-- Tool Registry موجود: `ToolTemplate`, `ToolDefinition`, `ToolPolicy`, `PlanTool`, `ToolRun`.
-- Baseline موجود مع profiles:
-  - `legacy_cpanel`
-  - `debian_nginx_opt`
-  - `minimal_linux`
-- Phase 2 discovery موجود ومجرب:
-  - `systemd_services_discovery`
-  - `nginx_sites_discovery`
-  - `opt_apps_discovery`
-  - `django_apps_discovery`
-  - `gunicorn_uvicorn_services_discovery`
-  - `postgres_status_discovery`
-  - `log_sources_discovery_v2`
-- Phase 2 ingestion موجود للخدمات والدومينات والتطبيقات ومصادر اللوج.
-- Reports foundation موجودة: `Report`, `ReportSection`, `FindingGroup`, `KnowledgeEntry`, `KnowledgeSource`, `Recommendation`.
-- Diagnostics موجودة لكن deterministic ومحدودة بالأدوات القديمة.
-- Telegram foundation موجودة: linking, notifications, guided diagnostics، لكنها يجب ألا تصبح عقل مستقل.
-- Tool Builder موجود كـ proposal workflow لكنه ليس مدمجا داخل شات.
-- Remote Bootstrap foundation موجود بالفعل: `BootstrapSession`, `BootstrapStep`, `BootstrapCredential`, `AgentInstallation`, Paramiko SSH adapter, encrypted temporary credentials, credential TTL, cleanup بعد النجاح/الفشل/expiry، fixed install command templates، runtime config upload، systemd service install/start، heartbeat verification، Admin action، واختبارات mocked.
-- Remote Bootstrap ما زال يحتاج إكمال runtime bundle: الـ bundle الحالي من نوع `sprint3-bootstrap-runtime` يقوم أساسا بـ registration + heartbeat فقط، ولا يثبت Runtime/Agent الحقيقي القادر على polling وAgentJob execution وjob result submission كما يعمل runtime الحالي.
-
-الثغرات المهمة قبل Telegram:
-
-- Remote Bootstrap يحتاج Sprint مستقل لتحديث installed runtime bundle قبل الاعتماد عليه لتثبيت runtime يشغل الأدوات.
-- لا يوجد Safe Context Builder موحد للـ AI.
-- لا توجد Conversation/Message models للشات الداخلي.
-- لا يوجد Orchestrator موحد يربط الشات بالأدوات والتقارير وTool Builder.
-- لا يوجد بعد نموذج command-template execution عام داخل Runtime؛ الموجود حاليا handler-based جزئيا.
-- لا يوجد live AI provider integration آمن بعد.
-- Diagnostics الحالية ما زالت deterministic ومحدودة.
-- أدوات Laravel/Apache/cPanel التجارية الأصلية غير مكتملة.
-- Runtime لا يعلن capabilities/version بشكل واضح.
+- المسار المصحح من C1 إلى C9 مكتمل.
+- Remote Bootstrap يثبت Runtime/Agent الحقيقي ويدعم registration وheartbeat وpolling وتنفيذ AgentJob وإرجاع النتائج.
+- Safe Context Builder وAdmin Internal Chat وPortal Customer Chat وTool Orchestrator منفذة.
+- Runtime يدعم `command_template` الآمن بأسلوب argv-only، مع بقاء `script_template` مؤجلا.
+- Tool Builder متاح في Admin Internal Chat فقط، ولا يوجد في Portal.
+- Portal يستخدم الأدوات المعتمدة فقط ويوفر تقارير customer-safe بنمط self-service.
+- تقارير الشات تستخدم redaction وreadable summaries ولا تعرض raw ToolRun/AgentJob output.
+- C10-A نُفذ يدويا على Matrix/Siyaq كـ internal pilot أولي ناجح. عمل Portal Chat وSafe Context و`services_status` ومسار `ToolRun -> AgentJob` وعودة safe summary والتقارير دون ظهور raw logs أو raw `.env` أو raw execution output.
+- مشكلة عرض dict/list في التقارير التي ظهرت أثناء C10-A أُصلحت لاحقا.
+- C10.5 فصل مسؤوليات Portal Customer Chat عن Staff-only Admin Internal Chat، وC10.5-B أكمل تحسين واجهة وتنقل Internal Chat.
+- C10-B Laravel/Apache/Innvii Pilot مؤجل حاليا.
+- Live AI لم ينفذ بعد. المسار المقترح التالي هو C10.6 داخل Admin Internal Chat فقط.
+- Telegram C11 وTelegram Pilot C12 لم يبدآ، وليسا المهمة الفورية التالية.
 
 ## 3. المراحل التنفيذية المعتمدة
 
-| المرحلة | الاسم | الهدف | حالة التنفيذ |
-|---:|---|---|---|
-| 0 | Current State Lock | تثبيت الوضع الحالي | مطلوب أولا |
-| 0.5 | Remote Bootstrap Runtime Completion | جعل bootstrap يثبت Runtime/Agent الحقيقي وليس heartbeat demo فقط | غير منفذ |
-| 1 | Architecture Cleanup | تثبيت مفهوم AI واحد | بدأ بوثيقة التصحيح |
-| 2 | Safe Context Builder | تجهيز سياق آمن للـ AI | غير منفذ |
-| 3 | Admin Chat MVP | واجهة محادثة داخلية | غير منفذ |
-| 4 | Tool Orchestrator MVP | تشغيل أدوات من الشات عبر السياسة | غير منفذ |
-| 5 | Safe Command Execution Runtime | دعم تنفيذ command templates بأمان | غير منفذ |
-| 6 | Tool Builder in Chat | إدخال بناء الأدوات في الشات | غير منفذ |
-| 7 | First Full Tool Cycle | إثبات دورة أداة كاملة | غير منفذ |
-| 8 | Reports from Chat | تقارير تقنية ومبسطة من نفس الشات | غير منفذ |
-| 9 | Internal Pilot | اختبار داخلي على بيئات حقيقية | غير منفذ |
-| 10 | Telegram Interface | ربط Telegram بنفس الشات | مؤجل |
-| 11 | Telegram Pilot | تجربة داخلية محدودة | مؤجل |
+| Sprint | الاسم | حالة التنفيذ |
+|---|---|---|
+| C1 | Current State and Documentation Alignment | مكتمل |
+| C1.5 | Remote Bootstrap Runtime Completion | مكتمل |
+| C2 | Safe Context Builder MVP | مكتمل |
+| C3 | Admin Chat Data Model and Read-only UI | مكتمل |
+| C4 | Deterministic Chat Responder | مكتمل |
+| C5 | Tool Orchestrator MVP | مكتمل |
+| C6 | Safe Command Execution Runtime | مكتمل |
+| C7 | Tool Builder from Chat | مكتمل، ثم قُصر على Admin Internal Chat في C10.5 |
+| C8 | First Laravel/Apache Tool Cycle | مكتمل باستخدام `apache_5xx_summary` |
+| C9 | Reports from Chat | مكتمل |
+| C10-A | Internal Pilot on Matrix/Siyaq | مكتمل يدويا وناجح كـ pilot أولي |
+| C10.5 | Split Admin and Portal Chat Responsibilities | مكتمل |
+| C10.5-B | Admin Internal Chat UX and Navigation Fix | مكتمل |
+| C10.5-C | Current State Reconciliation | جار، توثيق فقط |
+| C10-B | Laravel/Apache/Innvii Pilot | مؤجل |
+| C10.6 | Live Admin AI Chatbot MVP | الخطوة المقترحة التالية، غير منفذة |
+| C11 | Telegram Interface to Same Chat | لم يبدأ |
+| C12 | Telegram Pilot | لم يبدأ |
 
 ## 4. المرحلة 0 - Current State Lock
 
@@ -1033,19 +1016,46 @@ Objective:
 Objective:
 - اختبار شامل داخلي على بيئتين.
 
+Current reconciliation:
+- C10-A نُفذ يدويا على Matrix/Siyaq ونجح كـ internal pilot أولي.
+- C10-B Laravel/Apache/Innvii لم ينفذ ومؤجل حاليا.
+
+### Sprint C10.5 - Chat Responsibility Split
+
+Status:
+- مكتمل، بما في ذلك C10.5-B لتحسين UX والتنقل في Admin Internal Chat.
+- Portal Customer Chat لا يحتوي Tool Builder، وAdmin Internal Chat ما زال staff-only.
+
+### Sprint C10.5-C - Current State Reconciliation
+
+Objective:
+- توثيق الحالة الفعلية فقط قبل أي تطوير جديد.
+
+### Sprint C10.6 - Live Admin AI Chatbot MVP
+
+Status:
+- غير منفذ، وهو المسار المقترح التالي قبل Telegram ما لم يصدر قرار عكسي.
+- يبدأ داخل Admin Internal Chat فقط، وليس Portal أو Telegram.
+
 ### Sprint C11 - Telegram Interface to Same Chat
 
 Objective:
 - Telegram كواجهة لنفس chat/orchestrator.
+
+Status:
+- لم يبدأ، وليس المهمة الفورية التالية حاليا.
 
 ### Sprint C12 - Telegram Pilot
 
 Objective:
 - pilot داخلي محدود وآمن.
 
+Status:
+- لم يبدأ.
+
 ## 17. ما لا يجب تنفيذه الآن
 
-- لا live LLM قبل Safe Context وChat MVP.
+- لا live LLM ضمن C10.5-C؛ C10.6 هو Sprint مستقل مقترح ويحتاج نطاقا واعتمادا واضحين.
 - لا Telegram AI قبل نجاح Internal Pilot.
 - لا remediation.
 - لا write/destructive tools.
@@ -1095,10 +1105,10 @@ Sprint C2 - Safe Context Builder MVP
 
 ## 20. الخلاصة
 
-المسار الصحيح من الآن ليس توسيع Telegram ولا بناء عدة AI. المسار الصحيح هو بناء طبقة داخلية واحدة:
+المسار المنفذ أثبت الطبقة الداخلية الموحدة. التسلسل المقترح من الحالة الحالية هو:
 
 ```text
-Remote Bootstrap Runtime Completion -> Safe Context -> Admin Chat -> Tool Orchestrator -> Safe Command Execution Runtime -> Tool Builder Flow -> Reports -> Internal Pilot -> Telegram
+C10.5-C Current State Reconciliation -> C10.6 Live Admin AI Chatbot MVP -> later pilot decision -> Telegram C11 -> Telegram Pilot C12
 ```
 
-بهذا نستفيد من كل ما تم إنجازه، ونمنع الانحراف المعماري، ونحول Matrix Scanner SaaS إلى منتج تشخيص ذكي آمن وقابل للتوسع.
+يظل C10-B Laravel/Apache/Innvii مؤجلا. Live AI وTelegram لم ينفذا بعد، وأي انتقال إليهما يظل خاضعا لنطاق Sprint واعتماد مستقلين.

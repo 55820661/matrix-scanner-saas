@@ -2,6 +2,33 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-20 - Sprint C10.5-C Current State Reconciliation Start
+
+Intent:
+- Reconcile project documentation with the actual implemented and manually verified state before new development.
+
+Scope:
+- Correct roadmap status through C10.5-B.
+- Record the completed C10-A Matrix/Siyaq manual pilot and deferred C10-B Laravel/Apache/Innvii pilot.
+- Record C10.6 Live Admin AI Chatbot MVP as the next proposed sprint before Telegram.
+- Documentation only; no application code, migrations, runtime, permissions, tool execution, Portal/Admin Chat logic, Telegram, Live AI implementation, or server operations.
+
+## 2026-06-20 - Sprint C10.5-C Current State Reconciliation Complete
+
+Result:
+- Reconciled the corrected execution plan with completed C1-C9, the successful manual C10-A Matrix/Siyaq pilot, completed C10.5/C10.5-B, and deferred C10-B.
+- Recorded C10.6 Live Admin AI Chatbot MVP as the next proposed sprint before Telegram.
+- Updated README and execution reporting, and archived historical active-task headings.
+- Confirmed Telegram C11/C12 and Live AI have not started.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed with no issues.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- C10.6 is proposed but not implemented and requires its own approved implementation scope.
+- No application code, migrations, runtime, permissions, execution paths, Portal/Admin Chat logic, Telegram, Live AI, or server state were changed.
+
 ## 2026-06-05 - Sprint C2 Safe Context Builder MVP Start
 
 Intent:

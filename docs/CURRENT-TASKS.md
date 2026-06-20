@@ -2,7 +2,38 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
-## Active Task - Sprint C2 Safe Context Builder MVP
+## Current Task: C10.5-C Current State Reconciliation
+
+Scope:
+- Reconcile project documentation with the implemented and manually verified current state.
+- Record C1-C9, C10-A, C10.5, and C10.5-B accurately.
+- Keep C10-B deferred and Telegram unstarted.
+- Make no application code, migration, runtime, permission, or execution-path changes.
+
+Result:
+- Corrected the execution status and current-state summary.
+- Updated README, work log, and execution report.
+- Archived all historical `Active Task` headings.
+- No application code, migrations, runtime, permissions, execution paths, Portal/Admin Chat logic, Live AI, Telegram, or server state were changed.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed with no issues.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.5-C documentation reconciliation is complete pending its independent commit.
+
+## Next Proposed Sprint: C10.6 Live Admin AI Chatbot MVP
+
+- Proposed before Telegram unless a later approved decision changes the order.
+- Live AI would start in staff-only Admin Internal Chat, not Portal or Telegram.
+- Telegram is not the immediate next task and has not started.
+
+## Archived Task History
+
+All task entries below are completed or historical records. Their headings are retained as archived task history.
+
+## Archived Task - Sprint C2 Safe Context Builder MVP
 
 Task:
 - Execute Sprint C2 from the approved corrected Matrix Scanner SaaS roadmap.
@@ -27,7 +58,7 @@ Immediate next steps:
 - Implement context builder and tests.
 - Run Sprint C2 validation.
 
-## Active Task - Sprint C1.5 Remote Bootstrap Runtime Completion
+## Archived Task - Sprint C1.5 Remote Bootstrap Runtime Completion
 
 Task:
 - Execute Sprint C1.5 from the approved corrected Matrix Scanner SaaS roadmap.
@@ -73,7 +104,7 @@ Completion status:
 - Sprint C1.5 implementation is complete within the approved scope.
 - No Portal/customer bootstrap, raw shell/arbitrary command expansion, remediation/write/destructive behavior, server/VM execution, or Sprint C2 work was added.
 
-## Active Task - Sprint C1 Current State and Documentation Alignment
+## Archived Task - Sprint C1 Current State and Documentation Alignment
 
 Task:
 - Execute Sprint C1 from the approved corrected Matrix Scanner SaaS roadmap.
@@ -122,7 +153,7 @@ Completion status:
 - No product code, model/service/runtime changes, migrations, or server execution were performed.
 - Do not move to Sprint C1.5 until the owner approves proceeding.
 
-## Active Task - Decision Register Approval Update
+## Archived Task - Decision Register Approval Update
 
 Task:
 - Mark `docs/planning/DECISION-REGISTER.md` as approved and record the owner approval.
@@ -149,7 +180,7 @@ Verification:
 - `git diff --check` passed with line-ending warnings only.
 - No code, migrations, tests, runtime changes, or server execution were performed.
 
-## Active Task - Roadmap Tool Runtime Correction Detail
+## Archived Task - Roadmap Tool Runtime Correction Detail
 
 Task:
 - Strengthen `docs/planning/ROADMAP-CORRECTION.md` with the attached command-template-first tool/runtime correction.
@@ -186,7 +217,7 @@ Completion status:
 - Roadmap tool/runtime correction detail is complete.
 - No product code, migrations, runtime command-template implementation, ToolPolicy/PlanTool changes, AI/Telegram implementation, commit, or push was added.
 
-## Active Task - Tool Model Correction
+## Archived Task - Tool Model Correction
 
 Task:
 - Apply the attached correction that Matrix Scanner tools should primarily be approved read-only command templates, not necessarily runtime handlers.
@@ -221,7 +252,7 @@ Completion status:
 - Tool model correction is complete in the planning documents.
 - No product code, migrations, runtime command-template implementation, ToolPolicy/PlanTool activation, AI/Telegram implementation, commit, or push was added.
 
-## Active Task - Corrected Execution Plan
+## Archived Task - Corrected Execution Plan
 
 Task:
 - Create a detailed implementation plan Markdown file based on the roadmap correction and current project state.
@@ -257,7 +288,7 @@ Completion status:
 - Corrected execution plan document is complete.
 - No product code, migrations, runtime handlers, ToolPolicy/PlanTool activation, AI/Telegram implementation, commit, or push was added.
 
-## Active Task - Roadmap Correction Markdown Reference
+## Archived Task - Roadmap Correction Markdown Reference
 
 Task:
 - Convert `docs/planning/خطة_تصحيح_المسار_Matrix_Scanner_SaaS.docx` into a Markdown reference document for future project phases.
@@ -292,7 +323,7 @@ Completion status:
 - Roadmap correction Markdown reference is complete.
 - No product code, migrations, runtime handlers, ToolPolicy/PlanTool activation, AI/Telegram implementation, commit, or push was added.
 
-## Active Task - Phase 2 Sprint 2.11B Application Ingestion
+## Archived Task - Phase 2 Sprint 2.11B Application Ingestion
 
 Task:
 - Implement only Phase 2 application ingestion and deduplication for `opt_apps_discovery` and `django_apps_discovery`.
@@ -343,7 +374,7 @@ Completion status:
 - No report/AI/external bot/ToolPolicy/runtime/finding/remediation changes were added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.11B Nested App Hotfix
+## Archived Task - Phase 2 Sprint 2.11B Nested App Hotfix
 
 Task:
 - Filter clearly internal nested `opt_apps_discovery` package candidates during Phase 2 application ingestion.
@@ -389,7 +420,7 @@ Completion status:
 - No migration/report/AI/external bot/ToolPolicy/runtime/finding/remediation changes were added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.11A Ingestion
+## Archived Task - Phase 2 Sprint 2.11A Ingestion
 
 Task:
 - Implement only Phase 2 services, domains, and log source ingestion plus scan-scoped summary counts.
@@ -438,7 +469,7 @@ Completion status:
 - No Application ingestion/migration/report/AI/tool activation/runtime/remediation changes were added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.11A Metadata Hotfix
+## Archived Task - Phase 2 Sprint 2.11A Metadata Hotfix
 
 Task:
 - Prevent unknown Gunicorn/Uvicorn discovery rows from overwriting generic systemd service metadata.
@@ -480,7 +511,7 @@ Completion status:
 - No Application ingestion/migration/report/AI/tool activation/runtime/remediation changes were added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.10 Pilot Tool Enablement
+## Archived Task - Phase 2 Sprint 2.10 Pilot Tool Enablement
 
 Task:
 - Implement only the Sprint 2.10 management command/helper for safe Phase 2 pilot tool enablement.
@@ -530,7 +561,7 @@ Completion status:
 - No migration/Admin UI/Portal/ingestion/report/AI/external bot/remediation/global activation changes were added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.9 Baseline Profiles
+## Archived Task - Phase 2 Sprint 2.9 Baseline Profiles
 
 Task:
 - Implement only the Sprint 2.9 baseline profile and runtime tool selection layer.
@@ -578,7 +609,7 @@ Completion status:
 - No ingestion/report/ToolPolicy activation/AI planner/external bot changes were added.
 - No commit or push was made.
 
-## Active Task
+## Archived Task
 
 Task:
 - Sprint 1 Django SaaS Core implementation.
@@ -629,7 +660,7 @@ Completion:
 - Sprint 1 implementation is complete pending commit.
 - Remaining issue: rerun tests with PostgreSQL available.
 
-## Active Task - Push Sprint 1 Commit
+## Archived Task - Push Sprint 1 Commit
 
 Task:
 - Push Sprint 1 commit `508a1e6` to `origin/main`.
@@ -650,7 +681,7 @@ Completion:
 - Included Sprint 1 commit `508a1e6` and tracking commit `f8726de`.
 - Remaining work: rerun tests when PostgreSQL is available.
 
-## Active Task - Local Development Environment
+## Archived Task - Local Development Environment
 
 Task:
 - Prepare and verify the local development/testing environment for the current Sprint 1 Django codebase.
@@ -702,7 +733,7 @@ Completion:
 - Local setup documentation and Docker PostgreSQL option are in place.
 - Remaining setup: start Docker Desktop or configure manual PostgreSQL, then rerun database-dependent commands.
 
-## Active Task - Local Development Documentation Adjustment
+## Archived Task - Local Development Documentation Adjustment
 
 Task:
 - Adjust local development setup documentation so Docker is optional only and manual Windows PostgreSQL setup is the primary path.
@@ -745,7 +776,7 @@ Completion:
 - Documentation adjustment complete.
 - No commit was made, per instruction.
 
-## Active Task - Fix Sprint 1 Staff User Test Fixture
+## Archived Task - Fix Sprint 1 Staff User Test Fixture
 
 Task:
 - Fix only the failing Sprint 1 test `test_staff_user_without_account_has_no_customer_role`.
@@ -782,7 +813,7 @@ Verification:
 Completion:
 - Sprint 1 test fixture fix complete.
 
-## Active Task - Sprint 2 Agent Registration and Job Foundation
+## Archived Task - Sprint 2 Agent Registration and Job Foundation
 
 Task:
 - Implement Sprint 2 only: server agent registration, heartbeat, job polling/result endpoints, `system_identity` allowlist, `BaselineScan` skeleton, and a minimal scanner runtime prototype.
@@ -841,7 +872,7 @@ Completion:
 - Sprint 2 implementation is complete within the locked scope.
 - No Remote Bootstrap, full Baseline Scan, Finding, full Tool Registry, full Policy Engine, Telegram, Diagnostic Agent, Celery, systemd/install flow, or remediation/actions were added.
 
-## Active Task - Sprint 3 Remote Bootstrap MVP
+## Archived Task - Sprint 3 Remote Bootstrap MVP
 
 Task:
 - Implement Sprint 3 only: Admin-only Remote Bootstrap MVP to install/start Scanner Runtime and verify heartbeat.
@@ -907,7 +938,7 @@ Completion:
 - No full Baseline Scan, Security Preflight, diagnostic tools, full Tool Registry, full Policy Engine, Telegram, Diagnostic Agent, Celery, remediation/actions, customer Portal bootstrap, self-install flow, install script, or free shell execution were added.
 - Changes are not committed, per instruction.
 
-## Active Task - Sprint 4 Tool Registry and Policy Engine MVP
+## Archived Task - Sprint 4 Tool Registry and Policy Engine MVP
 
 Task:
 - Implement Sprint 4 only: Tool Registry and Policy Engine MVP.
@@ -969,7 +1000,7 @@ Completion:
 - No full Baseline Scan, Baseline orchestration, Security Preflight, Diagnostic Agent, Telegram, Celery, remediation/actions, customer-created tools, Admin Tool Builder Agent, new diagnostic tools beyond `system_identity`, or external JSON Schema dependency were added.
 - Changes are not committed, per instruction.
 
-## Active Task - Sprint 5 Baseline Scan Implementation
+## Archived Task - Sprint 5 Baseline Scan Implementation
 
 Task:
 - Implement Sprint 5 only: Baseline Scan Implementation using the Sprint 4 Tool Registry and Policy Engine.
@@ -1023,7 +1054,7 @@ Completion:
 - No Diagnostic Agent, Telegram, Celery, remediation/actions, Portal UI, full Security Preflight, raw log ingestion, raw `.env` storage, free shell commands, customer-created tools, or Admin Tool Builder Agent were added.
 - Changes are not committed, per instruction.
 
-## Active Task - Sprint 6 Admin and Portal MVP Screens
+## Archived Task - Sprint 6 Admin and Portal MVP Screens
 
 Task:
 - Implement Sprint 6 only: Admin and Portal MVP Screens.
@@ -1077,7 +1108,7 @@ Completion:
 - No Telegram integration, Diagnostic Agent, Celery, payments gateway, remediation/actions, Admin Tool Builder Agent, advanced reporting, PDF export, email alerts, customer Remote Bootstrap, React/Vue, user invitation/role management, or customer baseline start were added.
 - Changes are not committed, per instruction.
 
-## Active Task - Sprint 7 Telegram Integration MVP
+## Archived Task - Sprint 7 Telegram Integration MVP
 
 Task:
 - Implement Sprint 7 only: Telegram Integration MVP.
@@ -1135,7 +1166,7 @@ Completion:
 - No Diagnostic Agent, Telegram Guided Diagnostics, DiagnosticSession creation, ToolRun creation, AgentJob creation, remediation/actions, write tools, payments, Celery, polling infrastructure, per-account bot tokens, customer-created tools, or Admin Tool Builder Agent were added.
 - Changes are not committed, per instruction.
 
-## Active Task - Sprint 8 Diagnostic Agent MVP
+## Archived Task - Sprint 8 Diagnostic Agent MVP
 
 Task:
 - Implement Sprint 8 only: Diagnostic Agent MVP from Portal.
@@ -1193,7 +1224,7 @@ Completion:
 - No Telegram Guided Diagnostics, Telegram diagnostic commands/messages/approvals, live LLM execution, remediation/actions, write tools, shell/free commands, Celery, email alerts, PDF export, advanced reporting, IncidentReport, customer-created tools, or Admin Tool Builder Agent were added.
 - Changes are not committed, per instruction.
 
-## Active Task - Sprint 9 Telegram Guided Diagnostics
+## Archived Task - Sprint 9 Telegram Guided Diagnostics
 
 Task:
 - Implement Sprint 9 only: Telegram Guided Diagnostics.
@@ -1249,7 +1280,7 @@ Completion:
 - No group diagnostics, remediation/actions, write tools, free shell commands, direct AgentJob creation from Telegram, ToolPolicy bypass, live LLM execution, or raw outputs/secrets in Telegram were added.
 - Changes are not committed, per instruction.
 
-## Active Task - Sprint 10 Tool Definition Proposal Builder
+## Archived Task - Sprint 10 Tool Definition Proposal Builder
 
 Task:
 - Implement Sprint 10 only: Matrix Admin Tool Definition Proposal Builder MVP inside `apps/tools`.
@@ -1299,7 +1330,7 @@ Completion:
 - No new app, live LLM, provider calls, runtime handler/code generation, shell/free commands, remediation/actions, write/destructive tools, automatic enablement, automatic PlanTool attachment, ToolRun creation, AgentJob creation, or customer server execution were added.
 - Changes are not committed, per instruction.
 
-## Active Task - Sprint 11 Reports, Findings, and Knowledge Base Enhancement
+## Archived Task - Sprint 11 Reports, Findings, and Knowledge Base Enhancement
 
 Task:
 - Implement Sprint 11 only: reports, finding groups, advisory recommendations, and safe knowledge/context storage.
@@ -1339,7 +1370,7 @@ Completion:
 - No PDF export, email reports, scheduled reports/Celery, live LLM report generation, public API endpoints, remediation/actions, write tools, ToolPolicy bypass, direct AgentJob creation, or raw sensitive output display/storage were added.
 - Changes are not committed, per instruction.
 
-## Active Task - Sprint 12 Stabilization, Security Hardening, and Release Preparation
+## Archived Task - Sprint 12 Stabilization, Security Hardening, and Release Preparation
 
 Task:
 - Implement Sprint 12 only: final MVP stabilization, security hardening, documentation cleanup, release readiness, and regression coverage.
@@ -1380,7 +1411,7 @@ Completion:
 - No new product workflows, remediation/actions, write tools, live LLM execution, Celery/Redis, payment gateway, PDF/email/scheduled reporting, customer Remote Bootstrap, ToolPolicy bypass, or direct AgentJob creation outside existing approved flows were added.
 - Changes are not committed, per instruction.
 
-## Active Task - Phase 2 Sprint 2.1 Runtime Discovery Tool Contracts
+## Archived Task - Phase 2 Sprint 2.1 Runtime Discovery Tool Contracts
 
 Task:
 - Prepare only the first Phase 2 implementation step: Runtime Discovery Tool Contracts and seeding structure for Debian/Nginx `/opt` discovery tools.
@@ -1423,7 +1454,7 @@ Completion:
 - Runtime handlers, baseline integration, UI changes, external bot work, live LLM work, and remediation/write behavior remain out of scope and were not implemented.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.2 systemd Services Discovery
+## Archived Task - Phase 2 Sprint 2.2 systemd Services Discovery
 
 Task:
 - Implement only the Sprint 2.2 runtime safe execution helper and `systemd_services_discovery` runtime handler.
@@ -1471,7 +1502,7 @@ Completion:
 - No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, enabling migration, AI planner, external bot, or remediation/write behavior was added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.3 Nginx Sites Discovery
+## Archived Task - Phase 2 Sprint 2.3 Nginx Sites Discovery
 
 Task:
 - Implement only the Sprint 2.3 runtime `nginx_sites_discovery` collector.
@@ -1521,7 +1552,7 @@ Completion:
 - No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, migrations, AI planner, external bot, or remediation/write behavior was added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.4 /opt Applications Discovery
+## Archived Task - Phase 2 Sprint 2.4 /opt Applications Discovery
 
 Task:
 - Implement only the Sprint 2.4 runtime `opt_apps_discovery` collector.
@@ -1571,7 +1602,7 @@ Completion status:
 - No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, migrations, other Phase 2 handlers, AI planner, external bot, or remediation/write behavior was added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.5 Django Apps Discovery
+## Archived Task - Phase 2 Sprint 2.5 Django Apps Discovery
 
 Task:
 - Implement only the Sprint 2.5 runtime `django_apps_discovery` collector.
@@ -1620,7 +1651,7 @@ Completion status:
 - No baseline orchestration, baseline profile, ingestion, ToolPolicy/PlanTool activation, migrations, other Phase 2 handlers, AI planner, external bot, or remediation/write behavior was added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.6 Gunicorn/Uvicorn Services Discovery
+## Archived Task - Phase 2 Sprint 2.6 Gunicorn/Uvicorn Services Discovery
 
 Task:
 - Implement only the Sprint 2.6 runtime `gunicorn_uvicorn_services_discovery` collector.
@@ -1676,7 +1707,7 @@ Completion status:
 - No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, or external bot changes were added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.7 PostgreSQL Status Discovery
+## Archived Task - Phase 2 Sprint 2.7 PostgreSQL Status Discovery
 
 Task:
 - Implement only the Sprint 2.7 runtime `postgres_status_discovery` collector.
@@ -1725,7 +1756,7 @@ Completion status:
 - No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, or external bot changes were added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.8 Log Sources Discovery V2
+## Archived Task - Phase 2 Sprint 2.8 Log Sources Discovery V2
 
 Task:
 - Implement only the Sprint 2.8 runtime `log_sources_discovery_v2` collector.
@@ -1781,7 +1812,7 @@ Completion status:
 - No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, or external bot changes were added.
 - No commit or push was made.
 
-## Active Task - Phase 2 Sprint 2.8 Log Sources Discovery V2 Hotfix
+## Archived Task - Phase 2 Sprint 2.8 Log Sources Discovery V2 Hotfix
 
 Task:
 - Tighten `/opt` log source discovery after server smoke testing showed noisy internal/heavy directories and missing `/opt/.../logs` candidates.
@@ -1818,7 +1849,7 @@ Completion status:
 - Sprint 2.8 hotfix is complete within approved runtime-only scope.
 - No baseline/profile/ingestion changes, ToolPolicy/PlanTool activation, migrations, other handlers, AI planner, external bot, log parsing, or findings generation were added.
 - No commit or push was made.
-## Active Task - Corrected Execution Plan Remote Bootstrap Update
+## Archived Task - Corrected Execution Plan Remote Bootstrap Update
 
 Task:
 - Update `docs/planning/CORRECTED-EXECUTION-PLAN.md` only to include the accepted planning corrections.
@@ -1857,7 +1888,7 @@ Progress:
 Verification:
 - `git diff --check` passed with line-ending warnings only.
 - No code, migrations, runtime, model/service, test, or server execution changes were made.
-## Active Task - Decision Register Documentation
+## Archived Task - Decision Register Documentation
 
 Task:
 - Create `docs/planning/DECISION-REGISTER.md` as the official decision register for the corrected execution plan.
@@ -1875,7 +1906,7 @@ Out of scope:
 - Tests.
 - Server execution.
 
-## Active Task - Sprint C2 Safe Context Builder MVP
+## Archived Task - Sprint C2 Safe Context Builder MVP
 
 Task:
 - Implement the approved `Sprint C2 - Safe Context Builder MVP`.
@@ -1912,7 +1943,7 @@ Completion status:
 - Sprint C2 implementation and verification are complete.
 - Full suite was run because this sprint changes security-sensitive redaction/permissions/context behavior.
 
-## Active Task - Sprint C3 Admin Chat Data Model and Read-only UI
+## Archived Task - Sprint C3 Admin Chat Data Model and Read-only UI
 
 Task:
 - Implement the approved `Sprint C3 - Admin Chat Data Model and Read-only UI`.
@@ -1958,7 +1989,7 @@ Completion status:
 - Sprint C3 implementation and verification are complete.
 - Full suite was run because this sprint changes Portal permissions, redaction-sensitive chat storage, and tenant-scoped access behavior.
 
-## Active Task - Sprint C4 Deterministic Chat Responder
+## Archived Task - Sprint C4 Deterministic Chat Responder
 
 Task:
 - Implement the approved `Sprint C4 - Deterministic Chat Responder`.
@@ -2001,7 +2032,7 @@ Completion status:
 - Sprint C4 implementation and verification are complete.
 - Full suite was run because this sprint changes Portal chat behavior, decision logging, redaction-sensitive response storage, and permission-protected message flow.
 
-## Active Task - Sprint C5 Tool Orchestrator MVP
+## Archived Task - Sprint C5 Tool Orchestrator MVP
 
 Task:
 - Implement the approved `Sprint C5 - Tool Orchestrator MVP`.
@@ -2047,7 +2078,7 @@ Completion status:
 - Sprint C5 implementation and verification are complete.
 - Full suite was run because this sprint touches the ToolRun/AgentJob execution path and permission/policy enforcement.
 
-## Active Task - Sprint C6 Safe Command Execution Runtime
+## Archived Task - Sprint C6 Safe Command Execution Runtime
 
 Task:
 - Implement the approved `Sprint C6 - Safe Command Execution Runtime`.
@@ -2094,7 +2125,7 @@ Completion status:
 - Sprint C6 implementation and verification are complete.
 - Full suite was run because this sprint changes runtime, job execution payloads, and security enforcement.
 
-## Active Task - Sprint C7 Tool Builder from Chat
+## Archived Task - Sprint C7 Tool Builder from Chat
 
 Task:
 - Implement the approved `Sprint C7 - Tool Builder from Chat`.
@@ -2135,7 +2166,7 @@ Completion status:
 - Sprint C7 implementation and verification are complete.
 - Full suite was not run because C7 stayed in the proposal layer and did not modify runtime execution semantics directly.
 
-## Active Task - Sprint C8 First Laravel/Apache Tool Cycle
+## Archived Task - Sprint C8 First Laravel/Apache Tool Cycle
 
 Task:
 - Implement the approved `Sprint C8 - First Laravel/Apache Tool Cycle`.
@@ -2177,7 +2208,7 @@ Completion status:
 - Sprint C8 implementation and verification are complete.
 - Full suite was run because C8 changed tool execution, result propagation, and chat-visible security behavior.
 
-## Active Task - Sprint C9 Reports from Chat
+## Archived Task - Sprint C9 Reports from Chat
 
 Task:
 - Implement the approved `Sprint C9 - Reports from Chat`.
@@ -2222,7 +2253,7 @@ Completion status:
 - Sprint C9 implementation and verification are complete.
 - Full suite was run because C9 changed report redaction, report visibility, and review conversion behavior.
 
-## Active Task - Chat Report Rendering Fix
+## Archived Task - Chat Report Rendering Fix
 
 Task:
 - Fix final chat-generated report rendering so `technical_internal` and `customer_summary` do not expose dict/list payloads in report sections.
@@ -2260,7 +2291,7 @@ Completion status:
 - Chat report rendering fix is complete.
 - Full suite was not run because the change stayed inside chat-report rendering and conversion presentation, not runtime or policy execution.
 
-## Active Task - Sprint C10.5 Chat Responsibility Split
+## Archived Task - Sprint C10.5 Chat Responsibility Split
 
 Task:
 - Implement the approved corrective sprint that separates Matrix Admin internal chat from Customer Portal chat responsibilities.
@@ -2311,7 +2342,7 @@ Completion status:
 - Full suite was run because this sprint changed permissions, report conversion behavior, and chat-visible tool execution flows.
 - No live AI, Telegram, remediation/write/destructive tools, raw outputs, or policy bypasses were added.
 
-## Active Task - C10.5-B Admin Internal Chat UX and Navigation Fix
+## Archived Task - C10.5-B Admin Internal Chat UX and Navigation Fix
 
 Task:
 - Improve Django Admin discoverability and internal-chat usability after C10.5.
