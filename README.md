@@ -12,6 +12,8 @@ The current implementation includes the Safe Context Builder, staff-only Admin I
 
 C10.5 and C10.5-B completed the Admin/Portal responsibility split and internal chat UX. The Laravel/Apache/Innvii pilot is deferred. Live AI and the C11 Telegram interface have not started; the next proposed sprint is C10.6 Live Admin AI Chatbot MVP inside Admin Internal Chat only.
 
+Before Live AI, Safe Context now enforces a structured hard byte cap and provides a second-redacted, allowlisted AI-ready payload. Raw logs, environment data, ToolRun/AgentJob outputs, credentials, and execution behavior are excluded from that payload.
+
 ## MVP Safety Rule
 
 Read-only advisory diagnostics only.

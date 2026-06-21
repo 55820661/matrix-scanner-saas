@@ -1,10 +1,15 @@
 import json
 
 from django.core.exceptions import PermissionDenied
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.accounts.models import Account, User
-from apps.ai_context.services import DEFAULT_MAX_ITEMS, build_safe_context
+from apps.ai_chat.models import AdminChatToolRequest
+from apps.ai_context.services import (
+    DEFAULT_MAX_ITEMS,
+    build_safe_context,
+    prepare_safe_context_for_ai,
+)
 from apps.applications.models import Application
 from apps.plans.models import Plan
 from apps.reports.models import KnowledgeEntry, Report
@@ -205,3 +210,53 @@ class SafeContextBuilderTests(TestCase):
         self.assertNotIn("password=secret", serialized)
         self.assertNotIn("token=secret", serialized)
         self.assertIn("[REDACTED]", serialized)
+
+    @override_settings(AI_SAFE_CONTEXT_MAX_BYTES=2048)
+    def test_configured_hard_cap_truncates_context_without_breaking_json(self):
+        for index in range(DEFAULT_MAX_ITEMS):
+            Application.objects.create(
+                account=self.account,
+                server=self.server,
+                name=f"Verbose App {index} " + ("x" * 240),
+                path=f"/opt/{index}/" + ("y" * 400),
+                metadata={"description": "z" * 600},
+            )
+
+        context = build_safe_context(account=self.account, server=self.server, user=self.owner)
+        serialized = json.dumps(context, sort_keys=True)
+
+        self.assertLessEqual(len(serialized.encode("utf-8")), 2048)
+        self.assertTrue(context["metadata"]["truncated"])
+        self.assertGreater(context["metadata"]["original_size_bytes"], 2048)
+        self.assertEqual(context["metadata"]["final_size_bytes"], len(serialized.encode("utf-8")))
+        self.assertEqual(context["metadata"]["max_size_bytes"], 2048)
+        self.assertEqual(json.loads(serialized), context)
+        self.assertEqual(context["account_summary"]["id"], str(self.account.id))
+        self.assertEqual(context["server_summary"]["id"], str(self.server.id))
+
+    def test_ai_payload_preparation_has_no_execution_side_effects(self):
+        before = (
+            AdminChatToolRequest.objects.count(),
+            ToolRun.objects.count(),
+            AgentJob.objects.count(),
+        )
+
+        payload = prepare_safe_context_for_ai(
+            {
+                "context_version": "1.0",
+                "account_summary": {"id": str(self.account.id), "name": self.account.name},
+                "server_summary": {"id": str(self.server.id), "name": self.server.name},
+                "available_tools": [{"key": "status", "name": "Status"}],
+            }
+        )
+
+        self.assertEqual(
+            before,
+            (
+                AdminChatToolRequest.objects.count(),
+                ToolRun.objects.count(),
+                AgentJob.objects.count(),
+            ),
+        )
+        self.assertFalse(payload["metadata"]["tools_enabled"])
+        self.assertIn("Do not execute tools", " ".join(payload["safety_guidance"]["instructions"]))

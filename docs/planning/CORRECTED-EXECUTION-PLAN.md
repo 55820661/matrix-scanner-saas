@@ -53,8 +53,9 @@
 | C10-A | Internal Pilot on Matrix/Siyaq | مكتمل يدويا وناجح كـ pilot أولي |
 | C10.5 | Split Admin and Portal Chat Responsibilities | مكتمل |
 | C10.5-B | Admin Internal Chat UX and Navigation Fix | مكتمل |
-| C10.5-C | Current State Reconciliation | جار، توثيق فقط |
+| C10.5-C | Current State Reconciliation | مكتمل |
 | C10-B | Laravel/Apache/Innvii Pilot | مؤجل |
+| C10.6-Pre | Safe Context Hard Cap and Live AI Readiness | مكتمل، دون Live AI |
 | C10.6 | Live Admin AI Chatbot MVP | الخطوة المقترحة التالية، غير منفذة |
 | C11 | Telegram Interface to Same Chat | لم يبدأ |
 | C12 | Telegram Pilot | لم يبدأ |
@@ -1036,6 +1037,10 @@ Objective:
 Status:
 - غير منفذ، وهو المسار المقترح التالي قبل Telegram ما لم يصدر قرار عكسي.
 - يبدأ داخل Admin Internal Chat فقط، وليس Portal أو Telegram.
+
+Prerequisite completed:
+- C10.6-Pre يفرض hard byte cap فعليا على Safe Context ويجهز payload منفصلة allowlisted مع redaction ثانية وتعليمات واضحة بأن بيانات السياق غير موثوقة ولا تنفذ أدوات أو أوامر.
+- لا تتضمن payload الخام logs أو `.env` أو ToolRun/AgentJob output، ولم يضف هذا الشرط أي Live AI أو ChatKit أو execution path.
 
 ### Sprint C11 - Telegram Interface to Same Chat
 

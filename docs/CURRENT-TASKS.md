@@ -2,7 +2,37 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
-## Current Task: C10.5-C Current State Reconciliation
+## Current Task: C10.6-Pre Safe Context Hard Cap and Live AI Readiness
+
+Scope:
+- Enforce a deterministic structured hard byte cap on Safe Context.
+- Add a second-redaction, allowlisted AI-ready context preparation layer.
+- Add canary-secret, size-cap, JSON-integrity, priority, and no-execution tests.
+- Make the cap configurable through `AI_SAFE_CONTEXT_MAX_BYTES` with a safe default.
+
+Out of scope:
+- ChatKit, Live AI, OpenAI calls, ASGI/SSE, Telegram, Portal changes, tools, AgentJobs, remediation, uploads, and migrations.
+
+Result:
+- Added deterministic structured hard-cap enforcement with original/final/max size metadata.
+- Added `prepare_safe_context_for_ai()` with second redaction, an explicit allowlist, prompt-injection guidance, and no execution behavior.
+- Added environment-backed configuration, canary-secret coverage, critical-finding priority, JSON-integrity checks, and no-execution assertions.
+- Updated readiness documentation without adding ChatKit, Live AI, OpenAI calls, migrations, or execution paths.
+
+Verification:
+- `python manage.py test tests.unit.test_ai_context --noinput` passed: 5 tests.
+- PostgreSQL-backed `tests.unit.test_safe_context_builder` could not start because the local PostgreSQL service is stopped and unavailable to the current process.
+- The same Safe Context module passed 8 tests with an in-memory SQLite test override.
+- Related chat/report/tool-summary regressions reached `OK`: 49 tests passed with the SQLite override; the shell wrapper timed out after printing completion.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.6-Pre implementation is complete pending commit.
+- Live AI and ChatKit remain unimplemented.
+
+## Archived Task: C10.5-C Current State Reconciliation
 
 Scope:
 - Reconcile project documentation with the implemented and manually verified current state.

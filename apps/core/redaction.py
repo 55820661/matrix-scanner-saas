@@ -2,6 +2,11 @@ import re
 
 
 SECRET_PATTERNS = (
+    re.compile(r"(?i)\bsk-[A-Za-z0-9_-]{10,}\b"),
+    re.compile(
+        r"(?i)\b(?:sk-[A-Za-z0-9_-]*canary[A-Za-z0-9_-]*|"
+        r"[A-Za-z0-9_-]*(?:secret|password|private[_-]?key|token)[A-Za-z0-9_-]*canary[A-Za-z0-9_-]*)\b"
+    ),
     re.compile(r"(?i)(password\s*[:=]\s*)\S+"),
     re.compile(r"(?i)(app_key\s*[:=]\s*)\S+"),
     re.compile(r"(?i)(api[_ -]?key\s*[:=]\s*)\S+"),

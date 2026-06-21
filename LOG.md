@@ -2,6 +2,43 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-22 - C10.6-Pre Safe Context Hard Cap and Live AI Readiness Start
+
+Intent:
+- Close the Safe Context size and payload-safety gap before any Live AI implementation.
+
+Scope:
+- Add deterministic structured hard-cap enforcement and safe truncation metadata.
+- Add a second-redaction, allowlisted AI-ready payload builder.
+- Add canary-secret, size-cap, priority-preservation, JSON-integrity, and no-execution tests.
+- Add environment-backed byte-limit configuration and concise documentation.
+
+Out of scope:
+- ChatKit, Live AI, OpenAI calls, ASGI/SSE, Telegram, Portal changes, automatic tool requests, ToolRun/AgentJob execution, remediation, uploads, and migrations.
+
+## 2026-06-22 - C10.6-Pre Safe Context Hard Cap and Live AI Readiness Complete
+
+Result:
+- Enforced a deterministic structured hard byte cap for Safe Context.
+- Added safe size metadata without storing or logging discarded content.
+- Added `prepare_safe_context_for_ai()` with second redaction, allowlisted fields, critical-finding priority, prompt-injection guidance, and `tools_enabled=false`.
+- Added `AI_SAFE_CONTEXT_MAX_BYTES=65536` environment-backed configuration.
+- Expanded generic secret redaction for OpenAI-style keys and explicit canary markers.
+- Added focused pure and database integration tests without adding migrations or external dependencies.
+
+Verification:
+- `python manage.py test tests.unit.test_ai_context --noinput` passed: 5 tests.
+- Standard PostgreSQL test startup failed before test execution because the local service is stopped and cannot be started with current permissions.
+- Safe Context integration passed with an in-memory SQLite override: 8 tests.
+- Related admin chat, chat reports, reports, and tool-result regressions reached `OK` with the SQLite override: 49 tests; the shell wrapper timed out after printing the successful result.
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- Rerun the focused and related suites against PostgreSQL when the local service is available.
+- C10.6 Live AI/ChatKit remains separate and unimplemented.
+
 ## 2026-06-20 - Sprint C10.5-C Current State Reconciliation Start
 
 Intent:
