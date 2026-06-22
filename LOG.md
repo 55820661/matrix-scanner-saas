@@ -2,6 +2,37 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-22 - C10.6 Live Admin ChatKit with Custom Server MVP Start
+
+Intent:
+- Add the first conservative Live AI experience to staff-only Admin Internal Chat using ChatKit Custom Server Integration.
+
+Scope:
+- Add a disabled-by-default feature flag and server-only OpenAI configuration.
+- Add an embedded ChatKit panel and same-origin, CSRF-protected custom server endpoint.
+- Use fresh `build_safe_context()` plus `prepare_safe_context_for_ai()` for every live response.
+- Stream text responses, persist only completed assistant messages, record safe failure metadata, rate-limit staff users, and retain deterministic fallback.
+- Add ASGI/Nginx/CSP deployment documentation and focused mock-provider tests.
+
+Out of scope:
+- Portal/Telegram Live AI, tools/function calling/actions, automatic ToolRequest, ToolRun/AgentJob creation, uploads, remediation, AI reports, Hosted Agent Builder, Codex CLI runtime, server changes, and migrations.
+
+## 2026-06-22 - C10.6 Live Admin ChatKit with Custom Server MVP Complete
+
+Result:
+- Added a disabled-by-default, staff-only embedded ChatKit panel and same-origin Custom Server streaming endpoint.
+- Added fresh capped/redacted Safe Context provider input, server-only OpenAI configuration, rate limiting, timeout/failure/disconnect handling, completed-response persistence, and safe audit metadata.
+- Preserved deterministic fallback and left Portal, Telegram, tools/actions, execution objects, uploads, remediation, and AI reports unchanged.
+- Added ChatKit/OpenAI/Uvicorn dependencies and deployment/smoke documentation; no migrations or live infrastructure changes were made.
+- Retained `docs/index.html` as a non-served user reference only; its Hosted integration is not used by the application.
+
+Verification:
+- `python manage.py check` passed with no issues.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- 42 focused and related tests reached `OK` using an in-memory SQLite override; the wrapper timed out after success while closing the temporary test database.
+- PostgreSQL rerun remains pending because the local service is stopped and unavailable to the current process.
+- `pip check` passed with no broken requirements.
+- Python compilation passed using a temporary bytecode cache; the repository cache directory is not writable by the current process.
 ## 2026-06-22 - C10.6-Pre Safe Context Hard Cap and Live AI Readiness Start
 
 Intent:

@@ -14,6 +14,8 @@ C10.5 and C10.5-B completed the Admin/Portal responsibility split and internal c
 
 Before Live AI, Safe Context now enforces a structured hard byte cap and provides a second-redacted, allowlisted AI-ready payload. Raw logs, environment data, ToolRun/AgentJob outputs, credentials, and execution behavior are excluded from that payload.
 
+Staff-only Admin Internal Chat now includes a disabled-by-default ChatKit Custom Server mode with same-origin streaming, safe persistence, rate limiting, and deterministic fallback. Enabling it requires explicit server-side OpenAI and ASGI/Nginx configuration; Portal and Telegram remain deterministic and unchanged.
+
 ## MVP Safety Rule
 
 Read-only advisory diagnostics only.

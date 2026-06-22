@@ -1,14 +1,23 @@
+import json
+
+from asgiref.sync import sync_to_async
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.exceptions import PermissionDenied
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+
+from chatkit.server import StreamingResult
 
 from apps.accounts.models import Account
 from apps.applications.models import Application
 from apps.servers.models import Server
 
 from .models import AdminChatReportDraft, AdminChatSession
+from .chatkit_store import AdminChatKitContext
+from .live_ai import live_admin_chatkit_server, live_ai_configuration_error
 from .services import (
     add_user_message_and_response,
     approve_tool_request,
@@ -83,8 +92,49 @@ def internal_chat_session_detail(request, session_id):
             "available_tools": (session.context_snapshot_redacted or {}).get("available_tools", []),
             "can_write": user_can_write_chat(request.user, session),
             "chat_report_types": AdminChatReportDraft.DraftType.choices,
+            "live_ai_enabled": settings.ADMIN_LIVE_AI_ENABLED,
+            "live_ai_available": settings.ADMIN_LIVE_AI_ENABLED and not live_ai_configuration_error(),
+            "live_ai_error": live_ai_configuration_error() if settings.ADMIN_LIVE_AI_ENABLED else "",
         },
     )
+
+
+@require_POST
+@staff_member_required
+async def internal_chat_live(request, session_id):
+    if not settings.ADMIN_LIVE_AI_ENABLED:
+        return JsonResponse({"error": "Live AI is disabled."}, status=404)
+    configuration_error = live_ai_configuration_error()
+    if configuration_error:
+        return JsonResponse({"error": configuration_error}, status=503)
+
+    user = await request.auser()
+    session = await sync_to_async(
+        lambda: get_object_or_404(_scoped_internal_chat_sessions(), id=session_id),
+        thread_sensitive=True,
+    )()
+    try:
+        payload = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"error": "Invalid ChatKit request."}, status=400)
+    requested_thread_id = (payload.get("params") or {}).get("thread_id")
+    if requested_thread_id and str(requested_thread_id) != str(session.id):
+        return JsonResponse({"error": "Cross-session ChatKit access denied."}, status=403)
+
+    context = AdminChatKitContext(user=user, session=session)
+    try:
+        result = await live_admin_chatkit_server.process(request.body, context)
+    except PermissionDenied:
+        return JsonResponse({"error": "Live AI access denied."}, status=403)
+    except Exception:
+        return JsonResponse({"error": "Invalid ChatKit request."}, status=400)
+
+    if isinstance(result, StreamingResult):
+        response = StreamingHttpResponse(result, content_type="text/event-stream")
+        response["Cache-Control"] = "no-cache, no-store"
+        response["X-Accel-Buffering"] = "no"
+        return response
+    return HttpResponse(result.json, content_type="application/json")
 
 
 @require_POST

@@ -2,7 +2,38 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
-## Current Task: C10.6-Pre Safe Context Hard Cap and Live AI Readiness
+## Current Task: None
+
+No implementation task is currently active.
+
+## Archived Task: C10.6 Live Admin ChatKit with Custom Server MVP
+
+Scope:
+- Add feature-flagged, staff-only embedded ChatKit to Admin Internal Chat.
+- Implement a Django Custom Server endpoint with safe-context-only live response streaming.
+- Preserve current deterministic chat as the disabled/provider-failure/CDN fallback.
+- Add server-side OpenAI configuration, rate limiting, safe persistence, audit metadata, and deployment documentation.
+
+Out of scope:
+- Portal or Telegram Live AI, tools/function calling/actions, ToolRequest/ToolRun/AgentJob creation, uploads, remediation, AI report generation, Agent Builder, Codex CLI runtime, and migrations.
+
+Result:
+- Added a disabled-by-default embedded ChatKit panel and staff-only Custom Server SSE endpoint.
+- Added fresh capped/redacted Safe Context input, server-only provider configuration, rate limiting, timeout/failure/disconnect handling, safe completed-message persistence, and audit metadata.
+- Kept deterministic chat available as fallback and left Portal, Telegram, tools, actions, uploads, remediation, and reports unchanged.
+- Added ASGI/Uvicorn, Nginx buffering, CSP, and smoke-test documentation without changing live infrastructure.
+
+Verification:
+- `python manage.py check` passed with no issues.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- 42 Safe Context, Admin Chat, C10.5 split, and Live ChatKit tests reached `OK` with an in-memory SQLite override; the shell wrapper timed out after printing completion while closing the temporary database.
+- `pip check` passed with no broken requirements.
+- PostgreSQL-backed rerun remains pending because the local service is stopped and cannot be started with current permissions.
+
+Completion status:
+- C10.6 implementation is complete.
+
+## Archived Task: C10.6-Pre Safe Context Hard Cap and Live AI Readiness
 
 Scope:
 - Enforce a deterministic structured hard byte cap on Safe Context.

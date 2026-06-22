@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ar" dir="auto">
+<head>
+  <meta charset="UTF-8" />
+  <title>Matrix Clouds Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- ChatKit script -->
+  <script src="https://cdn.platform.openai.com/deployments/chatkit/chatkit.js" async></script>
+
+  <style>
+    :root{
+      --mc-bg: #0b1020;
+      --mc-panel: #050816;
+      --mc-border: rgba(255,255,255,0.10);
+      --mc-shadow: 0 20px 45px rgba(0,0,0,.45);
+
+      --btn-size: 56px;
+      --gap: 16px;
+
+      --panel-w: 380px;
+      --panel-h: 560px;
+
+      --radius: 18px;
+      --radius-lg: 20px;
+    }
+
+    body{
+      margin:0;
+      min-height:100vh;
+      background: var(--mc-bg);
+      color:#fff;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      direction: auto;
+      unicode-bidi: plaintext;
+    }
+
+    /* ===== Floating launcher ===== */
+    .chat-launcher{
+      position: fixed;
+      bottom: var(--gap);
+      z-index: 9999;
+      width: var(--btn-size);
+      height: var(--btn-size);
+      border-radius: 999px;
+      border: 1px solid var(--mc-border);
+      background: radial-gradient(circle at top left, #22d3ee, #6366f1);
+      box-shadow: var(--mc-shadow);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      user-select:none;
+    }
+    /* Placement by page direction */
+    html[dir="rtl"] .chat-launcher { left: var(--gap); right: auto; }
+    html[dir="ltr"] .chat-launcher { right: var(--gap); left: auto; }
+    /* If dir=auto, default to right; JS will correct if Arabic */
+    html[dir="auto"] .chat-launcher { right: var(--gap); left: auto; }
+
+    .chat-launcher svg{ width: 30px; height: 30px; }
+
+    /* ===== Overlay (mobile / focus) ===== */
+    .chat-overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 9998;
+      display:none;
+    }
+    .chat-overlay.open{ display:block; }
+
+    /* ===== Popup panel ===== */
+    .chat-panel{
+      position: fixed;
+      bottom: calc(var(--gap) + var(--btn-size) + 10px);
+      z-index: 9999;
+
+      width: var(--panel-w);
+      height: var(--panel-h);
+      max-height: calc(100vh - 24px);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: var(--mc-panel);
+      border: 1px solid var(--mc-border);
+      box-shadow: var(--mc-shadow);
+
+      display:none;
+      flex-direction: column;
+    }
+
+    html[dir="rtl"] .chat-panel { left: var(--gap); right: auto; }
+    html[dir="ltr"] .chat-panel { right: var(--gap); left: auto; }
+    html[dir="auto"] .chat-panel { right: var(--gap); left: auto; }
+
+    .chat-panel.open{ display:flex; }
+
+    /* Responsive: full width on small screens */
+    @media (max-width: 420px){
+      .chat-panel{
+        width: calc(100vw - 24px);
+        height: calc(100vh - 120px);
+        left: 12px !important;
+        right: 12px !important;
+      }
+      .chat-launcher{
+        left: auto !important;
+        right: 12px !important; /* fallback */
+      }
+    }
+
+    /* ===== Panel header ===== */
+    .panel-header{
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 12px;
+      background: radial-gradient(circle at top left, #22d3ee, #6366f1);
+    }
+
+    .panel-title{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .avatar{
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: rgba(2,6,23,.35);
+      border: 1px solid rgba(255,255,255,.25);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex: 0 0 auto;
+    }
+    .avatar svg{ width: 22px; height: 22px; }
+
+    .title-text{
+      display:flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .title-text .t1{
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .title-text .t2{
+      font-size: 11px;
+      opacity: .92;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .panel-close{
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.35);
+      background: rgba(2,6,23,.25);
+      color:#fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      flex: 0 0 auto;
+    }
+
+    .panel-body{
+      flex: 1;
+      background: radial-gradient(circle at top, #020617, #020617 40%, #000 100%);
+    }
+
+    openai-chatkit{
+      width:100%;
+      height:100%;
+      display:block;
+      direction: auto;
+      unicode-bidi: plaintext;
+    }
+
+    /* ===== Simple “bot avatar” SVG colors inherit ===== */
+    .svg-stroke{ stroke: rgba(255,255,255,.95); }
+    .svg-fill{ fill: rgba(255,255,255,.95); }
+  </style>
+</head>
+
+<body>
+
+  <!-- Overlay -->
+  <div id="chatOverlay" class="chat-overlay" aria-hidden="true"></div>
+
+  <!-- Popup Panel -->
+  <div id="chatPanel" class="chat-panel" role="dialog" aria-modal="true" aria-label="Matrix Clouds Chat">
+    <div class="panel-header">
+      <div class="panel-title">
+        <div class="avatar" aria-hidden="true">
+          <!-- AI assistant avatar icon (SVG) -->
+          <svg viewBox="0 0 24 24" fill="none">
+            <path class="svg-stroke" d="M7 10.5c0-2.2 1.8-4 4-4h2c2.2 0 4 1.8 4 4v4.5c0 2-1.6 3.6-3.6 3.6H10.6C8.6 18.6 7 17 7 15v-4.5Z" stroke-width="1.6" />
+            <path class="svg-stroke" d="M9.2 6.7V5.4c0-.8.6-1.4 1.4-1.4h2.8c.8 0 1.4.6 1.4 1.4v1.3" stroke-width="1.6" />
+            <path class="svg-stroke" d="M9.2 13.2h.01M14.8 13.2h.01" stroke-width="2.4" stroke-linecap="round"/>
+            <path class="svg-stroke" d="M9.5 15.8c.7.7 1.6 1 2.5 1s1.8-.3 2.5-1" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="title-text">
+          <div class="t1">مساعد ماتريكس كلاودز الذكي</div>
+          <div class="t2">اسأل عن خدماتنا أو اطلب تواصل مع المبيعات</div>
+        </div>
+      </div>
+
+      <button id="chatClose" class="panel-close" type="button" aria-label="إغلاق">
+        <!-- X -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path class="svg-stroke" d="M6 6l12 12M18 6L6 18" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="panel-body">
+      <openai-chatkit id="taskaai-chat" dir="auto"></openai-chatkit>
+    </div>
+  </div>
+
+  <!-- Launcher Button -->
+  <button id="chatLauncher" class="chat-launcher" type="button" aria-label="فتح الشات">
+    <!-- Same AI avatar icon -->
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path class="svg-stroke" d="M7 10.5c0-2.2 1.8-4 4-4h2c2.2 0 4 1.8 4 4v4.5c0 2-1.6 3.6-3.6 3.6H10.6C8.6 18.6 7 17 7 15v-4.5Z" stroke-width="1.6" />
+      <path class="svg-stroke" d="M9.2 6.7V5.4c0-.8.6-1.4 1.4-1.4h2.8c.8 0 1.4.6 1.4 1.4v1.3" stroke-width="1.6" />
+      <path class="svg-stroke" d="M9.2 13.2h.01M14.8 13.2h.01" stroke-width="2.4" stroke-linecap="round"/>
+      <path class="svg-stroke" d="M9.5 15.8c.7.7 1.6 1 2.5 1s1.8-.3 2.5-1" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+  </button>
+
+  <script>
+    // ===== Popup open/close =====
+    const panel = document.getElementById("chatPanel");
+    const overlay = document.getElementById("chatOverlay");
+    const launcher = document.getElementById("chatLauncher");
+    const closeBtn = document.getElementById("chatClose");
+
+    function setPlacementFromDir(){
+      // If html dir is auto, decide based on first strong char in language
+      const html = document.documentElement;
+      if (html.getAttribute("dir") === "auto") {
+        const lang = (html.getAttribute("lang") || "").toLowerCase();
+        // if page lang is Arabic -> RTL
+        if (lang.startsWith("ar")) html.setAttribute("dir", "rtl");
+        else html.setAttribute("dir", "ltr");
+      }
+    }
+
+    function openChat(){
+      setPlacementFromDir();
+      panel.classList.add("open");
+      overlay.classList.add("open");
+      overlay.setAttribute("aria-hidden", "false");
+      // focus close for accessibility
+      closeBtn.focus();
+    }
+
+    function closeChat(){
+      panel.classList.remove("open");
+      overlay.classList.remove("open");
+      overlay.setAttribute("aria-hidden", "true");
+      launcher.focus();
+    }
+
+    launcher.addEventListener("click", openChat);
+    closeBtn.addEventListener("click", closeChat);
+    overlay.addEventListener("click", closeChat);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && panel.classList.contains("open")) closeChat();
+    });
+
+    // ===== ChatKit init =====
+    async function initChatKit() {
+      const el = document.getElementById("taskaai-chat");
+      if (!el) return;
+
+      if (!customElements.get("openai-chatkit")) {
+        await customElements.whenDefined("openai-chatkit");
+      }
+
+      el.setOptions({
+        header: { enabled: false }, // لأننا عاملين هيدر خاص بينا
+        api: {
+          async getClientSecret(currentClientSecret) {
+            const res = await fetch("/api/chatkit/session", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+            });
+
+            if (!res.ok) {
+              const txt = await res.text();
+              console.error("❌ فشل استدعاء /api/chatkit/session:", txt);
+              throw new Error("فشل في إنشاء جلسة ChatKit (backend)");
+            }
+
+            const data = await res.json();
+            if (!data.client_secret) {
+              console.error("❌ client_secret غير موجود:", data);
+              throw new Error("client_secret غير موجود في رد السيرفر");
+            }
+            return data.client_secret;
+          },
+        },
+      });
+    }
+
+    window.addEventListener("load", initChatKit);
+  </script>
+</body>
+</html>

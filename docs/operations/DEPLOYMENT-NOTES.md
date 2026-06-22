@@ -43,9 +43,53 @@ TELEGRAM_WEBHOOK_SECRET
 PUBLIC_BASE_URL
 TOKEN_HASH_SALT
 FIELD_ENCRYPTION_KEY
+ADMIN_LIVE_AI_ENABLED=false
+OPENAI_API_KEY
+OPENAI_MODEL
+OPENAI_TIMEOUT_SECONDS=30
+OPENAI_MAX_INPUT_TOKENS=12000
+OPENAI_MAX_OUTPUT_TOKENS=1000
+ADMIN_LIVE_AI_RATE_LIMIT_PER_HOUR=30
 ```
 
 Never commit `.env`, Telegram bot tokens, SSH credentials, API keys, database passwords, private keys, raw registration tokens, or raw agent tokens.
+
+## Live Admin ChatKit Deployment
+
+Live Admin AI is disabled by default and is restricted to staff-only Admin Internal Chat. It uses ChatKit Custom Server Integration; the browser calls the same-origin Django endpoint and never receives the OpenAI API key.
+
+Serve Django through ASGI for production SSE:
+
+```text
+uvicorn scanner_platform.asgi:application --host 127.0.0.1 --port 8000 --proxy-headers
+```
+
+WSGI can technically stream but ties up a worker for the lifetime of each response and is not the recommended Live AI deployment. Review and update the production systemd unit manually; this repository does not change a running server unit.
+
+Apply proxy settings only to the Live AI path:
+
+```nginx
+location ~ ^/admin/internal-chat/[0-9]+/live/$ {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 45s;
+    proxy_send_timeout 45s;
+    gzip off;
+}
+```
+
+Preserve the existing forwarding headers and HTTPS configuration when merging this location into production Nginx. The proxy timeouts must remain longer than `OPENAI_TIMEOUT_SECONDS`.
+
+If Content Security Policy is enabled at Nginx or another proxy, keep it narrow:
+
+```text
+script-src 'self' https://cdn.platform.openai.com
+connect-src 'self'
+```
+
+The frontend must not connect directly to `api.openai.com`. The custom initialization script is served from local static files. Test the final CSP against Django Admin before rollout because existing Admin styles may have separate style policy requirements.
 
 ## HTTPS and Proxy Notes
 

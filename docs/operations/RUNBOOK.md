@@ -148,3 +148,18 @@ These are not part of the MVP runbook:
 - Customer Remote Bootstrap.
 - Live LLM execution.
 - Remediation/write/destructive actions.
+
+## Live Admin AI Smoke
+
+Live Admin AI remains disabled until the ASGI, Nginx, CSP, OpenAI project, and spend-limit review is complete.
+
+1. Set `ADMIN_LIVE_AI_ENABLED=true`, `OPENAI_API_KEY`, and `OPENAI_MODEL` outside the repository.
+2. Run Django through `scanner_platform.asgi:application` and apply the Live AI Nginx location from the deployment notes.
+3. Open a staff-only Admin Internal Chat session. Confirm Portal Chat and Telegram are unchanged.
+4. Confirm the embedded dark ChatKit panel loads and the deterministic fallback button remains available.
+5. Send an English message and an Arabic message. Check RTL text, composer direction, scrolling, dark mode, and a narrow/mobile viewport.
+6. Confirm the assistant message metadata reports `stream_status=completed` and contains no API key, prompt, raw logs, raw environment data, or execution output.
+7. Stop or block the provider and confirm a failed fallback message appears without a traceback or successful-stream status.
+8. Disable the feature flag and confirm the original deterministic chat renders without loading the ChatKit CDN.
+
+ChatKit RTL behavior must be accepted manually. If Arabic layout is not acceptable, record a product decision before replacing ChatKit with a custom UI.

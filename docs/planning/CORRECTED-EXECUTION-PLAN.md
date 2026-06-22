@@ -33,7 +33,7 @@
 - مشكلة عرض dict/list في التقارير التي ظهرت أثناء C10-A أُصلحت لاحقا.
 - C10.5 فصل مسؤوليات Portal Customer Chat عن Staff-only Admin Internal Chat، وC10.5-B أكمل تحسين واجهة وتنقل Internal Chat.
 - C10-B Laravel/Apache/Innvii Pilot مؤجل حاليا.
-- Live AI لم ينفذ بعد. المسار المقترح التالي هو C10.6 داخل Admin Internal Chat فقط.
+- C10.6 نفذ Live AI محدودا داخل Admin Internal Chat فقط عبر ChatKit Custom Server، خلف feature flag معطل افتراضيا.
 - Telegram C11 وTelegram Pilot C12 لم يبدآ، وليسا المهمة الفورية التالية.
 
 ## 3. المراحل التنفيذية المعتمدة
@@ -56,7 +56,7 @@
 | C10.5-C | Current State Reconciliation | مكتمل |
 | C10-B | Laravel/Apache/Innvii Pilot | مؤجل |
 | C10.6-Pre | Safe Context Hard Cap and Live AI Readiness | مكتمل، دون Live AI |
-| C10.6 | Live Admin AI Chatbot MVP | الخطوة المقترحة التالية، غير منفذة |
+| C10.6 | Live Admin ChatKit with Custom Server MVP | مكتمل، staff-only وfeature-flagged ودون tools/actions |
 | C11 | Telegram Interface to Same Chat | لم يبدأ |
 | C12 | Telegram Pilot | لم يبدأ |
 
@@ -1035,8 +1035,9 @@ Objective:
 ### Sprint C10.6 - Live Admin AI Chatbot MVP
 
 Status:
-- غير منفذ، وهو المسار المقترح التالي قبل Telegram ما لم يصدر قرار عكسي.
-- يبدأ داخل Admin Internal Chat فقط، وليس Portal أو Telegram.
+- مكتمل كـ Custom Server MVP داخل Admin Internal Chat فقط، وليس Portal أو Telegram.
+- معطل افتراضيا، ويستخدم OpenAI server-side فقط مع streaming وSafe Context محدود ومنقح.
+- لا tools أو actions أو uploads أو remediation أو إنشاء ToolRequest/ToolRun/AgentJob أو تقارير AI.
 
 Prerequisite completed:
 - C10.6-Pre يفرض hard byte cap فعليا على Safe Context ويجهز payload منفصلة allowlisted مع redaction ثانية وتعليمات واضحة بأن بيانات السياق غير موثوقة ولا تنفذ أدوات أو أوامر.
@@ -1060,7 +1061,7 @@ Status:
 
 ## 17. ما لا يجب تنفيذه الآن
 
-- لا live LLM ضمن C10.5-C؛ C10.6 هو Sprint مستقل مقترح ويحتاج نطاقا واعتمادا واضحين.
+- لا توسيع Live AI خارج C10.6 Admin Custom Server MVP قبل اعتماد Sprint مستقل.
 - لا Telegram AI قبل نجاح Internal Pilot.
 - لا remediation.
 - لا write/destructive tools.
@@ -1113,7 +1114,7 @@ Sprint C2 - Safe Context Builder MVP
 المسار المنفذ أثبت الطبقة الداخلية الموحدة. التسلسل المقترح من الحالة الحالية هو:
 
 ```text
-C10.5-C Current State Reconciliation -> C10.6 Live Admin AI Chatbot MVP -> later pilot decision -> Telegram C11 -> Telegram Pilot C12
+C10.5-C Current State Reconciliation -> C10.6 Live Admin ChatKit Custom Server MVP -> later pilot decision -> Telegram C11 -> Telegram Pilot C12
 ```
 
-يظل C10-B Laravel/Apache/Innvii مؤجلا. Live AI وTelegram لم ينفذا بعد، وأي انتقال إليهما يظل خاضعا لنطاق Sprint واعتماد مستقلين.
+يظل C10-B Laravel/Apache/Innvii مؤجلا. C10.6 Live Admin MVP مكتمل، بينما Telegram لم ينفذ بعد وأي انتقال إليه يظل خاضعا لنطاق Sprint واعتماد مستقل.
