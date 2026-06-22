@@ -147,6 +147,7 @@ AI_SAFE_CONTEXT_MAX_BYTES = int(os.environ.get("AI_SAFE_CONTEXT_MAX_BYTES", "655
 ADMIN_LIVE_AI_ENABLED = os.environ.get("ADMIN_LIVE_AI_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "")
+OPENAI_CHATKIT_DOMAIN_KEY = os.environ.get("OPENAI_CHATKIT_DOMAIN_KEY", "")
 OPENAI_TIMEOUT_SECONDS = int(os.environ.get("OPENAI_TIMEOUT_SECONDS", "30"))
 OPENAI_MAX_INPUT_TOKENS = int(os.environ.get("OPENAI_MAX_INPUT_TOKENS", "12000"))
 OPENAI_MAX_OUTPUT_TOKENS = int(os.environ.get("OPENAI_MAX_OUTPUT_TOKENS", "1000"))

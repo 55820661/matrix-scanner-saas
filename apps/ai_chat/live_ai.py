@@ -113,6 +113,8 @@ def live_ai_configuration_error() -> str:
         return "Live AI is enabled but OPENAI_API_KEY is not configured."
     if not settings.OPENAI_MODEL:
         return "Live AI is enabled but OPENAI_MODEL is not configured."
+    if not settings.OPENAI_CHATKIT_DOMAIN_KEY:
+        return "Live AI is enabled but OPENAI_CHATKIT_DOMAIN_KEY is not configured."
     if settings.OPENAI_TIMEOUT_SECONDS < 1:
         return "OPENAI_TIMEOUT_SECONDS must be at least 1."
     if settings.OPENAI_MAX_INPUT_TOKENS < 512:

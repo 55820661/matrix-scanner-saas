@@ -46,6 +46,7 @@ FIELD_ENCRYPTION_KEY
 ADMIN_LIVE_AI_ENABLED=false
 OPENAI_API_KEY
 OPENAI_MODEL
+OPENAI_CHATKIT_DOMAIN_KEY
 OPENAI_TIMEOUT_SECONDS=30
 OPENAI_MAX_INPUT_TOKENS=12000
 OPENAI_MAX_OUTPUT_TOKENS=1000
@@ -57,6 +58,8 @@ Never commit `.env`, Telegram bot tokens, SSH credentials, API keys, database pa
 ## Live Admin ChatKit Deployment
 
 Live Admin AI is disabled by default and is restricted to staff-only Admin Internal Chat. It uses ChatKit Custom Server Integration; the browser calls the same-origin Django endpoint and never receives the OpenAI API key.
+
+Register the production origin in the OpenAI domain allowlist and set its public ChatKit domain key in `OPENAI_CHATKIT_DOMAIN_KEY`. The Admin JavaScript lives under the `ai_chat` app static directory and is collected by Django automatically; do not copy it into `STATIC_ROOT` manually. Run `python manage.py collectstatic --noinput` during deployment.
 
 Serve Django through ASGI for production SSE:
 

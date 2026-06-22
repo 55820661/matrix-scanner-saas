@@ -2,6 +2,34 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-22 - C10.6-H1 ChatKit Frontend Initialization Hotfix Start
+
+Intent:
+- Fix the production ChatKit browser initialization schema mismatch and permanent static discovery.
+
+Scope:
+- Verify and apply the current Custom Server options shape.
+- Relocate the Admin ChatKit JavaScript into an app-owned static directory discoverable by Django.
+- Add focused frontend-config and static-discovery tests.
+
+Out of scope:
+- Backend provider logic, Portal, Telegram, tools/actions, Hosted Agent Builder, migrations, and live infrastructure changes.
+
+## 2026-06-22 - C10.6-H1 ChatKit Frontend Initialization Hotfix Complete
+
+Result:
+- Corrected the current ChatKit options contract to `api: { url, domainKey, fetch }` and `header: { enabled: false }`.
+- Added the required public domain-key configuration and fail-closed UI availability check.
+- Relocated `live_chatkit.js` into the `ai_chat` app static directory for automatic Django discovery.
+- Added regressions for static discovery, valid Custom Server options, missing domain-key handling, feature flags, access boundaries, and no execution-object creation.
+- Did not change the streaming endpoint, provider behavior, Safe Context, Portal, Telegram, tools/actions, or database schema.
+
+Verification:
+- Django check passed and no migrations were detected.
+- All 13 focused Live Admin ChatKit tests passed against the existing test database.
+- `findstatic` found the app-owned asset and `collectstatic --dry-run` included it among 128 files.
+- `git diff --check` passed.
+
 ## 2026-06-22 - C10.6 Live Admin ChatKit with Custom Server MVP Start
 
 Intent:

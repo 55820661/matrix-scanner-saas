@@ -6,6 +6,34 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.6-H1 Fix ChatKit frontend initialization API mismatch
+
+Scope:
+- Verify the current official ChatKit Custom Server browser initialization contract.
+- Correct the embedded Admin ChatKit options without changing the live backend unless required.
+- Move the JavaScript asset into an app-owned static source so `collectstatic` discovers it automatically.
+- Add focused initialization/static-discovery regressions while preserving staff-only, feature-flag, Safe Context, and no-tools boundaries.
+
+Out of scope:
+- Portal, Telegram, Hosted Agent Builder, tools/actions, backend provider behavior, migrations, and live infrastructure changes.
+
+Result:
+- Replaced invalid top-level `apiURL` and `fetch` with `api: { url, domainKey, fetch }` and replaced `header: false` with `header: { enabled: false }`.
+- Added required `OPENAI_CHATKIT_DOMAIN_KEY` configuration and fail-closed rendering when it is missing.
+- Moved the JavaScript source into `apps/ai_chat/static/admin_chat/` so Django app static discovery collects it without manual copying.
+- Kept the existing Custom Server endpoint, Safe Context/provider logic, staff-only restriction, feature flag, and no-tools boundary unchanged.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `findstatic` resolved the asset from the `ai_chat` app static directory.
+- `collectstatic --dry-run --noinput -v 2` included the asset and completed with 128 files.
+- `git diff --check` passed.
+
+Completion status:
+- C10.6-H1 is complete.
+
 ## Archived Task: C10.6 Live Admin ChatKit with Custom Server MVP
 
 Scope:

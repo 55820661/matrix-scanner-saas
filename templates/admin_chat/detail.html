@@ -199,6 +199,7 @@
           class="matrix-live-ai"
           id="matrix-live-ai"
           data-api-url="{% url 'admin_chat:session_live' session.id %}"
+          data-domain-key="{{ chatkit_domain_key }}"
           data-thread-id="{{ session.id }}"
         >
           <div class="matrix-live-ai-header">

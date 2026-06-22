@@ -153,7 +153,7 @@ These are not part of the MVP runbook:
 
 Live Admin AI remains disabled until the ASGI, Nginx, CSP, OpenAI project, and spend-limit review is complete.
 
-1. Set `ADMIN_LIVE_AI_ENABLED=true`, `OPENAI_API_KEY`, and `OPENAI_MODEL` outside the repository.
+1. Register the origin in the OpenAI domain allowlist, then set `ADMIN_LIVE_AI_ENABLED=true`, `OPENAI_API_KEY`, `OPENAI_MODEL`, and `OPENAI_CHATKIT_DOMAIN_KEY` outside the repository.
 2. Run Django through `scanner_platform.asgi:application` and apply the Live AI Nginx location from the deployment notes.
 3. Open a staff-only Admin Internal Chat session. Confirm Portal Chat and Telegram are unchanged.
 4. Confirm the embedded dark ChatKit panel loads and the deterministic fallback button remains available.

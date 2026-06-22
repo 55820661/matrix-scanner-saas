@@ -95,6 +95,7 @@ def internal_chat_session_detail(request, session_id):
             "live_ai_enabled": settings.ADMIN_LIVE_AI_ENABLED,
             "live_ai_available": settings.ADMIN_LIVE_AI_ENABLED and not live_ai_configuration_error(),
             "live_ai_error": live_ai_configuration_error() if settings.ADMIN_LIVE_AI_ENABLED else "",
+            "chatkit_domain_key": settings.OPENAI_CHATKIT_DOMAIN_KEY,
         },
     )
 

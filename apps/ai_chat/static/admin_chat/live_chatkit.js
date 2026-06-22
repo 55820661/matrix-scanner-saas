@@ -28,9 +28,17 @@
       ]);
       const csrfInput = document.querySelector("[name=csrfmiddlewaretoken]");
       chatkit.setOptions({
-        apiURL: livePanel.dataset.apiUrl,
+        api: {
+          url: livePanel.dataset.apiUrl,
+          domainKey: livePanel.dataset.domainKey,
+          fetch: (input, init = {}) => {
+            const headers = new Headers(init.headers || {});
+            if (csrfInput) headers.set("X-CSRFToken", csrfInput.value);
+            return window.fetch(input, { ...init, headers, credentials: "same-origin" });
+          },
+        },
         initialThread: livePanel.dataset.threadId,
-        header: false,
+        header: { enabled: false },
         history: { enabled: false },
         locale: document.documentElement.lang || navigator.language || "en-US",
         theme: {
@@ -40,11 +48,10 @@
           density: "compact",
           typography: { fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
         },
-        composer: { placeholder: "Ask about the selected account, server, findings, or reports..." },
-        fetch: (input, init = {}) => {
-          const headers = new Headers(init.headers || {});
-          if (csrfInput) headers.set("X-CSRFToken", csrfInput.value);
-          return window.fetch(input, { ...init, headers, credentials: "same-origin" });
+        composer: {
+          placeholder: "Ask about the selected account, server, findings, or reports...",
+          attachments: { enabled: false },
+          tools: [],
         },
       });
       status.textContent = "Live AI ready. Responses use fresh, capped, redacted Safe Context.";

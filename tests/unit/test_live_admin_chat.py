@@ -1,8 +1,11 @@
 import asyncio
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 from asgiref.sync import async_to_sync
+from django.conf import settings
+from django.contrib.staticfiles import finders
 from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -18,6 +21,7 @@ LIVE_SETTINGS = {
     "ADMIN_LIVE_AI_ENABLED": True,
     "OPENAI_API_KEY": "server-only-test-key",
     "OPENAI_MODEL": "test-model",
+    "OPENAI_CHATKIT_DOMAIN_KEY": "domain-test-key",
     "OPENAI_TIMEOUT_SECONDS": 3,
     "OPENAI_MAX_INPUT_TOKENS": 4000,
     "OPENAI_MAX_OUTPUT_TOKENS": 500,
@@ -148,6 +152,31 @@ class LiveAdminChatTests(TestCase):
         self.assertNotContains(page, LIVE_SETTINGS["OPENAI_API_KEY"])
         self.assertNotContains(page, "getClientSecret")
         self.assertNotContains(page, "chat-launcher")
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_chatkit_static_asset_is_discoverable_and_uses_custom_server_options(self):
+        asset_path = finders.find("admin_chat/live_chatkit.js")
+
+        self.assertTrue(asset_path)
+        self.assertEqual(
+            Path(asset_path).resolve(),
+            (settings.BASE_DIR / "apps" / "ai_chat" / "static" / "admin_chat" / "live_chatkit.js").resolve(),
+        )
+        source = Path(asset_path).read_text(encoding="utf-8")
+        self.assertIn("api: {", source)
+        self.assertIn("url: livePanel.dataset.apiUrl", source)
+        self.assertIn("domainKey: livePanel.dataset.domainKey", source)
+        self.assertIn("fetch: (input, init = {})", source)
+        self.assertIn("header: { enabled: false }", source)
+        self.assertNotIn("apiURL:", source)
+        self.assertNotIn("header: false", source)
+
+    @override_settings(**{**LIVE_SETTINGS, "OPENAI_CHATKIT_DOMAIN_KEY": ""})
+    def test_missing_chatkit_domain_key_fails_closed(self):
+        page = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+
+        self.assertContains(page, "OPENAI_CHATKIT_DOMAIN_KEY is not configured")
+        self.assertNotContains(page, '<openai-chatkit id="matrix-admin-chatkit"', html=False)
 
     @override_settings(**LIVE_SETTINGS)
     def test_non_staff_and_portal_sessions_are_rejected(self):
