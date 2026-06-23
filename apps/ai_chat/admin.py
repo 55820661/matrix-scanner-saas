@@ -1,6 +1,13 @@
 from django.contrib import admin, messages
 
-from .models import AdminChatDecision, AdminChatMessage, AdminChatReportDraft, AdminChatSession, AdminChatToolRequest
+from .models import (
+    AdminChatDecision,
+    AdminChatMessage,
+    AdminChatReportDraft,
+    AdminChatSession,
+    AdminChatToolRequest,
+    AdminLiveAIRequestLog,
+)
 from .services import convert_chat_report_draft, review_chat_report_draft
 
 
@@ -69,6 +76,54 @@ class AdminChatMessageAdmin(admin.ModelAdmin):
     list_filter = ("sender_type",)
     search_fields = ("body_redacted", "session__title_redacted")
     readonly_fields = ("session", "sender_type", "body_redacted", "metadata_redacted", "created_at", "updated_at")
+
+
+@admin.register(AdminLiveAIRequestLog)
+class AdminLiveAIRequestLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "created_at",
+        "status",
+        "error_class",
+        "model",
+        "user_identifier",
+        "session",
+        "account",
+        "server",
+        "application",
+        "latency_ms",
+        "safe_context_size_bytes",
+        "response_size_bytes",
+        "fallback_used",
+    )
+    list_filter = ("status", "model", "user", "account", "created_at")
+    search_fields = ("user__username", "user__email", "user_identifier", "session__id", "error_class")
+    readonly_fields = (
+        "user",
+        "user_identifier",
+        "session",
+        "account",
+        "server",
+        "application",
+        "model",
+        "status",
+        "latency_ms",
+        "safe_context_size_bytes",
+        "response_size_bytes",
+        "error_class",
+        "fallback_used",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(AdminChatDecision)

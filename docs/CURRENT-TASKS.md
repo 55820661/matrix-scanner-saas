@@ -6,6 +6,34 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.7-A Admin Live AI Governance Layer
+
+Scope:
+- Add safe per-request audit logging for Live Admin AI, including scoped IDs, status, latency, sizes, model, classified error, and fallback usage.
+- Add readonly Django Admin list/filter/search visibility for Live AI audit records.
+- Display non-secret Live AI enabled/model/rate-limit/safe-context-cap status in Admin Internal Chat.
+- Add focused governance tests while preserving Admin-only, feature flag, Safe Context, no-tools/actions, Portal, and Telegram boundaries.
+
+Out of scope:
+- New AI capabilities, tools/function calling, command execution, remediation, uploads, Portal AI/customer deterministic changes, Telegram AI, raw prompt logging, and secret exposure.
+
+Result:
+- Added `AdminLiveAIRequestLog` and one migration for per-request Live AI governance audit.
+- Logged successful and failed Live AI requests with classified errors, fallback usage, sizes, latency, user/session/account/server/application scope, and model.
+- Added readonly Django Admin visibility and non-secret Admin Internal Chat status display.
+- Redacted request payloads before ChatKit server processing to prevent raw secret-like user input from being echoed in SSE responses.
+- Preserved Portal, Telegram, deterministic customer chat, tools/actions, uploads, and remediation boundaries.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no additional changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.7-A is complete.
+
 ## Archived Task: C10.6-H1 Fix ChatKit frontend initialization API mismatch
 
 Scope:

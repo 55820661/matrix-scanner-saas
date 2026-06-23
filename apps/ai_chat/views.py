@@ -1,4 +1,5 @@
 import json
+from time import monotonic
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -13,11 +14,19 @@ from chatkit.server import StreamingResult
 
 from apps.accounts.models import Account
 from apps.applications.models import Application
+from apps.core.redaction import redact_json
 from apps.servers.models import Server
 
-from .models import AdminChatReportDraft, AdminChatSession
 from .chatkit_store import AdminChatKitContext
-from .live_ai import live_admin_chatkit_server, live_ai_configuration_error
+from .live_ai import (
+    LIVE_AI_SAFE_ERROR_MESSAGE,
+    classify_configuration_error,
+    create_live_ai_request_log,
+    live_admin_chatkit_server,
+    live_ai_configuration_error,
+    update_live_ai_request_log,
+)
+from .models import AdminChatReportDraft, AdminChatSession, AdminLiveAIRequestLog
 from .services import (
     add_user_message_and_response,
     approve_tool_request,
@@ -95,6 +104,10 @@ def internal_chat_session_detail(request, session_id):
             "live_ai_enabled": settings.ADMIN_LIVE_AI_ENABLED,
             "live_ai_available": settings.ADMIN_LIVE_AI_ENABLED and not live_ai_configuration_error(),
             "live_ai_error": live_ai_configuration_error() if settings.ADMIN_LIVE_AI_ENABLED else "",
+            "live_ai_status": "Enabled" if settings.ADMIN_LIVE_AI_ENABLED else "Disabled",
+            "live_ai_model": settings.OPENAI_MODEL or "not configured",
+            "live_ai_rate_limit_per_hour": settings.ADMIN_LIVE_AI_RATE_LIMIT_PER_HOUR,
+            "live_ai_safe_context_max_bytes": settings.AI_SAFE_CONTEXT_MAX_BYTES,
             "chatkit_domain_key": settings.OPENAI_CHATKIT_DOMAIN_KEY,
         },
     )
@@ -103,38 +116,90 @@ def internal_chat_session_detail(request, session_id):
 @require_POST
 @staff_member_required
 async def internal_chat_live(request, session_id):
-    if not settings.ADMIN_LIVE_AI_ENABLED:
-        return JsonResponse({"error": "Live AI is disabled."}, status=404)
-    configuration_error = live_ai_configuration_error()
-    if configuration_error:
-        return JsonResponse({"error": configuration_error}, status=503)
-
+    started_at = monotonic()
     user = await request.auser()
     session = await sync_to_async(
         lambda: get_object_or_404(_scoped_internal_chat_sessions(), id=session_id),
         thread_sensitive=True,
     )()
+    audit_log_id = await sync_to_async(create_live_ai_request_log, thread_sensitive=True)(user, session)
+
+    if not settings.ADMIN_LIVE_AI_ENABLED:
+        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+            audit_log_id,
+            status=AdminLiveAIRequestLog.Status.DENIED,
+            latency_ms=int((monotonic() - started_at) * 1000),
+            error_class=AdminLiveAIRequestLog.ErrorClass.DISABLED,
+            fallback_used=True,
+        )
+        return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=404)
+    configuration_error = live_ai_configuration_error()
+    if configuration_error:
+        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+            audit_log_id,
+            status=AdminLiveAIRequestLog.Status.FAILED,
+            latency_ms=int((monotonic() - started_at) * 1000),
+            error_class=classify_configuration_error(configuration_error),
+            fallback_used=True,
+        )
+        return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=503)
+
     try:
         payload = json.loads(request.body)
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return JsonResponse({"error": "Invalid ChatKit request."}, status=400)
+        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+            audit_log_id,
+            status=AdminLiveAIRequestLog.Status.FAILED,
+            latency_ms=int((monotonic() - started_at) * 1000),
+            error_class=AdminLiveAIRequestLog.ErrorClass.VALIDATION_ERROR,
+            fallback_used=True,
+        )
+        return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=400)
     requested_thread_id = (payload.get("params") or {}).get("thread_id")
     if requested_thread_id and str(requested_thread_id) != str(session.id):
-        return JsonResponse({"error": "Cross-session ChatKit access denied."}, status=403)
+        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+            audit_log_id,
+            status=AdminLiveAIRequestLog.Status.DENIED,
+            latency_ms=int((monotonic() - started_at) * 1000),
+            error_class=AdminLiveAIRequestLog.ErrorClass.AUTH_ERROR,
+            fallback_used=True,
+        )
+        return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=403)
 
-    context = AdminChatKitContext(user=user, session=session)
+    safe_body = json.dumps(redact_json(payload), separators=(",", ":")).encode("utf-8")
+    context = AdminChatKitContext(user=user, session=session, audit_log_id=audit_log_id)
     try:
-        result = await live_admin_chatkit_server.process(request.body, context)
+        result = await live_admin_chatkit_server.process(safe_body, context)
     except PermissionDenied:
-        return JsonResponse({"error": "Live AI access denied."}, status=403)
+        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+            audit_log_id,
+            status=AdminLiveAIRequestLog.Status.DENIED,
+            latency_ms=int((monotonic() - started_at) * 1000),
+            error_class=AdminLiveAIRequestLog.ErrorClass.AUTH_ERROR,
+            fallback_used=True,
+        )
+        return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=403)
     except Exception:
-        return JsonResponse({"error": "Invalid ChatKit request."}, status=400)
+        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+            audit_log_id,
+            status=AdminLiveAIRequestLog.Status.FAILED,
+            latency_ms=int((monotonic() - started_at) * 1000),
+            error_class=AdminLiveAIRequestLog.ErrorClass.VALIDATION_ERROR,
+            fallback_used=True,
+        )
+        return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=400)
 
     if isinstance(result, StreamingResult):
         response = StreamingHttpResponse(result, content_type="text/event-stream")
         response["Cache-Control"] = "no-cache, no-store"
         response["X-Accel-Buffering"] = "no"
         return response
+    await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+        audit_log_id,
+        status=AdminLiveAIRequestLog.Status.SUCCEEDED,
+        latency_ms=int((monotonic() - started_at) * 1000),
+        response_size_bytes=len(result.json.encode("utf-8")),
+    )
     return HttpResponse(result.json, content_type="application/json")
 
 

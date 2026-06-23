@@ -163,6 +163,22 @@
       background: #fff1f1;
       color: #7f1d1d;
     }
+    .live-ai-governance {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--hairline-color, #d4d4d4);
+      background: #f8fafc;
+    }
+    .live-ai-governance span {
+      padding: 5px 8px;
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      border-radius: 999px;
+      background: #fff;
+      color: #334155;
+      font-size: 12px;
+    }
     @media (max-width: 1180px) {
       .chat-page {
         grid-template-columns: 1fr;
@@ -193,6 +209,12 @@
         {% if session.server %}<span>Server: {{ session.server.name }}</span>{% endif %}
         {% if session.application %}<span>Application: {{ session.application.name }}</span>{% endif %}
         <span>Status: {{ session.status }}</span>
+      </div>
+      <div class="live-ai-governance" aria-label="Live AI governance status">
+        <span>Live AI: {{ live_ai_status }}</span>
+        <span>Model: {{ live_ai_model }}</span>
+        <span>Rate limit: {{ live_ai_rate_limit_per_hour }}/hour</span>
+        <span>Safe Context max: {{ live_ai_safe_context_max_bytes }} bytes</span>
       </div>
       {% if live_ai_available %}
         <div

@@ -2,6 +2,37 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-24 - C10.7-A Admin Live AI Governance Layer Start
+
+Intent:
+- Add governance, audit visibility, and safer error classification for staff-only Live Admin AI.
+
+Scope:
+- Record a safe audit row for each Live AI request, including status, latency, context/response sizes, model, scoped entities, and classified errors.
+- Add readonly Django Admin visibility for Live AI audit records.
+- Show non-secret Live AI operational status on the Admin Internal Chat page.
+- Keep Live AI limited to Safe Context only with no tools, actions, uploads, remediation, Portal AI, or Telegram AI.
+
+Out of scope:
+- Any new AI capability, tool/function calling, command execution, remediation, uploads, Portal/customer deterministic behavior changes, Telegram changes, and secret/raw prompt logging.
+
+## 2026-06-24 - C10.7-A Admin Live AI Governance Layer Complete
+
+Result:
+- Added `AdminLiveAIRequestLog` as a dedicated per-request governance audit table with a single migration.
+- Wired Live Admin AI requests to create/update audit rows for success, disabled, missing config, validation/auth failures, rate limits, timeouts, upstream errors, and unknown failures.
+- Added readonly Django Admin visibility for Live AI request logs with status/model/user/account/date filters and user/session/error search.
+- Added non-secret Live AI status, model, rate limit, and Safe Context cap visibility to Admin Internal Chat.
+- Redacted the ChatKit request payload before server processing so SSE responses do not echo raw secret-like user input.
+- Kept Portal, Telegram, tools/actions, uploads, remediation, and deterministic customer chat behavior unchanged.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no additional changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-22 - C10.6-H1 ChatKit Frontend Initialization Hotfix Start
 
 Intent:

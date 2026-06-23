@@ -289,7 +289,7 @@ class LiveAdminChatTests(TestCase):
         self.assertIn(b"temporarily unavailable", body)
         assistant = self.session.messages.filter(sender_type=AdminChatMessage.SenderType.ASSISTANT).latest("created_at")
         self.assertEqual(assistant.metadata_redacted["stream_status"], "failed")
-        self.assertEqual(assistant.metadata_redacted["error_code"], "provider_unavailable")
+        self.assertEqual(assistant.metadata_redacted["error_code"], "upstream_error")
 
     @override_settings(**{**LIVE_SETTINGS, "OPENAI_TIMEOUT_SECONDS": 1})
     def test_provider_timeout_returns_failed_fallback(self):
@@ -303,7 +303,7 @@ class LiveAdminChatTests(TestCase):
 
         assistant = self.session.messages.filter(sender_type=AdminChatMessage.SenderType.ASSISTANT).latest("created_at")
         self.assertEqual(assistant.metadata_redacted["stream_status"], "failed")
-        self.assertEqual(assistant.metadata_redacted["error_code"], "provider_unavailable")
+        self.assertEqual(assistant.metadata_redacted["error_code"], "timeout")
 
     @override_settings(**{**LIVE_SETTINGS, "ADMIN_LIVE_AI_RATE_LIMIT_PER_HOUR": 1})
     def test_rate_limit_blocks_second_provider_call(self):
@@ -319,7 +319,7 @@ class LiveAdminChatTests(TestCase):
             body = self.consume_stream(second)
 
         self.assertEqual(len(provider.calls), 1)
-        self.assertIn(b"rate limit reached", body)
+        self.assertIn(b"temporarily unavailable", body)
         latest = self.session.messages.filter(sender_type=AdminChatMessage.SenderType.ASSISTANT).latest("created_at")
         self.assertEqual(latest.metadata_redacted["error_code"], "rate_limited")
 

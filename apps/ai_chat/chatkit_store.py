@@ -30,6 +30,7 @@ class AdminChatKitContext:
     user: Any
     session: AdminChatSession
     item_metadata: dict[str, dict] = field(default_factory=dict)
+    audit_log_id: int | None = None
 
 
 class AdminChatKitStore(Store[AdminChatKitContext]):

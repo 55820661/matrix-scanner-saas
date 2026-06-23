@@ -74,6 +74,64 @@ class AdminChatMessage(TimeStampedModel):
         return f"{self.sender_type} message for {self.session_id}"
 
 
+class AdminLiveAIRequestLog(TimeStampedModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+        DENIED = "denied", "Denied"
+
+    class ErrorClass(models.TextChoices):
+        DISABLED = "disabled", "Disabled"
+        MISSING_CONFIG = "missing_config", "Missing config"
+        AUTH_ERROR = "auth_error", "Auth error"
+        RATE_LIMITED = "rate_limited", "Rate limited"
+        TIMEOUT = "timeout", "Timeout"
+        UPSTREAM_ERROR = "upstream_error", "Upstream error"
+        VALIDATION_ERROR = "validation_error", "Validation error"
+        UNKNOWN_ERROR = "unknown_error", "Unknown error"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="admin_live_ai_request_logs",
+        null=True,
+        blank=True,
+    )
+    user_identifier = models.CharField(max_length=320, blank=True)
+    session = models.ForeignKey(
+        AdminChatSession,
+        on_delete=models.SET_NULL,
+        related_name="live_ai_request_logs",
+        null=True,
+        blank=True,
+    )
+    account = models.ForeignKey(Account, on_delete=models.SET_NULL, related_name="admin_live_ai_request_logs", null=True, blank=True)
+    server = models.ForeignKey(Server, on_delete=models.SET_NULL, related_name="admin_live_ai_request_logs", null=True, blank=True)
+    application = models.ForeignKey(Application, on_delete=models.SET_NULL, related_name="admin_live_ai_request_logs", null=True, blank=True)
+    model = models.CharField(max_length=120, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    latency_ms = models.PositiveIntegerField(default=0)
+    safe_context_size_bytes = models.PositiveIntegerField(default=0)
+    response_size_bytes = models.PositiveIntegerField(default=0)
+    error_class = models.CharField(max_length=40, choices=ErrorClass.choices, blank=True)
+    fallback_used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["model", "created_at"]),
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["account", "created_at"]),
+            models.Index(fields=["session", "created_at"]),
+            models.Index(fields=["error_class", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"Live AI request {self.pk} ({self.status})"
+
+
 class AdminChatDecision(TimeStampedModel):
     class DecisionType(models.TextChoices):
         ANSWER = "answer", "Answer"

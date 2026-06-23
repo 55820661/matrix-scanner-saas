@@ -8,6 +8,7 @@ from time import monotonic
 from asgiref.sync import sync_to_async
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from openai import AsyncOpenAI
 
@@ -25,7 +26,7 @@ from chatkit.types import (
 )
 
 from apps.ai_chat.chatkit_store import AdminChatKitContext, AdminChatKitStore
-from apps.ai_chat.models import AdminChatMessage
+from apps.ai_chat.models import AdminChatMessage, AdminLiveAIRequestLog
 from apps.ai_context.services import build_safe_context, prepare_safe_context_for_ai
 from apps.audit.models import AuditLog
 from apps.core.redaction import redact_secrets
@@ -45,14 +46,7 @@ Never request, reveal, reconstruct, or repeat secrets, credentials, raw logs, ra
 Keep Admin and Portal responsibilities separate. Answer concisely and say clearly when the context is insufficient.
 """.strip()
 
-FALLBACK_MESSAGE = (
-    "Live AI is temporarily unavailable. No live response was completed. "
-    "Use the deterministic fallback in this page or retry later."
-)
-RATE_LIMIT_MESSAGE = (
-    "Live AI rate limit reached for this hour. No provider request was made. "
-    "Use the deterministic fallback in this page or retry later."
-)
+LIVE_AI_SAFE_ERROR_MESSAGE = "Live AI is temporarily unavailable. You can use the deterministic fallback."
 
 
 class LiveAIConfigurationError(RuntimeError):
@@ -124,6 +118,72 @@ def live_ai_configuration_error() -> str:
     if settings.ADMIN_LIVE_AI_RATE_LIMIT_PER_HOUR < 1:
         return "ADMIN_LIVE_AI_RATE_LIMIT_PER_HOUR must be at least 1."
     return ""
+
+
+def classify_configuration_error(message: str) -> str:
+    if "disabled" in (message or "").lower():
+        return AdminLiveAIRequestLog.ErrorClass.DISABLED
+    return AdminLiveAIRequestLog.ErrorClass.MISSING_CONFIG
+
+
+def classify_live_ai_exception(exc: Exception) -> str:
+    if isinstance(exc, LiveAIRateLimitError):
+        return AdminLiveAIRequestLog.ErrorClass.RATE_LIMITED
+    if isinstance(exc, LiveAIConfigurationError):
+        return classify_configuration_error(str(exc))
+    if isinstance(exc, PermissionDenied):
+        return AdminLiveAIRequestLog.ErrorClass.AUTH_ERROR
+    if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+        return AdminLiveAIRequestLog.ErrorClass.TIMEOUT
+    if isinstance(exc, (ValueError, TypeError, json.JSONDecodeError, UnicodeDecodeError)):
+        return AdminLiveAIRequestLog.ErrorClass.VALIDATION_ERROR
+    if isinstance(exc, RuntimeError):
+        return AdminLiveAIRequestLog.ErrorClass.UPSTREAM_ERROR
+    return AdminLiveAIRequestLog.ErrorClass.UNKNOWN_ERROR
+
+
+def _user_identifier(user) -> str:
+    email = getattr(user, "email", "") or ""
+    username = getattr(user, "username", "") or ""
+    if email and username:
+        return f"{username} <{email}>"
+    return email or username
+
+
+def create_live_ai_request_log(user, session) -> int:
+    log = AdminLiveAIRequestLog.objects.create(
+        user=user if getattr(user, "is_authenticated", False) else None,
+        user_identifier=redact_secrets(_user_identifier(user))[:320],
+        session=session,
+        account=session.account,
+        server=session.server,
+        application=session.application,
+        model=redact_secrets(settings.OPENAI_MODEL or "")[:120],
+    )
+    return log.id
+
+
+def update_live_ai_request_log(
+    log_id: int | None,
+    *,
+    status: str,
+    latency_ms: int = 0,
+    safe_context_size_bytes: int = 0,
+    response_size_bytes: int = 0,
+    error_class: str = "",
+    fallback_used: bool = False,
+) -> None:
+    if not log_id:
+        return
+    AdminLiveAIRequestLog.objects.filter(id=log_id).update(
+        status=status,
+        latency_ms=max(0, int(latency_ms or 0)),
+        safe_context_size_bytes=max(0, int(safe_context_size_bytes or 0)),
+        response_size_bytes=max(0, int(response_size_bytes or 0)),
+        error_class=error_class,
+        fallback_used=bool(fallback_used),
+        updated_at=timezone.now(),
+    )
 
 
 def _consume_rate_limit(user_id: int) -> None:
@@ -243,18 +303,18 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
         except asyncio.CancelledError:
             await sync_to_async(self._record_disconnect, thread_sensitive=True)(context, state, context_metadata)
             raise
-        except LiveAIRateLimitError:
+        except LiveAIRateLimitError as exc:
             stream_status = "failed"
-            error_code = "rate_limited"
-            output = RATE_LIMIT_MESSAGE
+            error_code = classify_live_ai_exception(exc)
+            output = LIVE_AI_SAFE_ERROR_MESSAGE
             yield ThreadItemUpdatedEvent(
                 item_id=item_id,
                 update=AssistantMessageContentPartTextDelta(content_index=0, delta=output),
             )
         except Exception as exc:
             stream_status = "failed"
-            error_code = "provider_unavailable"
-            output = FALLBACK_MESSAGE
+            error_code = classify_live_ai_exception(exc)
+            output = LIVE_AI_SAFE_ERROR_MESSAGE
             logger.warning("Live Admin AI response failed: %s", type(exc).__name__)
             yield ThreadItemUpdatedEvent(
                 item_id=item_id,
@@ -262,6 +322,21 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
             )
 
         state.latency_ms = int((monotonic() - started_at) * 1000)
+        safe_context_size_bytes = int(context_metadata.get("final_size_bytes") or 0)
+        response_size_bytes = len(output.encode("utf-8"))
+        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+            context.audit_log_id,
+            status=(
+                AdminLiveAIRequestLog.Status.SUCCEEDED
+                if stream_status == "completed"
+                else AdminLiveAIRequestLog.Status.FAILED
+            ),
+            latency_ms=state.latency_ms,
+            safe_context_size_bytes=safe_context_size_bytes,
+            response_size_bytes=response_size_bytes,
+            error_class=error_code,
+            fallback_used=stream_status != "completed",
+        )
         context.item_metadata[item_id] = {
             "model": state.model,
             "provider_request_id": state.provider_request_id,
@@ -285,6 +360,16 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
 
     @staticmethod
     def _record_disconnect(context: AdminChatKitContext, state: LiveAIProviderState, context_metadata: dict) -> None:
+        safe_context_size_bytes = int((context_metadata or {}).get("final_size_bytes") or 0)
+        update_live_ai_request_log(
+            context.audit_log_id,
+            status=AdminLiveAIRequestLog.Status.FAILED,
+            latency_ms=state.latency_ms,
+            safe_context_size_bytes=safe_context_size_bytes,
+            response_size_bytes=0,
+            error_class=AdminLiveAIRequestLog.ErrorClass.UNKNOWN_ERROR,
+            fallback_used=False,
+        )
         message = AdminChatMessage.objects.create(
             session=context.session,
             sender_type=AdminChatMessage.SenderType.SYSTEM,
