@@ -6,6 +6,34 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.8-A Admin AI Agent Behavior & Contextual Diagnostic Reasoning
+
+Scope:
+- Improve the hardcoded Live Admin AI instructions for internal operational advisory behavior.
+- Detect diagnostic intent from the redacted conversation and pass safe request-analysis metadata to the provider input.
+- Keep ordinary requests concise and diagnostic requests structured but flexible.
+- Add focused tests while preserving audit, feature flag, no-tools/actions, no Portal AI, and no Telegram AI boundaries.
+
+Out of scope:
+- Prompt profile database module, migrations, Admin prompt editing UI, Diagnostic Brief button, quick actions, tools/function calling, ToolRun/AgentJob creation, command execution, remediation, uploads, Portal/customer AI changes, and Telegram AI.
+
+Result:
+- Confirmed the current prompt is hardcoded in `apps/ai_chat/live_ai.py` as `LIVE_AI_INSTRUCTIONS`, with no settings-based prompt or prompt profile layer.
+- Strengthened internal operational advisory, Safe Context-only, diagnostic reasoning, limitations, and read-only suggested-check instructions.
+- Added diagnostic intent detection and safe request-analysis metadata without schema changes.
+- Added focused behavior tests and kept UI, Portal, Telegram, tools/actions, ToolRun/AgentJob, command execution, and remediation unchanged.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.8-A is complete.
+
 ## Archived Task: C10.7-A Admin Live AI Governance Layer
 
 Scope:

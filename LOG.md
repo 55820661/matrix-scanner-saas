@@ -2,6 +2,37 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-24 - C10.8-A Admin AI Agent Behavior Start
+
+Intent:
+- Improve Live Admin AI behavior so diagnostic questions receive structured contextual reasoning while ordinary questions remain concise.
+
+Scope:
+- Inspect the current Live Admin AI base prompt source.
+- Strengthen hardcoded base instructions for internal operational advisory behavior, Safe Context-only reasoning, limitations, and read-only suggested checks.
+- Add internal diagnostic-intent detection from redacted conversation text without schema changes.
+- Add focused tests for diagnostic/non-diagnostic behavior, safety boundaries, audit continuity, and Portal deterministic behavior.
+
+Out of scope:
+- Prompt profile models, migrations, Admin prompt UI, new buttons, quick actions, tools/function calling, ToolRun/AgentJob creation, command execution, remediation, uploads, Portal AI, Telegram AI, and customer-facing AI changes.
+
+## 2026-06-24 - C10.8-A Admin AI Agent Behavior Complete
+
+Result:
+- Confirmed the current Live Admin AI base prompt is hardcoded as `LIVE_AI_INSTRUCTIONS` in `apps/ai_chat/live_ai.py` and passed to OpenAI through `instructions=`.
+- Expanded the hardcoded instructions for internal operational advisory behavior, Safe Context-only reasoning, diagnostic structure, limitations, and read-only suggested checks.
+- Added internal diagnostic-intent detection from redacted conversation text and a safe `<REQUEST_ANALYSIS>` block in provider input.
+- Kept UI unchanged: no Diagnostic Brief button, no quick action, no prompt profile model, and no migration.
+- Preserved no tools, no ToolRun/AgentJob, no command execution, no remediation, no Portal AI, and no Telegram AI boundaries.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-24 - C10.7-A Admin Live AI Governance Layer Start
 
 Intent:
