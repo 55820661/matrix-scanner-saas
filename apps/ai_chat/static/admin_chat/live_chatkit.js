@@ -16,6 +16,11 @@
     }
   }
 
+  function clearError() {
+    error.textContent = "";
+    error.hidden = true;
+  }
+
   fallbackButton.addEventListener("click", () => {
     fallback.classList.toggle("is-hidden");
   });
@@ -32,9 +37,13 @@
           url: livePanel.dataset.apiUrl,
           domainKey: livePanel.dataset.domainKey,
           fetch: (input, init = {}) => {
+            clearError();
             const headers = new Headers(init.headers || {});
             if (csrfInput) headers.set("X-CSRFToken", csrfInput.value);
-            return window.fetch(input, { ...init, headers, credentials: "same-origin" });
+            return window.fetch(input, { ...init, headers, credentials: "same-origin" }).then((response) => {
+              if (response.ok) clearError();
+              return response;
+            });
           },
         },
         initialThread: livePanel.dataset.threadId,

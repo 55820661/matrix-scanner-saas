@@ -6,6 +6,36 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.8-H1 Live AI Failure State & Audit Finalization
+
+Scope:
+- Ensure Live Admin AI audit records are finalized as succeeded or failed, including exceptions raised during streaming iteration.
+- Add safe failure logging without prompts, raw context, raw messages, responses, env, or secrets.
+- Clear stale Live AI UI failure messages when a new request starts or a same-origin Live AI response succeeds.
+- Add focused tests while preserving C10.8-A prompt behavior and execution boundaries.
+
+Out of scope:
+- Prompt behavior changes, migrations, new buttons, quick actions, tools/function calling, ToolRun/AgentJob creation, command execution, remediation, Portal/customer deterministic chat changes, and Telegram AI.
+
+Result:
+- Wrapped Live Admin AI streaming iteration so generator exceptions finalize `AdminLiveAIRequestLog` as failed instead of leaving pending rows.
+- Added safe failure breadcrumbs with session/audit/status/error/model/latency only.
+- Cleared stale Live AI UI error text before retry and after successful same-origin responses.
+- Added focused hotfix tests for pre-stream and in-stream failures, success after failure, frontend reset logic, and Portal/tool boundaries.
+- No migrations, prompt behavior changes, UI buttons, quick actions, ToolRun/AgentJob, command execution, remediation, Portal AI, or Telegram AI changes were made.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.8-H1 is complete.
+
 ## Archived Task: C10.8-A Admin AI Agent Behavior & Contextual Diagnostic Reasoning
 
 Scope:

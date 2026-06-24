@@ -1,4 +1,5 @@
 import json
+import logging
 from time import monotonic
 
 from asgiref.sync import sync_to_async
@@ -20,6 +21,7 @@ from apps.servers.models import Server
 from .chatkit_store import AdminChatKitContext
 from .live_ai import (
     LIVE_AI_SAFE_ERROR_MESSAGE,
+    classify_live_ai_exception,
     classify_configuration_error,
     create_live_ai_request_log,
     live_admin_chatkit_server,
@@ -39,6 +41,9 @@ from .services import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 def _newline_list(value):
     return [line.strip() for line in (value or "").splitlines() if line.strip()]
 
@@ -48,6 +53,54 @@ def _scoped_internal_chat_sessions():
         AdminChatSession.objects.select_related("account", "server", "application", "user")
         .filter(channel=AdminChatSession.Channel.ADMIN_INTERNAL)
     )
+
+
+def _elapsed_ms(started_at):
+    return max(1, int((monotonic() - started_at) * 1000))
+
+
+def _live_ai_failure_log_extra(*, session_id, audit_log_id, status, error_class, model, latency_ms):
+    return {
+        "session_id": str(session_id),
+        "audit_id": str(audit_log_id or ""),
+        "status": status,
+        "error_class": error_class,
+        "model": model or "",
+        "latency_ms": latency_ms,
+    }
+
+
+async def _stream_live_ai_result(result, *, audit_log_id, session_id, started_at):
+    try:
+        async for chunk in result:
+            yield chunk
+    except Exception as exc:
+        error_class = classify_live_ai_exception(exc)
+        latency_ms = _elapsed_ms(started_at)
+        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+            audit_log_id,
+            status=AdminLiveAIRequestLog.Status.FAILED,
+            latency_ms=latency_ms,
+            response_size_bytes=0,
+            error_class=error_class,
+            fallback_used=True,
+        )
+        logger.error(
+            "Live AI streaming request failed",
+            extra=_live_ai_failure_log_extra(
+                session_id=session_id,
+                audit_log_id=audit_log_id,
+                status=AdminLiveAIRequestLog.Status.FAILED,
+                error_class=error_class,
+                model=settings.OPENAI_MODEL,
+                latency_ms=latency_ms,
+            ),
+        )
+        yield (
+            "data: "
+            + json.dumps({"type": "error", "error": LIVE_AI_SAFE_ERROR_MESSAGE}, separators=(",", ":"))
+            + "\n\n"
+        ).encode("utf-8")
 
 
 @staff_member_required
@@ -128,7 +181,7 @@ async def internal_chat_live(request, session_id):
         await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
             audit_log_id,
             status=AdminLiveAIRequestLog.Status.DENIED,
-            latency_ms=int((monotonic() - started_at) * 1000),
+            latency_ms=_elapsed_ms(started_at),
             error_class=AdminLiveAIRequestLog.ErrorClass.DISABLED,
             fallback_used=True,
         )
@@ -138,7 +191,7 @@ async def internal_chat_live(request, session_id):
         await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
             audit_log_id,
             status=AdminLiveAIRequestLog.Status.FAILED,
-            latency_ms=int((monotonic() - started_at) * 1000),
+            latency_ms=_elapsed_ms(started_at),
             error_class=classify_configuration_error(configuration_error),
             fallback_used=True,
         )
@@ -150,7 +203,7 @@ async def internal_chat_live(request, session_id):
         await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
             audit_log_id,
             status=AdminLiveAIRequestLog.Status.FAILED,
-            latency_ms=int((monotonic() - started_at) * 1000),
+            latency_ms=_elapsed_ms(started_at),
             error_class=AdminLiveAIRequestLog.ErrorClass.VALIDATION_ERROR,
             fallback_used=True,
         )
@@ -160,7 +213,7 @@ async def internal_chat_live(request, session_id):
         await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
             audit_log_id,
             status=AdminLiveAIRequestLog.Status.DENIED,
-            latency_ms=int((monotonic() - started_at) * 1000),
+            latency_ms=_elapsed_ms(started_at),
             error_class=AdminLiveAIRequestLog.ErrorClass.AUTH_ERROR,
             fallback_used=True,
         )
@@ -174,30 +227,51 @@ async def internal_chat_live(request, session_id):
         await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
             audit_log_id,
             status=AdminLiveAIRequestLog.Status.DENIED,
-            latency_ms=int((monotonic() - started_at) * 1000),
+            latency_ms=_elapsed_ms(started_at),
             error_class=AdminLiveAIRequestLog.ErrorClass.AUTH_ERROR,
             fallback_used=True,
         )
         return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=403)
-    except Exception:
+    except Exception as exc:
+        error_class = classify_live_ai_exception(exc)
+        latency_ms = _elapsed_ms(started_at)
         await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
             audit_log_id,
             status=AdminLiveAIRequestLog.Status.FAILED,
-            latency_ms=int((monotonic() - started_at) * 1000),
-            error_class=AdminLiveAIRequestLog.ErrorClass.VALIDATION_ERROR,
+            latency_ms=latency_ms,
+            error_class=error_class,
             fallback_used=True,
+        )
+        logger.error(
+            "Live AI request failed before streaming",
+            extra=_live_ai_failure_log_extra(
+                session_id=session.id,
+                audit_log_id=audit_log_id,
+                status=AdminLiveAIRequestLog.Status.FAILED,
+                error_class=error_class,
+                model=settings.OPENAI_MODEL,
+                latency_ms=latency_ms,
+            ),
         )
         return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=400)
 
     if isinstance(result, StreamingResult):
-        response = StreamingHttpResponse(result, content_type="text/event-stream")
+        response = StreamingHttpResponse(
+            _stream_live_ai_result(
+                result,
+                audit_log_id=audit_log_id,
+                session_id=session.id,
+                started_at=started_at,
+            ),
+            content_type="text/event-stream",
+        )
         response["Cache-Control"] = "no-cache, no-store"
         response["X-Accel-Buffering"] = "no"
         return response
     await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
         audit_log_id,
         status=AdminLiveAIRequestLog.Status.SUCCEEDED,
-        latency_ms=int((monotonic() - started_at) * 1000),
+        latency_ms=_elapsed_ms(started_at),
         response_size_bytes=len(result.json.encode("utf-8")),
     )
     return HttpResponse(result.json, content_type="application/json")

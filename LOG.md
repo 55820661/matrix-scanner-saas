@@ -2,6 +2,39 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-24 - C10.8-H1 Live AI Failure State & Audit Finalization Start
+
+Intent:
+- Fix Live Admin AI failure paths so request audit records never remain pending after stream or endpoint errors.
+
+Scope:
+- Finalize `AdminLiveAIRequestLog` as failed when the SSE/streaming iterator raises after `StreamingHttpResponse` is created.
+- Add safe diagnostic logging with IDs/status/class/latency only.
+- Reset stale Live AI UI failure state on retry and successful same-origin responses.
+- Add focused hotfix tests while preserving C10.8-A prompt behavior and no-tools/no-Portal/no-Telegram boundaries.
+
+Out of scope:
+- Prompt behavior changes, migrations, new UI buttons, quick actions, tools, ToolRun, AgentJob, command execution, remediation, Portal AI, Telegram AI, and deterministic customer chat changes.
+
+## 2026-06-24 - C10.8-H1 Live AI Failure State & Audit Finalization Complete
+
+Result:
+- Added a safe streaming wrapper around Live Admin AI `StreamingHttpResponse` iteration so exceptions raised after response creation finalize audit as failed.
+- Classified pre-streaming and streaming failures with existing Live AI error classes and recorded non-zero latency, `fallback_used=True`, and safe response size defaults.
+- Added safe failure breadcrumbs with only session/audit/status/error/model/latency metadata and no raw exception text, prompts, context, messages, responses, env, or secrets.
+- Updated the ChatKit frontend fetch hook to clear stale failure messages before retry and after successful same-origin responses.
+- Added focused hotfix tests for pre-stream failures, streaming generator failures, no pending audit leftovers, success after failure, frontend stale-error reset, and Portal/tool boundaries.
+- No migrations, prompt behavior changes, buttons, quick actions, tools, ToolRun/AgentJob, command execution, remediation, Portal AI, or Telegram AI changes were made.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-24 - C10.8-A Admin AI Agent Behavior Start
 
 Intent:
