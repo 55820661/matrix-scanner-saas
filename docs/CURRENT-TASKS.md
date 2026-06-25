@@ -6,6 +6,36 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.8-H2 Remove Visible Deterministic Fallback from Live Admin AI UI
+
+Scope:
+- Remove the visible deterministic fallback button and fallback panel from the Live Admin AI UI.
+- Replace Live Admin AI UI/error copy that mentions deterministic fallback with generic safe messages.
+- Keep backend deterministic behavior available for disabled/non-Live paths and Portal/customer chat unchanged.
+- Add focused regressions while preserving C10.8-A behavior and C10.8-H1 audit finalization.
+
+Out of scope:
+- Prompt behavior changes, diagnostic reasoning changes, Safe Context/provider input changes, migrations, tools/function calling, ToolRun/AgentJob creation, command execution, remediation, Portal AI, Telegram AI, and customer deterministic chat changes.
+
+Result:
+- Removed the visible Live Admin AI `Deterministic fallback` button.
+- Stopped rendering the deterministic fallback panel under ChatKit when Live Admin AI is available.
+- Replaced Live AI UI/error copy with generic retry/refresh wording that does not mention fallback.
+- Kept deterministic chat available for non-Live/disabled states and left Portal/customer deterministic chat untouched.
+- Did not change prompt behavior, diagnostic reasoning, Safe Context/provider input, migrations, tools/actions, ToolRun/AgentJob, remediation, Portal AI, or Telegram AI.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.8-H2 is complete.
+
 ## Archived Task: C10.8-H1 Live AI Failure State & Audit Finalization
 
 Scope:

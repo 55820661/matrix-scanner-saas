@@ -229,7 +229,6 @@
               <strong>Matrix Live Admin AI</strong>
               <span>Safe Context only. No tools, actions, uploads, or remediation.</span>
             </div>
-            <button id="show-deterministic-fallback" type="button">Deterministic fallback</button>
           </div>
           <div class="matrix-live-ai-body">
             <openai-chatkit id="matrix-admin-chatkit" dir="auto"></openai-chatkit>
@@ -241,7 +240,8 @@
         <div class="live-ai-configuration-error">{{ live_ai_error }}</div>
       {% endif %}
 
-      <div id="deterministic-fallback" class="chat-deterministic-fallback{% if live_ai_available %} is-hidden{% endif %}">
+      {% if not live_ai_available %}
+      <div id="deterministic-fallback" class="chat-deterministic-fallback">
         <div class="chat-thread">
           {% for message in chat_messages %}
             <article class="chat-bubble {{ message.sender_type }}">
@@ -268,6 +268,7 @@
           </div>
         {% endif %}
       </div>
+      {% endif %}
     </section>
 
     <aside class="chat-sidebar">

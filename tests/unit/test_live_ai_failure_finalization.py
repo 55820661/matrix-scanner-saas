@@ -114,7 +114,8 @@ class LiveAIFailureFinalizationTests(TestCase):
 
         log = AdminLiveAIRequestLog.objects.get()
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["error"], "Live AI is temporarily unavailable. You can use the deterministic fallback.")
+        self.assertEqual(response.json()["error"], "Live AI is temporarily unavailable. Please try again.")
+        self.assertNotIn("deterministic fallback", response.content.decode().lower())
         self.assertNotIn("sk-test-should-not-leak", response.content.decode())
         self.assertEqual(log.status, AdminLiveAIRequestLog.Status.FAILED)
         self.assertNotEqual(log.status, AdminLiveAIRequestLog.Status.PENDING)
@@ -193,6 +194,9 @@ class LiveAIFailureFinalizationTests(TestCase):
         self.assertIn("clearError();\n            const headers", source)
         self.assertIn("if (response.ok) clearError();", source)
         self.assertIn("chatkit.error", source)
+        self.assertIn("Live AI is temporarily unavailable. Please try again.", source)
+        self.assertNotIn("showFallback", source)
+        self.assertNotIn("deterministic fallback remains available", source)
 
     @override_settings(**LIVE_SETTINGS)
     def test_portal_deterministic_chat_is_unchanged(self):

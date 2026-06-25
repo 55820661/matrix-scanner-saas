@@ -1,15 +1,12 @@
 (() => {
   const chatkit = document.getElementById("matrix-admin-chatkit");
   const livePanel = document.getElementById("matrix-live-ai");
-  const fallback = document.getElementById("deterministic-fallback");
   const status = document.getElementById("matrix-live-ai-status");
   const error = document.getElementById("matrix-live-ai-error");
-  const fallbackButton = document.getElementById("show-deterministic-fallback");
 
-  if (!chatkit || !livePanel || !fallback || !status || !error || !fallbackButton) return;
+  if (!chatkit || !livePanel || !status || !error) return;
 
-  function showFallback(message) {
-    fallback.classList.remove("is-hidden");
+  function showError(message) {
     if (message) {
       error.textContent = message;
       error.hidden = false;
@@ -20,10 +17,6 @@
     error.textContent = "";
     error.hidden = true;
   }
-
-  fallbackButton.addEventListener("click", () => {
-    fallback.classList.toggle("is-hidden");
-  });
 
   window.addEventListener("load", async () => {
     try {
@@ -65,11 +58,11 @@
       });
       status.textContent = "Live AI ready. Responses use fresh, capped, redacted Safe Context.";
       chatkit.addEventListener("chatkit.error", () => {
-        showFallback("Live AI UI failed. The deterministic fallback remains available below.");
+        showError("Live AI is temporarily unavailable. Please try again.");
       });
     } catch (initializationError) {
       livePanel.classList.add("chatkit-unavailable");
-      showFallback("ChatKit could not load. The deterministic fallback remains available below.");
+      showError("Live AI could not load. Please refresh and try again.");
     }
   });
 })();

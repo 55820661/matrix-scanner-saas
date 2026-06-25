@@ -2,6 +2,39 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-25 - C10.8-H2 Remove Visible Live AI Deterministic Fallback Start
+
+Intent:
+- Remove visible deterministic fallback UI from the Live Admin AI experience so ChatKit appears as one clean admin assistant surface.
+
+Scope:
+- Remove the visible `Deterministic fallback` button and fallback panel when Live Admin AI is available.
+- Replace Live AI UI/error messages that mention deterministic fallback with generic safe messages.
+- Preserve backend deterministic chat behavior for non-Live/disabled states and Portal/customer chat.
+- Add focused tests for Live UI text removal, JS message cleanup, success/failure paths, and no ToolRun/AgentJob boundaries.
+
+Out of scope:
+- Prompt behavior, diagnostic reasoning, Safe Context/provider input, audit schema, migrations, tools/actions, remediation, Portal AI, Telegram AI, and customer deterministic chat changes.
+
+## 2026-06-25 - C10.8-H2 Remove Visible Live AI Deterministic Fallback Complete
+
+Result:
+- Removed the visible `Deterministic fallback` button from the Live Admin AI header.
+- Stopped rendering the deterministic fallback panel underneath ChatKit when Live Admin AI is available; the deterministic form remains available only for non-Live/disabled states.
+- Changed Live AI UI failure copy to generic retry/refresh messages without mentioning deterministic fallback.
+- Renamed the JS error path from fallback display behavior to `showError()` and kept `clearError()` on retry/success.
+- Updated the generic Live AI backend error message text only; no backend deterministic fallback logic was removed.
+- Preserved Portal/customer deterministic chat, C10.8-A behavior, H1 audit finalization, tools/actions, ToolRun/AgentJob, and migrations unchanged.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-24 - C10.8-H1 Live AI Failure State & Audit Finalization Start
 
 Intent:

@@ -85,7 +85,7 @@ DIAGNOSTIC_INTENT_TERMS = (
     "تصور للحالة",
 )
 
-LIVE_AI_SAFE_ERROR_MESSAGE = "Live AI is temporarily unavailable. You can use the deterministic fallback."
+LIVE_AI_SAFE_ERROR_MESSAGE = "Live AI is temporarily unavailable. Please try again."
 
 
 class LiveAIConfigurationError(RuntimeError):

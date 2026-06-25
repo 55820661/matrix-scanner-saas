@@ -148,7 +148,9 @@ class LiveAdminChatTests(TestCase):
 
         self.assertContains(page, '<openai-chatkit id="matrix-admin-chatkit"', html=False)
         self.assertContains(page, self.live_url())
-        self.assertContains(page, "Deterministic fallback")
+        self.assertNotContains(page, "Deterministic fallback")
+        self.assertNotContains(page, 'id="deterministic-fallback"', html=False)
+        self.assertNotContains(page, "Send deterministic message")
         self.assertNotContains(page, LIVE_SETTINGS["OPENAI_API_KEY"])
         self.assertNotContains(page, "getClientSecret")
         self.assertNotContains(page, "chat-launcher")
@@ -168,8 +170,17 @@ class LiveAdminChatTests(TestCase):
         self.assertIn("domainKey: livePanel.dataset.domainKey", source)
         self.assertIn("fetch: (input, init = {})", source)
         self.assertIn("header: { enabled: false }", source)
+        self.assertIn("function showError(message)", source)
+        self.assertIn("function clearError()", source)
+        self.assertIn("Live AI is temporarily unavailable. Please try again.", source)
+        self.assertIn("Live AI could not load. Please refresh and try again.", source)
         self.assertNotIn("apiURL:", source)
         self.assertNotIn("header: false", source)
+        self.assertNotIn("showFallback", source)
+        self.assertNotIn("show-deterministic-fallback", source)
+        self.assertNotIn("deterministic fallback remains available", source)
+        self.assertNotIn("Live AI UI failed. The deterministic fallback remains available below.", source)
+        self.assertNotIn("ChatKit could not load. The deterministic fallback remains available below.", source)
 
     @override_settings(**{**LIVE_SETTINGS, "OPENAI_CHATKIT_DOMAIN_KEY": ""})
     def test_missing_chatkit_domain_key_fails_closed(self):

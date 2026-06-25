@@ -147,7 +147,8 @@ class AdminLiveAIGovernanceTests(TestCase):
                 "fallback_used": log.fallback_used,
             }
         )
-        self.assertIn(b"Live AI is temporarily unavailable. You can use the deterministic fallback.", body)
+        self.assertIn(b"Live AI is temporarily unavailable. Please try again.", body)
+        self.assertNotIn(b"deterministic fallback", body.lower())
         self.assertNotIn(b"sk-test-should-not-leak", body)
         self.assertEqual(log.status, AdminLiveAIRequestLog.Status.FAILED)
         self.assertEqual(log.error_class, AdminLiveAIRequestLog.ErrorClass.UPSTREAM_ERROR)
@@ -166,7 +167,8 @@ class AdminLiveAIGovernanceTests(TestCase):
 
         log = AdminLiveAIRequestLog.objects.get()
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["error"], "Live AI is temporarily unavailable. You can use the deterministic fallback.")
+        self.assertEqual(response.json()["error"], "Live AI is temporarily unavailable. Please try again.")
+        self.assertNotIn("deterministic fallback", response.content.decode().lower())
         self.assertEqual(log.status, AdminLiveAIRequestLog.Status.FAILED)
         self.assertEqual(log.error_class, AdminLiveAIRequestLog.ErrorClass.MISSING_CONFIG)
         self.assertTrue(log.fallback_used)
