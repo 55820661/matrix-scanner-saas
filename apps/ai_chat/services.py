@@ -1,5 +1,6 @@
 import json
 import re
+import time
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
@@ -26,6 +27,8 @@ from .models import AdminChatDecision, AdminChatMessage, AdminChatReportDraft, A
 MAX_MESSAGE_LENGTH = 4000
 MAX_TITLE_LENGTH = 160
 MAX_RESPONSE_LENGTH = 3000
+AUTO_TOOL_FOLLOWUP_MAX_WAIT_SECONDS = 20
+AUTO_TOOL_FOLLOWUP_POLL_INTERVAL_SECONDS = 2
 TOOL_REQUEST_PROPOSAL_RE = re.compile(
     r"<TOOL_REQUEST_PROPOSAL>\s*(?P<payload>\{.*?\})\s*</TOOL_REQUEST_PROPOSAL>",
     re.IGNORECASE | re.DOTALL,
@@ -531,6 +534,10 @@ def _execution_params_for_request(tool_request):
     return params
 
 
+def _is_live_ai_tool_request(tool_request):
+    return (tool_request.params_redacted or {}).get("source") == "live_ai_tool_proposal"
+
+
 def _validate_ai_tool_definition(user, session, tool_key):
     if session.channel != AdminChatSession.Channel.ADMIN_INTERNAL:
         raise PermissionDenied
@@ -638,8 +645,9 @@ def create_ai_tool_request_from_proposal(*, user, session, message, proposal):
                 "reason": reason,
             }
         ),
-        reasoning_summary="Live AI proposed an allowlisted read-only tool request. Approval is required before execution.",
+        reasoning_summary="Live AI proposed an allowlisted read-only tool request. The backend will execute it through policy checks.",
     )
+    execute_ai_tool_request_with_followup(user=user, tool_request=request)
     return request
 
 
@@ -650,7 +658,7 @@ def approve_tool_request(*, user, tool_request):
         raise ValidationError("Only suggested tool requests can be approved.")
     if not session.server_id:
         raise ValidationError("Tool request is not server-scoped.")
-    if (tool_request.params_redacted or {}).get("source") == "live_ai_tool_proposal":
+    if _is_live_ai_tool_request(tool_request):
         tool_definition = _validate_ai_tool_definition(user, session, tool_request.tool_definition.key)
     else:
         tool_definition = tool_request.tool_definition
@@ -679,8 +687,13 @@ def approve_tool_request(*, user, tool_request):
     AdminChatMessage.objects.create(
         session=session,
         sender_type=AdminChatMessage.SenderType.SYSTEM,
-        body_redacted=f"Tool request queued: {tool_request.tool_definition.key}",
-        metadata_redacted={"source": "tool_orchestrator", "tool_request_id": str(tool_request.id), "tool_run_id": str(tool_run.id)},
+        body_redacted=f"Read-only tool started: {tool_request.tool_definition.key}",
+        metadata_redacted={
+            "source": "tool_orchestrator",
+            "tool_request_id": str(tool_request.id),
+            "tool_run_id": str(tool_run.id),
+            "execution_started": True,
+        },
     )
     AdminChatDecision.objects.create(
         session=session,
@@ -690,6 +703,151 @@ def approve_tool_request(*, user, tool_request):
         reasoning_summary="Approved chat tool request queued through create_tool_run_job.",
     )
     return tool_run
+
+
+def wait_for_tool_execution_result(
+    tool_run,
+    *,
+    timeout_seconds=AUTO_TOOL_FOLLOWUP_MAX_WAIT_SECONDS,
+    poll_interval_seconds=AUTO_TOOL_FOLLOWUP_POLL_INTERVAL_SECONDS,
+):
+    deadline = time.monotonic() + max(0, timeout_seconds)
+    terminal_statuses = {
+        ToolRun.Status.SUCCEEDED,
+        ToolRun.Status.FAILED,
+        ToolRun.Status.REJECTED,
+        ToolRun.Status.TIMEOUT,
+        ToolRun.Status.CANCELLED,
+    }
+    while True:
+        tool_run.refresh_from_db()
+        if tool_run.status in terminal_statuses:
+            summary = _safe_text(summarize_tool_run_result(tool_run) or tool_run.error_message, limit=MAX_RESPONSE_LENGTH)
+            if tool_run.status == ToolRun.Status.SUCCEEDED:
+                return {
+                    "state": "succeeded",
+                    "status": tool_run.status,
+                    "summary": summary or f"{tool_run.tool_definition.key} completed successfully.",
+                    "tool_run_id": tool_run.id,
+                }
+            return {
+                "state": "failed",
+                "status": tool_run.status,
+                "summary": summary or f"{tool_run.tool_definition.key} did not complete successfully.",
+                "tool_run_id": tool_run.id,
+            }
+        if time.monotonic() >= deadline:
+            return {
+                "state": "timeout",
+                "status": tool_run.status,
+                "summary": (
+                    "Tool execution did not finish within the follow-up wait window. "
+                    "The worker may still be processing it or execution may be delayed."
+                ),
+                "tool_run_id": tool_run.id,
+            }
+        time.sleep(max(0.1, poll_interval_seconds))
+
+
+def _tool_followup_body(tool_request, outcome):
+    tool_key = tool_request.tool_definition.key
+    state = outcome.get("state")
+    status = outcome.get("status") or "unknown"
+    summary = _safe_text(outcome.get("summary") or "", limit=MAX_RESPONSE_LENGTH)
+    if state == "succeeded":
+        return _safe_text(
+            f"Read-only check completed successfully: {tool_key}\n\nResult summary:\n{summary}\n\n"
+            "This was a read-only check and did not change server configuration.",
+            limit=MAX_RESPONSE_LENGTH,
+        )
+    if state == "failed":
+        return _safe_text(
+            f"Read-only check failed: {tool_key}\n\nShort reason:\n{summary or status}",
+            limit=MAX_RESPONSE_LENGTH,
+        )
+    if state == "timeout":
+        return _safe_text(
+            f"Read-only check started but did not complete within the follow-up wait window.\n\n"
+            f"Current status: {status}.\n"
+            "The worker may still be processing it or execution may be delayed.",
+            limit=MAX_RESPONSE_LENGTH,
+        )
+    return _safe_text(
+        f"The read-only check could not be started: {tool_key}\n\nReason: {summary or status}",
+        limit=MAX_RESPONSE_LENGTH,
+    )
+
+
+def _record_tool_followup_message(tool_request, outcome):
+    body = _tool_followup_body(tool_request, outcome)
+    message = AdminChatMessage.objects.create(
+        session=tool_request.session,
+        sender_type=AdminChatMessage.SenderType.ASSISTANT,
+        body_redacted=body,
+        metadata_redacted=redact_json(
+            {
+                "source": "auto_tool_followup",
+                "tool_request_id": str(tool_request.id),
+                "tool_run_id": str(outcome.get("tool_run_id") or ""),
+                "tool_key": tool_request.tool_definition.key,
+                "state": outcome.get("state"),
+                "status": outcome.get("status"),
+            }
+        ),
+    )
+    tool_request.session.last_message_at = message.created_at
+    tool_request.session.save(update_fields=["last_message_at", "updated_at"])
+    AdminChatDecision.objects.create(
+        session=tool_request.session,
+        decision_type=AdminChatDecision.DecisionType.TOOL_REQUEST,
+        input_context_redacted={
+            "tool_request_id": str(tool_request.id),
+            "tool_key": tool_request.tool_definition.key,
+            "tool_run_id": str(outcome.get("tool_run_id") or ""),
+        },
+        output_json_redacted=redact_json(
+            {
+                "state": outcome.get("state"),
+                "status": outcome.get("status"),
+                "summary": body,
+            }
+        ),
+        reasoning_summary="Automatic read-only tool execution follow-up stored a safe chat summary.",
+    )
+    return message
+
+
+def execute_ai_tool_request_with_followup(*, user, tool_request):
+    if not _is_live_ai_tool_request(tool_request):
+        raise ValidationError("Only Live AI tool proposals can be auto-executed.")
+    try:
+        tool_run = approve_tool_request(user=user, tool_request=tool_request)
+    except (ToolPolicyDenied, ValidationError, PermissionDenied) as exc:
+        tool_request.refresh_from_db()
+        if tool_request.status == AdminChatToolRequest.Status.SUGGESTED:
+            tool_request.status = AdminChatToolRequest.Status.FAILED
+            tool_request.error_summary = _safe_text(str(exc), limit=500)
+            tool_request.save(update_fields=["status", "error_summary", "updated_at"])
+        outcome = {
+            "state": "not_started",
+            "status": tool_request.status,
+            "summary": _safe_text(str(exc), limit=MAX_RESPONSE_LENGTH),
+            "tool_run_id": "",
+        }
+        _record_tool_followup_message(tool_request, outcome)
+        return outcome
+    outcome = wait_for_tool_execution_result(tool_run)
+    tool_request.refresh_from_db()
+    if outcome["state"] == "succeeded":
+        tool_request.status = AdminChatToolRequest.Status.SUCCEEDED
+    elif outcome["state"] == "failed":
+        tool_request.status = AdminChatToolRequest.Status.FAILED
+        tool_request.error_summary = _safe_text(outcome.get("summary") or "", limit=500)
+    else:
+        tool_request.status = AdminChatToolRequest.Status.QUEUED
+    tool_request.save(update_fields=["status", "error_summary", "updated_at"])
+    _record_tool_followup_message(tool_request, outcome)
+    return outcome
 
 
 def reject_tool_request(*, user, tool_request):

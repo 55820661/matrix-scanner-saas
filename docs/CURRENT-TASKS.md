@@ -6,6 +6,39 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.9-H1 Auto-Execute Approved Read-Only Tools with Result Follow-up
+
+Scope:
+- Auto-execute valid Live AI read-only tool proposals through the existing ToolRun/AgentJob path.
+- Poll briefly for completion and add a safe chat follow-up with result summary, failure reason, timeout/current status, or not-started explanation.
+- Keep validation restricted to allowlisted, enabled, read-only tools permitted by ToolPolicy and PlanTool for the selected server.
+
+Out of scope:
+- Write/destructive/remediation tools, arbitrary shell, uploads, Portal AI, Telegram AI, customer-facing AI, and Portal/customer deterministic behavior changes.
+
+Result:
+- Valid Live AI proposals now create `AdminChatToolRequest` and immediately queue ToolRun/AgentJob through the existing policy-backed path.
+- Added bounded backend follow-up polling with safe chat messages for succeeded, failed, timeout/current-status, and not-started outcomes.
+- Added start messages only after actual ToolRun/AgentJob records are created.
+- Updated Live AI instructions to avoid unsupported wait/completion claims.
+- Preserved no raw proposal JSON, no unsafe raw output, no polling audit rows, and no Portal/Telegram/customer behavior changes.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests when rerun alone after a parallel-test database deadlock.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.9-H1 is complete.
+
 ## Archived Task: C10.9-A AI Read-Only Tool Request Flow
 
 Scope:

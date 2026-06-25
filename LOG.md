@@ -2156,3 +2156,38 @@ Verification:
 
 Remaining:
 - C10.9-B can add safe result summarization back into AI chat if needed.
+## 2026-06-25 - C10.9-H1 Auto-Execute Approved Read-Only Tools with Result Follow-up Start
+
+Intent:
+- Change valid Live AI read-only tool proposals from pending approval to automatic execution through the existing policy-backed ToolRun/AgentJob path, then add a bounded result follow-up message.
+
+Scope:
+- Auto-execute only allowlisted, enabled, read-only tools permitted by ToolPolicy and PlanTool for the selected server.
+- Add backend polling for a short bounded period after ToolRun/AgentJob creation.
+- Add safe chat follow-up for succeeded, failed, timed-out, or not-started execution states.
+- Update Live AI instructions so it does not ask the admin to wait unless backend execution and follow-up are actually queued.
+
+Out of scope:
+- Write/destructive/remediation tools, arbitrary shell, uploads, Portal AI, Telegram AI, customer-facing AI, and any Portal/customer deterministic behavior changes.
+
+Result:
+- Valid Live AI read-only tool proposals now create `AdminChatToolRequest`, immediately queue ToolRun/AgentJob through the existing `create_tool_run_job()` policy path, and store a start message only after execution records exist.
+- Added bounded follow-up polling via `wait_for_tool_execution_result()` with safe succeeded, failed, timeout, and not-started chat summaries.
+- Updated Live AI instructions so it does not tell the admin to wait or claim completion unless backend execution/follow-up confirms state.
+- Preserved allowlist, ToolPolicy, PlanTool, server scoping, no raw proposal JSON, and no raw unsafe output in transcripts.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests when rerun alone after a parallel-test database deadlock.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- C10.9-H1 is complete within scope.
