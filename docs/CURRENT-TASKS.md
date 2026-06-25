@@ -6,6 +6,41 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.9-H3 Adaptive Tool Follow-up and Arabic Result Summary
+
+Scope:
+- Extend Live AI tool follow-up wait timing with a final grace refresh before timeout.
+- Avoid timeout messages for ToolRuns that succeed within the practical wait window.
+- Make backend start/final/failure/timeout/not-started messages Arabic and user-friendly.
+- Improve safe result summaries beyond generic `completed successfully`.
+- Keep multi-tool execution, combined summaries, and no raw JSON/secrets/log dumps.
+
+Out of scope:
+- Write/destructive/remediation tools, arbitrary commands, uploads, Portal AI, Telegram AI, customer-facing AI, migrations, and production-history cleanup.
+
+Result:
+- Extended single-tool follow-up wait to 45 seconds and added adaptive multi-tool waits up to 120 seconds.
+- Added final grace wait and refresh before timeout to reduce timeout-then-success contradictions.
+- Reworked backend tool execution messages into Arabic for start, success, failure, timeout, and not-started outcomes.
+- Improved safe result summaries from redacted structured ToolRun output.
+- Verified free-text tool names without proposal blocks do not execute tools.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 21 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.9-H3 is complete.
+
 ## Archived Task: C10.9-H2 Tool Execution Completion Loop
 
 Scope:

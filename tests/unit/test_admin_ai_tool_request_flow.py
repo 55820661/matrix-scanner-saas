@@ -12,7 +12,14 @@ from django.utils import timezone
 
 from apps.accounts.models import Account, User
 from apps.ai_chat.models import AdminChatMessage, AdminChatSession, AdminChatToolRequest, AdminLiveAIRequestLog
-from apps.ai_chat.services import approve_tool_request, create_admin_chat_session, create_chat_session, reject_tool_request
+from apps.ai_chat.services import (
+    approve_tool_request,
+    create_admin_chat_session,
+    create_chat_session,
+    reject_tool_request,
+    tool_followup_timeout_for_count,
+    wait_for_tool_execution_result,
+)
 from apps.plans.models import Plan
 from apps.servers.models import AgentJob, ScannerAgent, Server
 from apps.subscriptions.models import Subscription
@@ -257,6 +264,15 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual(AgentJob.objects.count(), 0)
 
     @override_settings(**LIVE_SETTINGS)
+    def test_free_text_tool_name_without_proposal_does_not_execute(self):
+        self.create_tool()
+        self.post_live_with_provider_text("بدأت فحص services_status وسأتابع النتيجة، لكن بدون proposal block.")
+
+        self.assertEqual(AdminChatToolRequest.objects.count(), 0)
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+
+    @override_settings(**LIVE_SETTINGS)
     def test_tool_success_within_followup_adds_safe_result_summary(self):
         self.create_tool()
         self.post_live_with_provider_text(
@@ -274,7 +290,7 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual(AgentJob.objects.count(), 1)
         self.assertEqual(tool_request.tool_run.agent_job.tool_key, "services_status")
         self.assertEqual(tool_request.tool_run.requested_by_type, ToolRun.RequestedByType.ADMIN)
-        self.assertIn("completed successfully", followup.body_redacted)
+        self.assertIn("اكتمل الفحص بنجاح", followup.body_redacted)
         self.assertIn("Services check completed successfully", followup.body_redacted)
         self.assertTrue((followup.metadata_redacted or {}).get("chatkit_item_id"))
 
@@ -292,7 +308,7 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual(tool_request.status, AdminChatToolRequest.Status.FAILED)
         self.assertEqual(ToolRun.objects.count(), 1)
         self.assertEqual(AgentJob.objects.count(), 1)
-        self.assertIn("failed", followup.body_redacted.lower())
+        self.assertIn("فشل تنفيذ الفحص", followup.body_redacted)
         self.assertIn("Scanner agent reported", followup.body_redacted)
 
     @override_settings(**LIVE_SETTINGS)
@@ -307,8 +323,8 @@ class AdminAIToolRequestFlowTests(TestCase):
 
         self.assertEqual(ToolRun.objects.count(), 1)
         self.assertEqual(AgentJob.objects.count(), 1)
-        self.assertIn("did not complete", followup.body_redacted)
-        self.assertIn("Current status: queued", followup.body_redacted)
+        self.assertIn("لم يكتمل خلال مدة الانتظار", followup.body_redacted)
+        self.assertIn("queued", followup.body_redacted)
 
     @override_settings(**LIVE_SETTINGS)
     def test_tool_creation_failure_does_not_claim_running_or_wait(self):
@@ -322,7 +338,7 @@ class AdminAIToolRequestFlowTests(TestCase):
 
         self.assertEqual(ToolRun.objects.count(), 0)
         self.assertEqual(AgentJob.objects.count(), 0)
-        self.assertIn("could not be started", followup.body_redacted)
+        self.assertIn("لم أتمكن من بدء الفحص", followup.body_redacted)
         self.assertNotIn("wait", followup.body_redacted.lower())
         self.assertNotIn("running", followup.body_redacted.lower())
 
@@ -340,7 +356,7 @@ class AdminAIToolRequestFlowTests(TestCase):
             content_type="application/json",
         )
 
-        self.assertIn("Read-only check started", streamed)
+        self.assertIn("بدأت فحص قراءة فقط", streamed)
         self.assertIn("Visible streamed result summary", streamed)
         self.assertIn("Visible streamed result summary", response.content.decode())
         self.assertEqual(AdminLiveAIRequestLog.objects.count(), 1)
@@ -362,8 +378,8 @@ class AdminAIToolRequestFlowTests(TestCase):
 
         self.assertEqual(ToolRun.objects.count(), 2)
         self.assertEqual(AgentJob.objects.count(), 2)
-        self.assertIn("services_status: succeeded", combined.body_redacted)
-        self.assertIn("system_identity: failed", combined.body_redacted)
+        self.assertIn("services_status: نجح", combined.body_redacted)
+        self.assertIn("system_identity: فشل", combined.body_redacted)
 
     @override_settings(**LIVE_SETTINGS)
     def test_every_live_ai_toolrun_gets_final_result_message(self):
@@ -381,6 +397,64 @@ class AdminAIToolRequestFlowTests(TestCase):
                 metadata_redacted__source__in=["tool_result_summary", "tool_result_failed", "tool_result_timeout"],
             ).exists()
         )
+
+    def test_single_tool_wait_window_allows_22_second_success_without_timeout(self):
+        definition = self.create_tool()
+        tool_run = ToolRun.objects.create(
+            account=self.account,
+            server=self.server,
+            agent=ScannerAgent.objects.get(server=self.server),
+            tool_definition=definition,
+            requested_by=self.staff,
+            requested_by_type=ToolRun.RequestedByType.ADMIN,
+            status=ToolRun.Status.QUEUED,
+        )
+
+        def refresh_side_effect():
+            if tool_run.refresh_from_db.call_count >= 2:
+                tool_run.status = ToolRun.Status.SUCCEEDED
+                tool_run.result_redacted = {"summary": "تم العثور على مصادر سجلات آمنة."}
+
+        with patch("apps.ai_chat.services.time.monotonic", side_effect=[0, 22]), patch(
+            "apps.ai_chat.services.time.sleep"
+        ), patch.object(tool_run, "refresh_from_db", side_effect=refresh_side_effect):
+            outcome = wait_for_tool_execution_result(tool_run, timeout_seconds=45, poll_interval_seconds=2)
+
+        self.assertEqual(outcome["state"], "succeeded")
+        self.assertNotEqual(outcome["state"], "timeout")
+        self.assertIn("مصادر سجلات", outcome["summary"])
+
+    def test_final_grace_check_catches_success_before_timeout(self):
+        definition = self.create_tool()
+        tool_run = ToolRun.objects.create(
+            account=self.account,
+            server=self.server,
+            agent=ScannerAgent.objects.get(server=self.server),
+            tool_definition=definition,
+            requested_by=self.staff,
+            requested_by_type=ToolRun.RequestedByType.ADMIN,
+            status=ToolRun.Status.QUEUED,
+        )
+        refresh_count = {"value": 0}
+
+        def refresh_side_effect():
+            refresh_count["value"] += 1
+            if refresh_count["value"] >= 2:
+                tool_run.status = ToolRun.Status.SUCCEEDED
+                tool_run.result_redacted = {"summary": "اكتمل خلال مهلة السماح النهائية."}
+
+        with patch("apps.ai_chat.services.time.monotonic", return_value=99), patch(
+            "apps.ai_chat.services.time.sleep"
+        ) as sleep_mock, patch.object(tool_run, "refresh_from_db", side_effect=refresh_side_effect):
+            outcome = wait_for_tool_execution_result(tool_run, timeout_seconds=0, poll_interval_seconds=2)
+
+        self.assertEqual(outcome["state"], "succeeded")
+        sleep_mock.assert_called_once_with(5)
+
+    def test_multi_tool_timeout_window_scales_to_cap(self):
+        self.assertEqual(tool_followup_timeout_for_count(1), 45)
+        self.assertEqual(tool_followup_timeout_for_count(2), 65)
+        self.assertEqual(tool_followup_timeout_for_count(10), 120)
 
     def test_non_staff_cannot_approve_or_reject_tool_request(self):
         self.create_tool()

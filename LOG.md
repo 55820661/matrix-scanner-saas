@@ -2227,3 +2227,39 @@ Verification:
 
 Remaining:
 - C10.9-H2 is complete within scope.
+## 2026-06-25 - C10.9-H3 Adaptive Tool Follow-up and Arabic Result Summary Start
+
+Intent:
+- Improve Live AI tool follow-up timing so near-complete ToolRuns do not show premature timeout, and make backend tool start/final messages Arabic and more useful for Arabic conversations.
+
+Scope:
+- Increase single/multi-tool wait windows and add final grace refresh before timeout.
+- Improve success/failure/timeout/not-started backend chat messages in Arabic.
+- Summarize safe structured ToolRun output more clearly without raw JSON, secrets, large logs, or stack traces.
+- Keep multi-tool proposal execution and combined explanation behavior.
+
+Out of scope:
+- Write/destructive/remediation tools, arbitrary commands, uploads, Portal AI, Telegram AI, customer-facing AI, migrations, and production-history cleanup.
+
+Result:
+- Increased Live AI tool follow-up waits to 45 seconds for a single tool and an adaptive multi-tool window capped at 120 seconds.
+- Added a final 5-second grace wait and refresh before returning timeout.
+- Converted backend start/success/failure/timeout/not-started messages to Arabic user-facing wording.
+- Improved safe ToolRun result summaries from structured redacted results without exposing raw JSON, secrets, large logs, or stack traces.
+- Preserved multiple proposal execution, combined mixed-result explanation, and no execution from free-text tool names without proposal blocks.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 21 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- C10.9-H3 is complete within scope.

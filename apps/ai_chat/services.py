@@ -27,8 +27,13 @@ from .models import AdminChatDecision, AdminChatMessage, AdminChatReportDraft, A
 MAX_MESSAGE_LENGTH = 4000
 MAX_TITLE_LENGTH = 160
 MAX_RESPONSE_LENGTH = 3000
-AUTO_TOOL_FOLLOWUP_MAX_WAIT_SECONDS = 20
+AUTO_TOOL_FOLLOWUP_MAX_WAIT_SECONDS = 45
 AUTO_TOOL_FOLLOWUP_POLL_INTERVAL_SECONDS = 2
+AUTO_TOOL_SINGLE_MAX_WAIT_SECONDS = 45
+AUTO_TOOL_MULTI_BASE_WAIT_SECONDS = 45
+AUTO_TOOL_MULTI_EXTRA_WAIT_SECONDS = 20
+AUTO_TOOL_MULTI_MAX_WAIT_SECONDS = 120
+AUTO_TOOL_FINAL_GRACE_SECONDS = 5
 TOOL_REQUEST_PROPOSAL_RE = re.compile(
     r"<TOOL_REQUEST_PROPOSAL>\s*(?P<payload>\{.*?\})\s*</TOOL_REQUEST_PROPOSAL>",
     re.IGNORECASE | re.DOTALL,
@@ -401,6 +406,29 @@ def _render_multiline_rows(rows, *, empty_text):
     return "\n".join(cleaned) if cleaned else empty_text
 
 
+def _safe_tool_result_summary(tool_run):
+    base_summary = _safe_text(summarize_tool_run_result(tool_run), limit=MAX_RESPONSE_LENGTH)
+    result = tool_run.result_redacted if isinstance(tool_run.result_redacted, dict) else {}
+    bullets = []
+    if result:
+        status = result.get("status") or result.get("result") or ""
+        if status:
+            bullets.append(f"- حالة نتيجة الأداة: {_safe_text(str(status), limit=120)}")
+        summary = result.get("summary") or result.get("message") or result.get("description") or ""
+        if isinstance(summary, str) and summary.strip():
+            bullets.append(f"- {_safe_text(summary, limit=500)}")
+        output = result.get("output") if isinstance(result.get("output"), dict) else {}
+        if output:
+            for key, value in list(output.items())[:5]:
+                if isinstance(value, (str, int, float, bool)) and str(value).strip():
+                    bullets.append(f"- {_safe_text(str(key), limit=80)}: {_safe_text(str(value), limit=240)}")
+    if not bullets and base_summary:
+        bullets.append(f"- {base_summary}")
+    if not bullets:
+        bullets.append("- تم تنفيذ الفحص بنجاح، لكن النتيجة التفصيلية محفوظة في سجل التشغيل وتحتاج مراجعة من صفحة ToolRun.")
+    return _safe_text("\n".join(bullets[:6]), limit=MAX_RESPONSE_LENGTH)
+
+
 def _technical_tool_activity_body(context):
     tool_runs = context.get("recent_tool_runs") or []
     lines = ["Recent read-only tool activity:"]
@@ -545,6 +573,16 @@ def _execution_params_for_request(tool_request):
     return params
 
 
+def tool_followup_timeout_for_count(tool_count):
+    count = max(1, int(tool_count or 1))
+    if count == 1:
+        return AUTO_TOOL_SINGLE_MAX_WAIT_SECONDS
+    return min(
+        AUTO_TOOL_MULTI_MAX_WAIT_SECONDS,
+        AUTO_TOOL_MULTI_BASE_WAIT_SECONDS + ((count - 1) * AUTO_TOOL_MULTI_EXTRA_WAIT_SECONDS),
+    )
+
+
 def _is_live_ai_tool_request(tool_request):
     return (tool_request.params_redacted or {}).get("source") == "live_ai_tool_proposal"
 
@@ -609,14 +647,14 @@ def create_tool_request(*, user, session, tool_key, params=None, message=None):
     return request
 
 
-def create_ai_tool_request_from_proposal(*, user, session, message, proposal):
+def create_ai_tool_request_from_proposal(*, user, session, message, proposal, timeout_seconds=None):
     _require_session_writer(user, session)
     if session.status != AdminChatSession.Status.OPEN:
         raise ValidationError("Chat session is archived.")
     tool_key = _safe_text((proposal or {}).get("tool_slug") or "", limit=120)
     tool_params = _validate_ai_tool_params((proposal or {}).get("params") or {})
     tool_definition = _validate_ai_tool_definition(user, session, tool_key)
-    reason = _safe_text((proposal or {}).get("reason") or "Read-only check proposed by Live AI.", limit=500)
+    reason = _safe_text((proposal or {}).get("reason") or "فحص قراءة فقط اقترحه Live AI.", limit=500)
     if AdminChatToolRequest.objects.filter(
         session=session,
         message=message,
@@ -658,11 +696,12 @@ def create_ai_tool_request_from_proposal(*, user, session, message, proposal):
         ),
         reasoning_summary="Live AI proposed an allowlisted read-only tool request. The backend will execute it through policy checks.",
     )
-    return execute_ai_tool_request_with_followup(user=user, tool_request=request)
+    return execute_ai_tool_request_with_followup(user=user, tool_request=request, timeout_seconds=timeout_seconds)
 
 
 def create_ai_tool_requests_from_proposals(*, user, session, message, proposals):
     results = []
+    timeout_seconds = tool_followup_timeout_for_count(len(proposals or []))
     for proposal in proposals or []:
         try:
             result = create_ai_tool_request_from_proposal(
@@ -670,6 +709,7 @@ def create_ai_tool_requests_from_proposals(*, user, session, message, proposals)
                 session=session,
                 message=message,
                 proposal=proposal,
+                timeout_seconds=timeout_seconds,
             )
         except (PermissionDenied, ValidationError, ValueError):
             continue
@@ -727,8 +767,8 @@ def approve_tool_request(*, user, tool_request):
         session=session,
         sender_type=AdminChatMessage.SenderType.SYSTEM,
         body_redacted=(
-            f'Read-only check started: "{tool_request.tool_definition.key}".\n'
-            "I will follow the execution and show the result when it completes."
+            f'بدأت فحص قراءة فقط: "{tool_request.tool_definition.key}".\n'
+            "سأتابع التنفيذ وأعرض النتيجة عند اكتماله."
         ),
         metadata_redacted={
             "source": "tool_orchestrator",
@@ -747,6 +787,23 @@ def approve_tool_request(*, user, tool_request):
     return tool_run
 
 
+def _terminal_tool_outcome(tool_run):
+    summary = _safe_tool_result_summary(tool_run)
+    if tool_run.status == ToolRun.Status.SUCCEEDED:
+        return {
+            "state": "succeeded",
+            "status": tool_run.status,
+            "summary": summary,
+            "tool_run_id": tool_run.id,
+        }
+    return {
+        "state": "failed",
+        "status": tool_run.status,
+        "summary": summary or _safe_text(tool_run.error_message, limit=MAX_RESPONSE_LENGTH) or "لم يكتمل الفحص بنجاح.",
+        "tool_run_id": tool_run.id,
+    }
+
+
 def wait_for_tool_execution_result(
     tool_run,
     *,
@@ -754,6 +811,7 @@ def wait_for_tool_execution_result(
     poll_interval_seconds=AUTO_TOOL_FOLLOWUP_POLL_INTERVAL_SECONDS,
 ):
     deadline = time.monotonic() + max(0, timeout_seconds)
+    grace_seconds = AUTO_TOOL_FINAL_GRACE_SECONDS
     terminal_statuses = {
         ToolRun.Status.SUCCEEDED,
         ToolRun.Status.FAILED,
@@ -764,27 +822,19 @@ def wait_for_tool_execution_result(
     while True:
         tool_run.refresh_from_db()
         if tool_run.status in terminal_statuses:
-            summary = _safe_text(summarize_tool_run_result(tool_run) or tool_run.error_message, limit=MAX_RESPONSE_LENGTH)
-            if tool_run.status == ToolRun.Status.SUCCEEDED:
-                return {
-                    "state": "succeeded",
-                    "status": tool_run.status,
-                    "summary": summary or f"{tool_run.tool_definition.key} completed successfully.",
-                    "tool_run_id": tool_run.id,
-                }
-            return {
-                "state": "failed",
-                "status": tool_run.status,
-                "summary": summary or f"{tool_run.tool_definition.key} did not complete successfully.",
-                "tool_run_id": tool_run.id,
-            }
+            return _terminal_tool_outcome(tool_run)
         if time.monotonic() >= deadline:
+            if grace_seconds > 0:
+                time.sleep(grace_seconds)
+                tool_run.refresh_from_db()
+                if tool_run.status in terminal_statuses:
+                    return _terminal_tool_outcome(tool_run)
             return {
                 "state": "timeout",
                 "status": tool_run.status,
                 "summary": (
-                    "Tool execution did not finish within the follow-up wait window. "
-                    "The worker may still be processing it or execution may be delayed."
+                    "لم يكتمل الفحص خلال مدة الانتظار. قد يكون التنفيذ ما زال في قائمة الانتظار "
+                    "أو أن عامل التنفيذ لم ينه المهمة بعد."
                 ),
                 "tool_run_id": tool_run.id,
             }
@@ -798,24 +848,27 @@ def _tool_followup_body(tool_request, outcome):
     summary = _safe_text(outcome.get("summary") or "", limit=MAX_RESPONSE_LENGTH)
     if state == "succeeded":
         return _safe_text(
-            f"Read-only check completed successfully: {tool_key}\n\nResult summary:\n{summary}\n\n"
-            "This was a read-only check and did not change server configuration.",
+            f'اكتمل الفحص بنجاح: "{tool_key}".\n\n'
+            f"الخلاصة:\n{summary}\n\n"
+            "التفسير:\nهذا فحص قراءة فقط ولم يغير أي إعدادات على السيرفر.",
             limit=MAX_RESPONSE_LENGTH,
         )
     if state == "failed":
         return _safe_text(
-            f"Read-only check failed: {tool_key}\n\nShort reason:\n{summary or status}",
+            f'فشل تنفيذ الفحص: "{tool_key}".\n\n'
+            f"السبب:\n{summary or status}",
             limit=MAX_RESPONSE_LENGTH,
         )
     if state == "timeout":
         return _safe_text(
-            f"Read-only check started but did not complete within the follow-up wait window.\n\n"
-            f"Current status: {status}.\n"
-            "The worker may still be processing it or execution may be delayed.",
+            "بدأ الفحص، لكنه لم يكتمل خلال مدة الانتظار.\n\n"
+            f"الحالة الحالية:\n{status}\n\n"
+            "التفسير:\nقد يكون التنفيذ ما زال في قائمة الانتظار أو أن عامل التنفيذ لم ينه المهمة بعد.",
             limit=MAX_RESPONSE_LENGTH,
         )
     return _safe_text(
-        f"The read-only check could not be started: {tool_key}\n\nReason: {summary or status}",
+        f'لم أتمكن من بدء الفحص: "{tool_key}".\n\n'
+        f"السبب:\n{summary or status}",
         limit=MAX_RESPONSE_LENGTH,
     )
 
@@ -889,14 +942,21 @@ def _assign_chatkit_item_id(message, item_id):
 
 
 def _record_combined_tool_followup_message(*, session, results):
-    lines = ["Completed read-only tool follow-up for multiple checks.", "", "Results:"]
+    lines = ["اكتملت متابعة الفحوصات التالية:", "", "النتائج:"]
     for result in results:
         tool_request = result.get("tool_request")
         outcome = result.get("outcome") or {}
         tool_key = tool_request.tool_definition.key if tool_request else "tool"
         state = outcome.get("state") or "unknown"
         status = outcome.get("status") or "unknown"
-        lines.append(f"- {tool_key}: {state} ({status})")
+        state_label = {
+            "succeeded": "نجح",
+            "failed": "فشل",
+            "timeout": "لم يكتمل خلال المهلة",
+            "not_started": "لم يبدأ",
+        }.get(state, state)
+        lines.append(f"- {tool_key}: {state_label} ({status})")
+    lines.extend(["", "الخلاصة العامة:", "تم تنفيذ الفحوصات الصالحة فقط عبر المسار المعتمد للأدوات read-only."])
     message = AdminChatMessage.objects.create(
         session=session,
         sender_type=AdminChatMessage.SenderType.ASSISTANT,
@@ -915,7 +975,7 @@ def _record_combined_tool_followup_message(*, session, results):
     return message
 
 
-def execute_ai_tool_request_with_followup(*, user, tool_request):
+def execute_ai_tool_request_with_followup(*, user, tool_request, timeout_seconds=None):
     if not _is_live_ai_tool_request(tool_request):
         raise ValidationError("Only Live AI tool proposals can be auto-executed.")
     try:
@@ -942,7 +1002,10 @@ def execute_ai_tool_request_with_followup(*, user, tool_request):
             "outcome": outcome,
         }
     start_message = _assign_chatkit_item_id(_latest_tool_start_message(tool_request), f"tool_start_{tool_request.id}")
-    outcome = wait_for_tool_execution_result(tool_run)
+    outcome = wait_for_tool_execution_result(
+        tool_run,
+        timeout_seconds=timeout_seconds or AUTO_TOOL_FOLLOWUP_MAX_WAIT_SECONDS,
+    )
     outcome["tool_run_id"] = outcome.get("tool_run_id") or tool_run.id
     tool_request.refresh_from_db()
     if outcome["state"] == "succeeded":
