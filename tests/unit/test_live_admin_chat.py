@@ -10,6 +10,7 @@ from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
+from apps.ai_chat.chatkit_store import AdminChatKitContext, AdminChatKitStore
 from apps.accounts.models import Account, User
 from apps.ai_chat.models import AdminChatMessage, AdminChatSession, AdminChatToolRequest
 from apps.ai_chat.services import create_admin_chat_session
@@ -150,6 +151,10 @@ class LiveAdminChatTests(TestCase):
         self.assertContains(page, self.live_url())
         self.assertNotContains(page, "Deterministic fallback")
         self.assertNotContains(page, 'id="deterministic-fallback"', html=False)
+        self.assertNotContains(page, 'id="matrix-live-ai-status"', html=False)
+        self.assertNotContains(page, 'id="matrix-live-ai-error"', html=False)
+        self.assertNotContains(page, "Live AI ready")
+        self.assertNotContains(page, "Live AI is temporarily unavailable")
         self.assertNotContains(page, "Send deterministic message")
         self.assertNotContains(page, LIVE_SETTINGS["OPENAI_API_KEY"])
         self.assertNotContains(page, "getClientSecret")
@@ -170,12 +175,15 @@ class LiveAdminChatTests(TestCase):
         self.assertIn("domainKey: livePanel.dataset.domainKey", source)
         self.assertIn("fetch: (input, init = {})", source)
         self.assertIn("header: { enabled: false }", source)
-        self.assertIn("function showError(message)", source)
-        self.assertIn("function clearError()", source)
-        self.assertIn("Live AI is temporarily unavailable. Please try again.", source)
-        self.assertIn("Live AI could not load. Please refresh and try again.", source)
+        self.assertIn("history: { enabled: true }", source)
         self.assertNotIn("apiURL:", source)
         self.assertNotIn("header: false", source)
+        self.assertNotIn("matrix-live-ai-status", source)
+        self.assertNotIn("matrix-live-ai-error", source)
+        self.assertNotIn("Live AI ready", source)
+        self.assertNotIn("Live AI is temporarily unavailable", source)
+        self.assertNotIn("Live AI could not load", source)
+        self.assertNotIn("history: { enabled: false }", source)
         self.assertNotIn("showFallback", source)
         self.assertNotIn("show-deterministic-fallback", source)
         self.assertNotIn("deterministic fallback remains available", source)
@@ -273,11 +281,25 @@ class LiveAdminChatTests(TestCase):
         self.assertIn("[REDACTED]", provider.calls[0]["input_text"])
         self.assertIn("Do not execute commands, tools, functions", provider.calls[0]["instructions"])
         assistant = self.session.messages.filter(sender_type=AdminChatMessage.SenderType.ASSISTANT).latest("created_at")
+        user_message = self.session.messages.filter(sender_type=AdminChatMessage.SenderType.USER).latest("created_at")
         self.assertEqual(assistant.metadata_redacted["stream_status"], "completed")
         self.assertEqual(assistant.metadata_redacted["model"], "test-model")
         self.assertEqual(assistant.metadata_redacted["usage"], {"input_units": 25, "output_units": 7})
         self.assertIn("final_size_bytes", assistant.metadata_redacted["context"])
         self.assertNotIn("sk-test-canary-secret", assistant.body_redacted)
+        self.assertNotIn("sk-test-canary-secret", user_message.body_redacted)
+        self.assertNotIn("SAFE_CONTEXT_DATA", assistant.body_redacted)
+        self.assertNotIn("SAFE_CONTEXT_DATA", user_message.body_redacted)
+        history = async_to_sync(AdminChatKitStore().load_thread_items)(
+            str(self.session.id),
+            after=None,
+            limit=20,
+            order="asc",
+            context=AdminChatKitContext(user=self.staff, session=self.session),
+        )
+        history_text = "\n".join("".join(part.text for part in item.content) for item in history.data)
+        self.assertIn("Status [REDACTED]", history_text)
+        self.assertIn("Healthy without [REDACTED] exposure.", history_text)
         self.assertEqual(
             before,
             (

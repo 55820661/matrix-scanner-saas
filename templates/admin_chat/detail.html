@@ -123,14 +123,6 @@
       font-size: 11px;
       opacity: .9;
     }
-    .matrix-live-ai-header button {
-      border: 1px solid rgba(255, 255, 255, .35);
-      border-radius: 6px;
-      padding: 7px 10px;
-      background: rgba(2, 6, 23, .28);
-      color: #fff;
-      cursor: pointer;
-    }
     .matrix-live-ai-body {
       flex: 1;
       min-height: 520px;
@@ -141,16 +133,6 @@
       height: 520px;
       direction: auto;
       unicode-bidi: plaintext;
-    }
-    .matrix-live-ai-status,
-    .matrix-live-ai-error {
-      padding: 10px 16px;
-      border-top: 1px solid rgba(255, 255, 255, .12);
-      color: #cbd5e1;
-      font-size: 12px;
-    }
-    .matrix-live-ai-error {
-      color: #fecaca;
     }
     .chat-deterministic-fallback.is-hidden {
       display: none;
@@ -233,8 +215,6 @@
           <div class="matrix-live-ai-body">
             <openai-chatkit id="matrix-admin-chatkit" dir="auto"></openai-chatkit>
           </div>
-          <div class="matrix-live-ai-status" id="matrix-live-ai-status">Connecting to the same-origin Live AI endpoint...</div>
-          <div class="matrix-live-ai-error" id="matrix-live-ai-error" hidden></div>
         </div>
       {% elif live_ai_enabled and live_ai_error %}
         <div class="live-ai-configuration-error">{{ live_ai_error }}</div>

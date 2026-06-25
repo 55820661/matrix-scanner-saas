@@ -1,22 +1,8 @@
 (() => {
   const chatkit = document.getElementById("matrix-admin-chatkit");
   const livePanel = document.getElementById("matrix-live-ai");
-  const status = document.getElementById("matrix-live-ai-status");
-  const error = document.getElementById("matrix-live-ai-error");
 
-  if (!chatkit || !livePanel || !status || !error) return;
-
-  function showError(message) {
-    if (message) {
-      error.textContent = message;
-      error.hidden = false;
-    }
-  }
-
-  function clearError() {
-    error.textContent = "";
-    error.hidden = true;
-  }
+  if (!chatkit || !livePanel) return;
 
   window.addEventListener("load", async () => {
     try {
@@ -30,18 +16,14 @@
           url: livePanel.dataset.apiUrl,
           domainKey: livePanel.dataset.domainKey,
           fetch: (input, init = {}) => {
-            clearError();
             const headers = new Headers(init.headers || {});
             if (csrfInput) headers.set("X-CSRFToken", csrfInput.value);
-            return window.fetch(input, { ...init, headers, credentials: "same-origin" }).then((response) => {
-              if (response.ok) clearError();
-              return response;
-            });
+            return window.fetch(input, { ...init, headers, credentials: "same-origin" });
           },
         },
         initialThread: livePanel.dataset.threadId,
         header: { enabled: false },
-        history: { enabled: false },
+        history: { enabled: true },
         locale: document.documentElement.lang || navigator.language || "en-US",
         theme: {
           colorScheme: "dark",
@@ -56,13 +38,8 @@
           tools: [],
         },
       });
-      status.textContent = "Live AI ready. Responses use fresh, capped, redacted Safe Context.";
-      chatkit.addEventListener("chatkit.error", () => {
-        showError("Live AI is temporarily unavailable. Please try again.");
-      });
     } catch (initializationError) {
       livePanel.classList.add("chatkit-unavailable");
-      showError("Live AI could not load. Please refresh and try again.");
     }
   });
 })();

@@ -182,7 +182,7 @@ class LiveAIFailureFinalizationTests(TestCase):
         self.assertEqual(AdminLiveAIRequestLog.objects.filter(status=AdminLiveAIRequestLog.Status.SUCCEEDED).count(), 1)
         self.assertFalse(AdminLiveAIRequestLog.objects.filter(status=AdminLiveAIRequestLog.Status.PENDING).exists())
 
-    def test_frontend_clears_stale_failure_state_on_retry_and_success(self):
+    def test_frontend_has_no_custom_status_error_strip_and_loads_history(self):
         asset_path = finders.find("admin_chat/live_chatkit.js")
         self.assertTrue(asset_path)
         self.assertEqual(
@@ -190,11 +190,15 @@ class LiveAIFailureFinalizationTests(TestCase):
             (settings.BASE_DIR / "apps" / "ai_chat" / "static" / "admin_chat" / "live_chatkit.js").resolve(),
         )
         source = Path(asset_path).read_text(encoding="utf-8")
-        self.assertIn("function clearError()", source)
-        self.assertIn("clearError();\n            const headers", source)
-        self.assertIn("if (response.ok) clearError();", source)
-        self.assertIn("chatkit.error", source)
-        self.assertIn("Live AI is temporarily unavailable. Please try again.", source)
+        self.assertIn("history: { enabled: true }", source)
+        self.assertNotIn("function clearError()", source)
+        self.assertNotIn("clearError()", source)
+        self.assertNotIn("showError", source)
+        self.assertNotIn("chatkit.error", source)
+        self.assertNotIn("matrix-live-ai-status", source)
+        self.assertNotIn("matrix-live-ai-error", source)
+        self.assertNotIn("Live AI ready", source)
+        self.assertNotIn("Live AI is temporarily unavailable", source)
         self.assertNotIn("showFallback", source)
         self.assertNotIn("deterministic fallback remains available", source)
 

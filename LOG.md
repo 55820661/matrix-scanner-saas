@@ -2,6 +2,39 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-25 - C10.8-H3 Live AI UI Cleanup and Message Persistence Start
+
+Intent:
+- Remove custom Live AI status/error strips and make Live Admin AI messages persist visibly after refresh.
+
+Scope:
+- Remove the custom status/error strip underneath ChatKit.
+- Use the existing `AdminChatMessage` session transcript for Live AI user/assistant messages.
+- Enable ChatKit history loading from `AdminChatKitStore` instead of keeping frontend-only state.
+- Add tests for persistence, history configuration, no raw Safe Context/secrets, audit continuity, and no ToolRun/AgentJob side effects.
+
+Out of scope:
+- Prompt behavior, diagnostic intent detection, Safe Context builder changes, tools/actions, ToolRun/AgentJob, remediation, Portal AI, Telegram AI, customer chat changes, prompt management, and migrations unless strictly necessary.
+
+## 2026-06-25 - C10.8-H3 Live AI UI Cleanup and Message Persistence Complete
+
+Result:
+- Removed the custom Live Admin AI status/error strip from the template and JavaScript.
+- Stopped writing custom ready/unavailable/load-failure messages under ChatKit.
+- Enabled ChatKit history loading with `history: { enabled: true }`.
+- Confirmed Live AI messages are persisted through the existing `AdminChatMessage` transcript and loaded through `AdminChatKitStore.load_thread_items`.
+- Added regressions for user/assistant persistence, refresh/history loading, no raw Safe Context or secrets in transcript, audit continuity, and no ToolRun/AgentJob side effects.
+- No migrations, prompt behavior changes, Safe Context changes, tools/actions, Portal AI, Telegram AI, or customer chat changes were made.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-25 - C10.8-H2 Remove Visible Live AI Deterministic Fallback Start
 
 Intent:

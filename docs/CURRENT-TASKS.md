@@ -6,6 +6,36 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.8-H3 Live AI UI Cleanup and Message Persistence
+
+Scope:
+- Remove the custom status/error strip from the Live Admin AI UI.
+- Ensure Live AI user and assistant messages persist in the existing Admin Internal Chat session history.
+- Enable ChatKit history loading from the existing store so refresh does not lose the transcript.
+- Add focused tests while preserving audit, prompt behavior, no-tools/actions, Portal, and Telegram boundaries.
+
+Out of scope:
+- Prompt behavior changes, diagnostic intent changes, Safe Context builder changes, migrations unless unavoidable, tools/function calling, ToolRun/AgentJob creation, command execution, remediation, Portal AI, Telegram AI, and customer chat changes.
+
+Result:
+- Removed custom Live Admin AI status/error DOM and JavaScript display logic.
+- Enabled ChatKit history with `history: { enabled: true }`.
+- Verified Live AI user and assistant messages persist in `AdminChatMessage` and hydrate through `AdminChatKitStore.load_thread_items`.
+- Verified transcripts do not store raw Safe Context or secret-like input.
+- Preserved audit, H1 failure finalization, no ToolRun/AgentJob, Portal/customer deterministic chat, and C10.8-A behavior.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.8-H3 is complete.
+
 ## Archived Task: C10.8-H2 Remove Visible Deterministic Fallback from Live Admin AI UI
 
 Scope:
