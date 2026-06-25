@@ -37,6 +37,7 @@ from .services import (
     create_chat_report_draft,
     create_tool_build_request_from_chat,
     create_tool_request,
+    reject_tool_request,
     user_can_write_chat,
 )
 
@@ -301,6 +302,16 @@ def internal_chat_tool_request_approve(request, session_id, request_id):
     tool_request = get_object_or_404(session.tool_requests.select_related("tool_definition"), id=request_id)
     approve_tool_request(user=request.user, tool_request=tool_request)
     messages.success(request, "Tool request approved and queued.")
+    return redirect("admin_chat:session_detail", session_id=session.id)
+
+
+@require_POST
+@staff_member_required
+def internal_chat_tool_request_reject(request, session_id, request_id):
+    session = get_object_or_404(_scoped_internal_chat_sessions(), id=session_id)
+    tool_request = get_object_or_404(session.tool_requests.select_related("tool_definition"), id=request_id)
+    reject_tool_request(user=request.user, tool_request=tool_request)
+    messages.warning(request, "Tool request rejected. No execution was created.")
     return redirect("admin_chat:session_detail", session_id=session.id)
 
 

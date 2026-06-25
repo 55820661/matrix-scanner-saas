@@ -1,3 +1,6 @@
+import json
+import re
+
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 
@@ -7,7 +10,7 @@ from apps.applications.models import Application
 from apps.core.redaction import redact_json, redact_secrets
 from apps.reports.models import Report, ReportSection
 from apps.servers.models import Server
-from apps.tools.models import ToolBuildProposal, ToolBuildRequest, ToolDefinition, ToolRun, ToolTemplate
+from apps.tools.models import ToolBuildProposal, ToolBuildRequest, ToolDefinition, ToolPolicy, ToolRun, ToolTemplate
 from apps.tools.result_summaries import summarize_tool_run_result
 from apps.tools.services import (
     ToolPolicyDenied,
@@ -23,6 +26,19 @@ from .models import AdminChatDecision, AdminChatMessage, AdminChatReportDraft, A
 MAX_MESSAGE_LENGTH = 4000
 MAX_TITLE_LENGTH = 160
 MAX_RESPONSE_LENGTH = 3000
+TOOL_REQUEST_PROPOSAL_RE = re.compile(
+    r"<TOOL_REQUEST_PROPOSAL>\s*(?P<payload>\{.*?\})\s*</TOOL_REQUEST_PROPOSAL>",
+    re.IGNORECASE | re.DOTALL,
+)
+AI_READ_ONLY_TOOL_ALLOWLIST = {
+    "system_identity",
+    "services_status",
+    "latest_baseline_summary",
+    "log_sources_discovery_v2",
+    "systemd_services_discovery",
+    "nginx_sites_discovery",
+    "postgres_status_discovery",
+}
 
 
 def _safe_text(value, *, limit):
@@ -30,6 +46,32 @@ def _safe_text(value, *, limit):
     if len(text) > limit:
         return f"{text[:limit]}..."
     return text
+
+
+def strip_tool_request_proposals(text):
+    return _safe_text(TOOL_REQUEST_PROPOSAL_RE.sub("", text or ""), limit=MAX_RESPONSE_LENGTH)
+
+
+def extract_tool_request_proposal(text):
+    match = TOOL_REQUEST_PROPOSAL_RE.search(text or "")
+    if not match:
+        return None
+    try:
+        payload = json.loads(match.group("payload"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    tool_slug = _safe_text(str(payload.get("tool_slug") or ""), limit=120)
+    reason = _safe_text(str(payload.get("reason") or ""), limit=500)
+    params = payload.get("params") or {}
+    if not isinstance(params, dict):
+        return None
+    return {
+        "tool_slug": tool_slug,
+        "reason": reason,
+        "params": redact_json(params),
+    }
 
 
 def _require_portal_account_user(user):
@@ -469,6 +511,52 @@ def _available_tool_keys_for_session(user, session):
     return {tool.get("key") for tool in context.get("available_tools", []) if tool.get("key")}
 
 
+def _validate_ai_tool_params(params):
+    params = params or {}
+    if not isinstance(params, dict):
+        raise ValidationError("Tool proposal parameters must be an object.")
+    allowed_keys = {"scope"}
+    if set(params) - allowed_keys:
+        raise ValidationError("Tool proposal parameters are not allowed for this read-only flow.")
+    scope = params.get("scope", "selected_server")
+    if scope not in {"selected_server", ""}:
+        raise ValidationError("Tool proposal scope must be selected_server.")
+    return {}
+
+
+def _execution_params_for_request(tool_request):
+    params = tool_request.params_redacted or {}
+    if isinstance(params, dict) and isinstance(params.get("tool_params"), dict):
+        return params.get("tool_params") or {}
+    return params
+
+
+def _validate_ai_tool_definition(user, session, tool_key):
+    if session.channel != AdminChatSession.Channel.ADMIN_INTERNAL:
+        raise PermissionDenied
+    if not session.server_id:
+        raise ValidationError("A server-scoped chat session is required before requesting a tool.")
+    if tool_key not in AI_READ_ONLY_TOOL_ALLOWLIST:
+        raise ValidationError("Tool is not allowlisted for AI proposals.")
+    if tool_key not in _available_tool_keys_for_session(user, session):
+        raise ValidationError("Tool is not available to this role, plan, policy, and server.")
+    try:
+        tool_definition = ToolDefinition.objects.select_related("template", "policy").get(key=tool_key)
+    except ToolDefinition.DoesNotExist as exc:
+        raise ValidationError("Tool is not registered.") from exc
+    if not tool_definition.is_enabled_for_mvp:
+        raise ValidationError("Only enabled read-only tools can be proposed.")
+    try:
+        policy = tool_definition.policy
+    except ToolPolicy.DoesNotExist as exc:
+        raise ValidationError("Tool policy is missing.") from exc
+    if not policy.is_active or not policy.allow_admin_run:
+        raise ValidationError("Tool policy does not allow admin approval for this tool.")
+    if policy.allowed_server_statuses and session.server.status not in policy.allowed_server_statuses:
+        raise ValidationError("Server status is not allowed for this tool.")
+    return tool_definition
+
+
 def create_tool_request(*, user, session, tool_key, params=None, message=None):
     _require_session_writer(user, session)
     if session.status != AdminChatSession.Status.OPEN:
@@ -503,6 +591,58 @@ def create_tool_request(*, user, session, tool_key, params=None, message=None):
     return request
 
 
+def create_ai_tool_request_from_proposal(*, user, session, message, proposal):
+    _require_session_writer(user, session)
+    if session.status != AdminChatSession.Status.OPEN:
+        raise ValidationError("Chat session is archived.")
+    tool_key = _safe_text((proposal or {}).get("tool_slug") or "", limit=120)
+    tool_params = _validate_ai_tool_params((proposal or {}).get("params") or {})
+    tool_definition = _validate_ai_tool_definition(user, session, tool_key)
+    reason = _safe_text((proposal or {}).get("reason") or "Read-only check proposed by Live AI.", limit=500)
+    if AdminChatToolRequest.objects.filter(
+        session=session,
+        message=message,
+        tool_definition=tool_definition,
+        status=AdminChatToolRequest.Status.SUGGESTED,
+    ).exists():
+        return None
+    request = AdminChatToolRequest.objects.create(
+        session=session,
+        message=message,
+        tool_definition=tool_definition,
+        params_redacted=redact_json(
+            {
+                "tool_params": tool_params,
+                "scope": "selected_server",
+                "reason": reason,
+                "source": "live_ai_tool_proposal",
+            }
+        ),
+        status=AdminChatToolRequest.Status.SUGGESTED,
+    )
+    AdminChatDecision.objects.create(
+        session=session,
+        decision_type=AdminChatDecision.DecisionType.TOOL_REQUEST,
+        input_context_redacted=redact_json(
+            {
+                "source": "live_ai_tool_proposal",
+                "message_id": str(message.id),
+                "tool_key": tool_key,
+            }
+        ),
+        output_json_redacted=redact_json(
+            {
+                "status": request.status,
+                "tool_request_id": str(request.id),
+                "tool_key": tool_definition.key,
+                "reason": reason,
+            }
+        ),
+        reasoning_summary="Live AI proposed an allowlisted read-only tool request. Approval is required before execution.",
+    )
+    return request
+
+
 def approve_tool_request(*, user, tool_request):
     session = tool_request.session
     _require_session_writer(user, session)
@@ -510,12 +650,16 @@ def approve_tool_request(*, user, tool_request):
         raise ValidationError("Only suggested tool requests can be approved.")
     if not session.server_id:
         raise ValidationError("Tool request is not server-scoped.")
-    params = tool_request.params_redacted or {}
+    if (tool_request.params_redacted or {}).get("source") == "live_ai_tool_proposal":
+        tool_definition = _validate_ai_tool_definition(user, session, tool_request.tool_definition.key)
+    else:
+        tool_definition = tool_request.tool_definition
+    params = _execution_params_for_request(tool_request)
     try:
         tool_run, _job = create_tool_run_job(
             account=session.account,
             server=session.server,
-            tool_key=tool_request.tool_definition.key,
+            tool_key=tool_definition.key,
             params=params,
             requested_by=user,
             requested_by_type=ToolRun.RequestedByType.ADMIN
@@ -546,6 +690,31 @@ def approve_tool_request(*, user, tool_request):
         reasoning_summary="Approved chat tool request queued through create_tool_run_job.",
     )
     return tool_run
+
+
+def reject_tool_request(*, user, tool_request):
+    session = tool_request.session
+    _require_session_writer(user, session)
+    if tool_request.status != AdminChatToolRequest.Status.SUGGESTED:
+        raise ValidationError("Only suggested tool requests can be rejected.")
+    tool_request.status = AdminChatToolRequest.Status.CANCELLED
+    tool_request.approved_by = user
+    tool_request.approved_at = timezone.now()
+    tool_request.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
+    AdminChatMessage.objects.create(
+        session=session,
+        sender_type=AdminChatMessage.SenderType.SYSTEM,
+        body_redacted=f"Read-only tool request rejected: {tool_request.tool_definition.key}",
+        metadata_redacted={"source": "tool_request_approval", "tool_request_id": str(tool_request.id), "decision": "rejected"},
+    )
+    AdminChatDecision.objects.create(
+        session=session,
+        decision_type=AdminChatDecision.DecisionType.TOOL_REQUEST,
+        input_context_redacted={"tool_request_id": str(tool_request.id), "tool_key": tool_request.tool_definition.key},
+        output_json_redacted={"status": tool_request.status, "decision": "rejected"},
+        reasoning_summary="Matrix Admin rejected the read-only chat tool request. No ToolRun or AgentJob was created.",
+    )
+    return tool_request
 
 
 def sync_chat_tool_requests_for_tool_run(tool_run):

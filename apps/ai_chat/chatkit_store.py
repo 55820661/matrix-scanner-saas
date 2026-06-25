@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from asgiref.sync import sync_to_async
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 
 from chatkit.store import Store
@@ -20,7 +20,13 @@ from chatkit.types import (
 )
 
 from apps.ai_chat.models import AdminChatDecision, AdminChatMessage, AdminChatSession
-from apps.ai_chat.services import MAX_RESPONSE_LENGTH, add_user_message
+from apps.ai_chat.services import (
+    MAX_RESPONSE_LENGTH,
+    add_user_message,
+    create_ai_tool_request_from_proposal,
+    extract_tool_request_proposal,
+    strip_tool_request_proposals,
+)
 from apps.audit.models import AuditLog
 from apps.core.redaction import redact_json, redact_secrets
 
@@ -197,7 +203,9 @@ class AdminChatKitStore(Store[AdminChatKitContext]):
     ) -> None:
         if self._find_message(context.session, item.id):
             return
-        body = redact_secrets(self._assistant_text(item)).strip()[:MAX_RESPONSE_LENGTH]
+        raw_body = redact_secrets(self._assistant_text(item)).strip()[:MAX_RESPONSE_LENGTH]
+        proposal = metadata.pop("tool_request_proposal", None) or extract_tool_request_proposal(raw_body)
+        body = strip_tool_request_proposals(raw_body)
         safe_metadata = redact_json(
             {
                 "source": "admin_live_chatkit",
@@ -228,6 +236,16 @@ class AdminChatKitStore(Store[AdminChatKitContext]):
             },
             reasoning_summary="Live AI context-only response." if stream_status == "completed" else "Live AI failed; safe fallback response returned.",
         )
+        if stream_status == "completed" and proposal:
+            try:
+                create_ai_tool_request_from_proposal(
+                    user=context.user,
+                    session=context.session,
+                    message=message,
+                    proposal=proposal,
+                )
+            except (PermissionDenied, ValidationError, ValueError):
+                pass
         AuditLog.objects.create(
             actor_user=context.user,
             actor_type=AuditLog.ActorType.ADMIN,

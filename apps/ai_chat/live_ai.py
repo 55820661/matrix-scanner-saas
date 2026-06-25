@@ -27,6 +27,7 @@ from chatkit.types import (
 
 from apps.ai_chat.chatkit_store import AdminChatKitContext, AdminChatKitStore
 from apps.ai_chat.models import AdminChatMessage, AdminLiveAIRequestLog
+from apps.ai_chat.services import extract_tool_request_proposal, strip_tool_request_proposals
 from apps.ai_context.services import build_safe_context, prepare_safe_context_for_ai
 from apps.audit.models import AuditLog
 from apps.core.redaction import redact_secrets
@@ -47,6 +48,14 @@ You do not run commands.
 You do not create ToolRequest, ToolRun, AgentJob, reports, or any execution object.
 You do not perform remediation, writes, file operations, service actions, uploads, or function calls.
 Do not suggest executable commands as a direct solution. Suggested checks must be read-only and require human approval.
+You may propose read-only tool requests when the Safe Context is insufficient.
+You must not claim that tools were executed.
+You must wait for admin approval before any tool can run.
+Only propose tools from the available read-only tool list in Safe Context.
+If no suitable tool is available, say what data is missing.
+When proposing a tool, include exactly one hidden internal block at the end of your answer:
+<TOOL_REQUEST_PROPOSAL>{"tool_slug":"available_tool_key","reason":"short safe reason","params":{"scope":"selected_server"}}</TOOL_REQUEST_PROPOSAL>
+Never show raw JSON outside that hidden internal proposal block.
 Never request, reveal, reconstruct, or repeat secrets, credentials, raw logs, raw environment values, or raw execution output.
 Do not output raw ToolRun output, raw AgentJob result, raw logs, or raw env.
 Do not claim you performed live checks unless the result is already present in Safe Context.
@@ -86,6 +95,7 @@ DIAGNOSTIC_INTENT_TERMS = (
 )
 
 LIVE_AI_SAFE_ERROR_MESSAGE = "Live AI is temporarily unavailable. Please try again."
+TOOL_REQUEST_PROPOSAL_START = "<TOOL_REQUEST_PROPOSAL"
 
 
 class LiveAIConfigurationError(RuntimeError):
@@ -285,6 +295,19 @@ def _build_provider_input(safe_context: dict, messages: list[dict]) -> str:
     return prefix + analysis_block + "<REDACTED_CONVERSATION>\n" + "\n".join(selected) + "\n</REDACTED_CONVERSATION>"
 
 
+def _visible_live_ai_output(text: str) -> str:
+    marker_index = text.upper().find(TOOL_REQUEST_PROPOSAL_START)
+    if marker_index >= 0:
+        text = text[:marker_index]
+    return strip_tool_request_proposals(text)
+
+
+def _streamable_visible_length(output: str, visible_output: str) -> int:
+    if TOOL_REQUEST_PROPOSAL_START in output.upper():
+        return len(visible_output)
+    return max(0, len(visible_output) - len(TOOL_REQUEST_PROPOSAL_START))
+
+
 def _build_live_ai_input(context: AdminChatKitContext):
     safe_context = build_safe_context(
         account=context.session.account,
@@ -321,6 +344,7 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
 
         state = LiveAIProviderState(model=settings.OPENAI_MODEL)
         output = ""
+        streamed_visible_length = 0
         stream_status = "completed"
         error_code = ""
         context_metadata = {}
@@ -350,10 +374,15 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
                         break
                     safe_delta = safe_delta[:remaining]
                     output += safe_delta
-                    yield ThreadItemUpdatedEvent(
-                        item_id=item_id,
-                        update=AssistantMessageContentPartTextDelta(content_index=0, delta=safe_delta),
-                    )
+                    visible_output = _visible_live_ai_output(output)
+                    streamable_length = _streamable_visible_length(output, visible_output)
+                    visible_delta = visible_output[streamed_visible_length:streamable_length]
+                    streamed_visible_length = streamable_length
+                    if visible_delta:
+                        yield ThreadItemUpdatedEvent(
+                            item_id=item_id,
+                            update=AssistantMessageContentPartTextDelta(content_index=0, delta=visible_delta),
+                        )
             if not output.strip():
                 raise RuntimeError("Provider returned an empty response.")
         except asyncio.CancelledError:
@@ -379,7 +408,8 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
 
         state.latency_ms = int((monotonic() - started_at) * 1000)
         safe_context_size_bytes = int(context_metadata.get("final_size_bytes") or 0)
-        response_size_bytes = len(output.encode("utf-8"))
+        visible_output = _visible_live_ai_output(output)
+        response_size_bytes = len(visible_output.encode("utf-8"))
         await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
             context.audit_log_id,
             status=(
@@ -401,9 +431,10 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
             "error_code": error_code,
             "usage": state.usage,
             "context": context_metadata,
+            "tool_request_proposal": extract_tool_request_proposal(output) if stream_status == "completed" else None,
         }
         yield ThreadItemDoneEvent(
-            item=assistant_item.model_copy(update={"content": [AssistantMessageContent(text=output)]})
+            item=assistant_item.model_copy(update={"content": [AssistantMessageContent(text=visible_output)]})
         )
 
     async def handle_stream_cancelled(

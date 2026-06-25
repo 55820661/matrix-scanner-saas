@@ -6,6 +6,39 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.9-A AI Read-Only Tool Request Flow
+
+Scope:
+- Add a safe Admin Live AI proposal flow for read-only tool requests inside Admin Internal Chat.
+- Require explicit staff approval before ToolRun/AgentJob creation through the existing policy-backed path.
+- Validate proposals with a code allowlist plus existing ToolDefinition/ToolPolicy/plan/server checks.
+- Add dry-run/apply cleanup for stale legacy pending Live AI audit rows.
+
+Out of scope:
+- Direct AI tool execution, auto-approved tools, write/destructive/remediation tools, arbitrary shell, uploads, Portal AI, Telegram AI, customer-facing AI, prompt management, and subscription/payment changes.
+
+Result:
+- Parsed hidden `<TOOL_REQUEST_PROPOSAL>` blocks from Live AI output and stripped them from streaming display and saved transcripts.
+- Validated proposals against an explicit read-only allowlist plus current ToolDefinition, ToolPolicy, PlanTool, server-status, and server-scoped chat checks.
+- Created `AdminChatToolRequest` only for valid proposals, with no ToolRun/AgentJob before approval.
+- Added staff-only approve/reject flow in Admin Internal Chat; approval uses the existing `create_tool_run_job()` path and rejection creates no execution objects.
+- Added `cleanup_live_ai_legacy_test_data` management command with dry-run default and explicit `--apply` for stale pending audit rows.
+- Preserved Live AI generation audit scope: history/init/refresh/approval/rejection do not create `AdminLiveAIRequestLog`.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 11 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.9-A is complete.
+
 ## Archived Task: C10.8-H4 ChatKit History Hydration and Audit Scope
 
 Scope:

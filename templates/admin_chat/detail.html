@@ -209,7 +209,7 @@
           <div class="matrix-live-ai-header">
             <div>
               <strong>Matrix Live Admin AI</strong>
-              <span>Safe Context only. No tools, actions, uploads, or remediation.</span>
+              <span>Safe Context only. Read-only tools require explicit approval. No actions, uploads, or remediation.</span>
             </div>
           </div>
           <div class="matrix-live-ai-body">
@@ -277,6 +277,7 @@
             <thead>
               <tr>
                 <th>Tool</th>
+                <th>Reason</th>
                 <th>Status</th>
                 <th>Action</th>
               </tr>
@@ -285,12 +286,18 @@
               {% for request in tool_requests %}
                 <tr>
                   <td>{{ request.tool_definition.key }}</td>
+                  <td>{{ request.params_redacted.reason|default:"-" }}</td>
                   <td>{{ request.status }}</td>
                   <td>
                     {% if can_write and request.status == "suggested" %}
-                      <form method="post" action="{% url 'admin_chat:tool_request_approve' session.id request.id %}">
+                      <p class="help">Pending approval. The tool has not run.</p>
+                      <form method="post" action="{% url 'admin_chat:tool_request_approve' session.id request.id %}" style="display: inline-block;">
                         {% csrf_token %}
                         <input type="submit" value="Approve">
+                      </form>
+                      <form method="post" action="{% url 'admin_chat:tool_request_reject' session.id request.id %}" style="display: inline-block;">
+                        {% csrf_token %}
+                        <input type="submit" value="Reject">
                       </form>
                     {% else %}
                       {{ request.tool_run.id|default:"-" }}
@@ -298,7 +305,7 @@
                   </td>
                 </tr>
               {% empty %}
-                <tr><td colspan="3">No tool requests yet.</td></tr>
+                <tr><td colspan="4">No tool requests yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>

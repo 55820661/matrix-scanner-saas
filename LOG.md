@@ -2121,3 +2121,38 @@ Verification:
 Remaining:
 - C10.5-B is complete within the approved scope.
 - No live AI, Telegram, Tool Builder-in-Portal, runtime, or policy changes were introduced.
+## 2026-06-25 - C10.9-A AI Read-Only Tool Request Flow Start
+
+Intent:
+- Add a safe Admin Live AI read-only tool request proposal flow that requires explicit staff approval before any ToolRun or AgentJob is created.
+
+Scope:
+- Parse hidden internal tool proposals from Live AI assistant output.
+- Validate proposals against an explicit read-only allowlist and existing ToolPolicy/plan/server guardrails.
+- Create pending AdminChatToolRequest records only for valid proposals.
+- Add staff-only approve/reject handling inside Admin Internal Chat.
+- Add a dry-run/apply management command for stale legacy pending Live AI audit cleanup.
+
+Out of scope:
+- Direct AI tool execution, auto-approval, write/destructive/remediation tools, arbitrary shell, uploads, Portal AI, Telegram AI, customer-facing AI, and subscription/payment changes.
+
+Result:
+- Added hidden Live AI tool proposal parsing with display/storage stripping for `<TOOL_REQUEST_PROPOSAL>` blocks.
+- Added an explicit first-phase read-only allowlist and validation against existing ToolDefinition, ToolPolicy, PlanTool, server status, and active scanner-agent execution path.
+- Created `AdminChatToolRequest` records only for valid Live AI proposals; no ToolRun or AgentJob is created until staff approval.
+- Added staff-only approve/reject UI flow in Admin Internal Chat; rejection maps to the existing cancelled status and creates no execution objects.
+- Added `cleanup_live_ai_legacy_test_data` with dry-run default and explicit `--apply` for stale pending Live AI audit rows.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 11 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- C10.9-B can add safe result summarization back into AI chat if needed.
