@@ -56,11 +56,22 @@ def strip_tool_request_proposals(text):
 
 
 def extract_tool_request_proposal(text):
-    match = TOOL_REQUEST_PROPOSAL_RE.search(text or "")
-    if not match:
-        return None
+    proposals = extract_tool_request_proposals(text)
+    return proposals[0] if proposals else None
+
+
+def extract_tool_request_proposals(text):
+    proposals = []
+    for match in TOOL_REQUEST_PROPOSAL_RE.finditer(text or ""):
+        proposal = _parse_tool_request_proposal(match.group("payload"))
+        if proposal:
+            proposals.append(proposal)
+    return proposals
+
+
+def _parse_tool_request_proposal(payload_text):
     try:
-        payload = json.loads(match.group("payload"))
+        payload = json.loads(payload_text)
     except (TypeError, ValueError, json.JSONDecodeError):
         return None
     if not isinstance(payload, dict):
@@ -647,8 +658,36 @@ def create_ai_tool_request_from_proposal(*, user, session, message, proposal):
         ),
         reasoning_summary="Live AI proposed an allowlisted read-only tool request. The backend will execute it through policy checks.",
     )
-    execute_ai_tool_request_with_followup(user=user, tool_request=request)
-    return request
+    return execute_ai_tool_request_with_followup(user=user, tool_request=request)
+
+
+def create_ai_tool_requests_from_proposals(*, user, session, message, proposals):
+    results = []
+    for proposal in proposals or []:
+        try:
+            result = create_ai_tool_request_from_proposal(
+                user=user,
+                session=session,
+                message=message,
+                proposal=proposal,
+            )
+        except (PermissionDenied, ValidationError, ValueError):
+            continue
+        if result:
+            results.append(result)
+    if len(results) > 1:
+        combined_message = _record_combined_tool_followup_message(session=session, results=results)
+        _assign_chatkit_item_id(combined_message, f"tool_result_combined_{message.id}")
+        results.append(
+            {
+                "tool_request": None,
+                "tool_run": None,
+                "start_message": None,
+                "followup_message": combined_message,
+                "outcome": {"state": "combined", "status": "completed", "tool_run_id": ""},
+            }
+        )
+    return results
 
 
 def approve_tool_request(*, user, tool_request):
@@ -687,7 +726,10 @@ def approve_tool_request(*, user, tool_request):
     AdminChatMessage.objects.create(
         session=session,
         sender_type=AdminChatMessage.SenderType.SYSTEM,
-        body_redacted=f"Read-only tool started: {tool_request.tool_definition.key}",
+        body_redacted=(
+            f'Read-only check started: "{tool_request.tool_definition.key}".\n'
+            "I will follow the execution and show the result when it completes."
+        ),
         metadata_redacted={
             "source": "tool_orchestrator",
             "tool_request_id": str(tool_request.id),
@@ -780,13 +822,20 @@ def _tool_followup_body(tool_request, outcome):
 
 def _record_tool_followup_message(tool_request, outcome):
     body = _tool_followup_body(tool_request, outcome)
+    source_by_state = {
+        "succeeded": "tool_result_summary",
+        "failed": "tool_result_failed",
+        "timeout": "tool_result_timeout",
+        "not_started": "tool_result_not_started",
+    }
+    source = source_by_state.get(outcome.get("state"), "tool_result_timeout")
     message = AdminChatMessage.objects.create(
         session=tool_request.session,
         sender_type=AdminChatMessage.SenderType.ASSISTANT,
         body_redacted=body,
         metadata_redacted=redact_json(
             {
-                "source": "auto_tool_followup",
+                "source": source,
                 "tool_request_id": str(tool_request.id),
                 "tool_run_id": str(outcome.get("tool_run_id") or ""),
                 "tool_key": tool_request.tool_definition.key,
@@ -817,6 +866,55 @@ def _record_tool_followup_message(tool_request, outcome):
     return message
 
 
+def _latest_tool_start_message(tool_request):
+    return (
+        AdminChatMessage.objects.filter(
+            session=tool_request.session,
+            metadata_redacted__source="tool_orchestrator",
+            metadata_redacted__tool_request_id=str(tool_request.id),
+        )
+        .order_by("-created_at")
+        .first()
+    )
+
+
+def _assign_chatkit_item_id(message, item_id):
+    if not message:
+        return None
+    metadata = dict(message.metadata_redacted or {})
+    metadata["chatkit_item_id"] = item_id
+    message.metadata_redacted = redact_json(metadata)
+    message.save(update_fields=["metadata_redacted", "updated_at"])
+    return message
+
+
+def _record_combined_tool_followup_message(*, session, results):
+    lines = ["Completed read-only tool follow-up for multiple checks.", "", "Results:"]
+    for result in results:
+        tool_request = result.get("tool_request")
+        outcome = result.get("outcome") or {}
+        tool_key = tool_request.tool_definition.key if tool_request else "tool"
+        state = outcome.get("state") or "unknown"
+        status = outcome.get("status") or "unknown"
+        lines.append(f"- {tool_key}: {state} ({status})")
+    message = AdminChatMessage.objects.create(
+        session=session,
+        sender_type=AdminChatMessage.SenderType.ASSISTANT,
+        body_redacted=_safe_text("\n".join(lines), limit=MAX_RESPONSE_LENGTH),
+        metadata_redacted=redact_json(
+            {
+                "source": "tool_result_summary",
+                "mode": "combined",
+                "tool_request_ids": [str((result.get("tool_request")).id) for result in results if result.get("tool_request")],
+                "states": [(result.get("outcome") or {}).get("state") for result in results],
+            }
+        ),
+    )
+    session.last_message_at = message.created_at
+    session.save(update_fields=["last_message_at", "updated_at"])
+    return message
+
+
 def execute_ai_tool_request_with_followup(*, user, tool_request):
     if not _is_live_ai_tool_request(tool_request):
         raise ValidationError("Only Live AI tool proposals can be auto-executed.")
@@ -834,9 +932,18 @@ def execute_ai_tool_request_with_followup(*, user, tool_request):
             "summary": _safe_text(str(exc), limit=MAX_RESPONSE_LENGTH),
             "tool_run_id": "",
         }
-        _record_tool_followup_message(tool_request, outcome)
-        return outcome
+        followup_message = _record_tool_followup_message(tool_request, outcome)
+        _assign_chatkit_item_id(followup_message, f"tool_result_{tool_request.id}")
+        return {
+            "tool_request": tool_request,
+            "tool_run": None,
+            "start_message": None,
+            "followup_message": followup_message,
+            "outcome": outcome,
+        }
+    start_message = _assign_chatkit_item_id(_latest_tool_start_message(tool_request), f"tool_start_{tool_request.id}")
     outcome = wait_for_tool_execution_result(tool_run)
+    outcome["tool_run_id"] = outcome.get("tool_run_id") or tool_run.id
     tool_request.refresh_from_db()
     if outcome["state"] == "succeeded":
         tool_request.status = AdminChatToolRequest.Status.SUCCEEDED
@@ -846,8 +953,15 @@ def execute_ai_tool_request_with_followup(*, user, tool_request):
     else:
         tool_request.status = AdminChatToolRequest.Status.QUEUED
     tool_request.save(update_fields=["status", "error_summary", "updated_at"])
-    _record_tool_followup_message(tool_request, outcome)
-    return outcome
+    followup_message = _record_tool_followup_message(tool_request, outcome)
+    _assign_chatkit_item_id(followup_message, f"tool_result_{tool_request.id}")
+    return {
+        "tool_request": tool_request,
+        "tool_run": tool_run,
+        "start_message": start_message,
+        "followup_message": followup_message,
+        "outcome": outcome,
+    }
 
 
 def reject_tool_request(*, user, tool_request):

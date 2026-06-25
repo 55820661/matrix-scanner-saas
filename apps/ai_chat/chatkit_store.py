@@ -23,7 +23,7 @@ from apps.ai_chat.models import AdminChatDecision, AdminChatMessage, AdminChatSe
 from apps.ai_chat.services import (
     MAX_RESPONSE_LENGTH,
     add_user_message,
-    create_ai_tool_request_from_proposal,
+    create_ai_tool_requests_from_proposals,
     extract_tool_request_proposal,
     strip_tool_request_proposals,
 )
@@ -236,13 +236,13 @@ class AdminChatKitStore(Store[AdminChatKitContext]):
             },
             reasoning_summary="Live AI context-only response." if stream_status == "completed" else "Live AI failed; safe fallback response returned.",
         )
-        if stream_status == "completed" and proposal:
+        if stream_status == "completed" and proposal and not safe_metadata.get("tool_request_handled"):
             try:
-                create_ai_tool_request_from_proposal(
+                create_ai_tool_requests_from_proposals(
                     user=context.user,
                     session=context.session,
                     message=message,
-                    proposal=proposal,
+                    proposals=[proposal],
                 )
             except (PermissionDenied, ValidationError, ValueError):
                 pass

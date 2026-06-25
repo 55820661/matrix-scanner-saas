@@ -27,7 +27,7 @@ from chatkit.types import (
 
 from apps.ai_chat.chatkit_store import AdminChatKitContext, AdminChatKitStore
 from apps.ai_chat.models import AdminChatMessage, AdminLiveAIRequestLog
-from apps.ai_chat.services import extract_tool_request_proposal, strip_tool_request_proposals
+from apps.ai_chat.services import create_ai_tool_requests_from_proposals, extract_tool_request_proposals, strip_tool_request_proposals
 from apps.ai_context.services import build_safe_context, prepare_safe_context_for_ai
 from apps.audit.models import AuditLog
 from apps.core.redaction import redact_secrets
@@ -311,6 +311,25 @@ def _streamable_visible_length(output: str, visible_output: str) -> int:
     return max(0, len(visible_output) - len(TOOL_REQUEST_PROPOSAL_START))
 
 
+def _message_to_assistant_item(message, thread_id):
+    return AssistantMessageItem(
+        id=str((message.metadata_redacted or {}).get("chatkit_item_id") or f"admin_msg_{message.id}"),
+        thread_id=str(thread_id),
+        created_at=message.created_at,
+        content=[AssistantMessageContent(text=message.body_redacted)],
+    )
+
+
+def _execute_tool_proposals_for_item(*, user, session, item_id, proposals):
+    message = AdminChatMessage.objects.get(metadata_redacted__chatkit_item_id=item_id)
+    return create_ai_tool_requests_from_proposals(
+        user=user,
+        session=session,
+        message=message,
+        proposals=proposals,
+    )
+
+
 def _build_live_ai_input(context: AdminChatKitContext):
     safe_context = build_safe_context(
         account=context.session.account,
@@ -426,6 +445,7 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
             error_class=error_code,
             fallback_used=stream_status != "completed",
         )
+        proposals = extract_tool_request_proposals(output) if stream_status == "completed" else []
         context.item_metadata[item_id] = {
             "model": state.model,
             "provider_request_id": state.provider_request_id,
@@ -434,11 +454,26 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
             "error_code": error_code,
             "usage": state.usage,
             "context": context_metadata,
-            "tool_request_proposal": extract_tool_request_proposal(output) if stream_status == "completed" else None,
+            "tool_request_handled": True,
         }
         yield ThreadItemDoneEvent(
             item=assistant_item.model_copy(update={"content": [AssistantMessageContent(text=visible_output)]})
         )
+        if proposals:
+            tool_results = await sync_to_async(_execute_tool_proposals_for_item, thread_sensitive=True)(
+                user=context.user,
+                session=context.session,
+                item_id=item_id,
+                proposals=proposals,
+            )
+            for result in tool_results:
+                for message_key in ("start_message", "followup_message"):
+                    message = result.get(message_key)
+                    if not message:
+                        continue
+                    tool_item = _message_to_assistant_item(message, thread.id)
+                    yield ThreadItemAddedEvent(item=tool_item)
+                    yield ThreadItemDoneEvent(item=tool_item)
 
     async def handle_stream_cancelled(
         self,

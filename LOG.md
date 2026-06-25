@@ -2191,3 +2191,39 @@ Verification:
 
 Remaining:
 - C10.9-H1 is complete within scope.
+## 2026-06-25 - C10.9-H2 Tool Execution Completion Loop Start
+
+Intent:
+- Ensure every Live AI-triggered read-only ToolRun produces a visible completion/failure/timeout follow-up in the same ChatKit lifecycle, and remove stale explicit-approval UI copy.
+
+Scope:
+- Stream tool start and final follow-up items back to ChatKit after actual ToolRun/AgentJob creation.
+- Keep saved final result messages in history with explicit result metadata.
+- Support multiple proposal blocks in one Live AI response with a combined final explanation.
+- Update Admin Live AI header copy to the current auto-execution behavior.
+
+Out of scope:
+- Write/destructive/remediation tools, arbitrary commands, uploads, Portal AI, Telegram AI, customer-facing AI, migrations, and tool policy expansion.
+
+Result:
+- Streamed Live AI tool start and final follow-up messages back through ChatKit in the same response lifecycle.
+- Ensured saved final tool messages use explicit metadata sources: `tool_result_summary`, `tool_result_failed`, `tool_result_timeout`, or `tool_result_not_started`.
+- Added `chatkit_item_id` metadata to start/final tool messages so history hydration and immediate ChatKit display stay aligned without duplicate saves.
+- Added multi-tool handling with a combined final explanation for multiple proposal blocks, including partial success/failure coverage.
+- Updated the Admin Live AI header to: `Safe Context only. Approved read-only tools may run automatically. No write actions, uploads, or remediation.`
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 17 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- C10.9-H2 is complete within scope.

@@ -265,7 +265,7 @@ class AdminAIToolRequestFlowTests(TestCase):
             wait_outcome=self.success_outcome("Services check completed successfully without exposing raw output."),
         )
         tool_request = AdminChatToolRequest.objects.get()
-        followup = AdminChatMessage.objects.filter(metadata_redacted__source="auto_tool_followup").get()
+        followup = AdminChatMessage.objects.filter(metadata_redacted__source="tool_result_summary").get()
 
         self.assertEqual(tool_request.status, AdminChatToolRequest.Status.SUCCEEDED)
         self.assertEqual(tool_request.approved_by, self.staff)
@@ -276,6 +276,7 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual(tool_request.tool_run.requested_by_type, ToolRun.RequestedByType.ADMIN)
         self.assertIn("completed successfully", followup.body_redacted)
         self.assertIn("Services check completed successfully", followup.body_redacted)
+        self.assertTrue((followup.metadata_redacted or {}).get("chatkit_item_id"))
 
     @override_settings(**LIVE_SETTINGS)
     def test_tool_failure_adds_failure_explanation(self):
@@ -286,7 +287,7 @@ class AdminAIToolRequestFlowTests(TestCase):
             wait_outcome=self.failed_outcome("Scanner agent reported a safe execution failure."),
         )
         tool_request = AdminChatToolRequest.objects.get()
-        followup = AdminChatMessage.objects.filter(metadata_redacted__source="auto_tool_followup").get()
+        followup = AdminChatMessage.objects.filter(metadata_redacted__source="tool_result_failed").get()
 
         self.assertEqual(tool_request.status, AdminChatToolRequest.Status.FAILED)
         self.assertEqual(ToolRun.objects.count(), 1)
@@ -302,7 +303,7 @@ class AdminAIToolRequestFlowTests(TestCase):
             '<TOOL_REQUEST_PROPOSAL>{"tool_slug":"services_status","reason":"Check services","params":{"scope":"selected_server"}}</TOOL_REQUEST_PROPOSAL>',
             wait_outcome=self.timeout_outcome(),
         )
-        followup = AdminChatMessage.objects.filter(metadata_redacted__source="auto_tool_followup").get()
+        followup = AdminChatMessage.objects.filter(metadata_redacted__source="tool_result_timeout").get()
 
         self.assertEqual(ToolRun.objects.count(), 1)
         self.assertEqual(AgentJob.objects.count(), 1)
@@ -317,13 +318,69 @@ class AdminAIToolRequestFlowTests(TestCase):
             'I recommend a read-only services check.\n'
             '<TOOL_REQUEST_PROPOSAL>{"tool_slug":"services_status","reason":"Check services","params":{"scope":"selected_server"}}</TOOL_REQUEST_PROPOSAL>',
         )
-        followup = AdminChatMessage.objects.filter(metadata_redacted__source="auto_tool_followup").get()
+        followup = AdminChatMessage.objects.filter(metadata_redacted__source="tool_result_not_started").get()
 
         self.assertEqual(ToolRun.objects.count(), 0)
         self.assertEqual(AgentJob.objects.count(), 0)
         self.assertIn("could not be started", followup.body_redacted)
         self.assertNotIn("wait", followup.body_redacted.lower())
         self.assertNotIn("running", followup.body_redacted.lower())
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_result_messages_are_streamed_and_available_in_history(self):
+        self.create_tool()
+        streamed = self.post_live_with_provider_text(
+            'I recommend a read-only services check.\n'
+            '<TOOL_REQUEST_PROPOSAL>{"tool_slug":"services_status","reason":"Check services","params":{"scope":"selected_server"}}</TOOL_REQUEST_PROPOSAL>',
+            wait_outcome=self.success_outcome("Visible streamed result summary."),
+        )
+        response = self.client.post(
+            self.live_url(),
+            data=json.dumps({"type": "items.list", "params": {"thread_id": str(self.session.id), "limit": 20, "order": "asc"}}),
+            content_type="application/json",
+        )
+
+        self.assertIn("Read-only check started", streamed)
+        self.assertIn("Visible streamed result summary", streamed)
+        self.assertIn("Visible streamed result summary", response.content.decode())
+        self.assertEqual(AdminLiveAIRequestLog.objects.count(), 1)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_multiple_tool_proposals_create_combined_final_explanation(self):
+        self.create_tool(key="services_status")
+        self.create_tool(key="system_identity")
+        self.post_live_with_provider_text(
+            'I recommend two read-only checks.\n'
+            '<TOOL_REQUEST_PROPOSAL>{"tool_slug":"services_status","reason":"Check services","params":{"scope":"selected_server"}}</TOOL_REQUEST_PROPOSAL>\n'
+            '<TOOL_REQUEST_PROPOSAL>{"tool_slug":"system_identity","reason":"Check system identity","params":{"scope":"selected_server"}}</TOOL_REQUEST_PROPOSAL>',
+            wait_side_effect=[
+                self.success_outcome("Services check completed."),
+                self.failed_outcome("System identity check failed safely."),
+            ],
+        )
+        combined = AdminChatMessage.objects.filter(metadata_redacted__mode="combined").get()
+
+        self.assertEqual(ToolRun.objects.count(), 2)
+        self.assertEqual(AgentJob.objects.count(), 2)
+        self.assertIn("services_status: succeeded", combined.body_redacted)
+        self.assertIn("system_identity: failed", combined.body_redacted)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_every_live_ai_toolrun_gets_final_result_message(self):
+        self.create_tool()
+        self.post_live_with_provider_text(
+            'I recommend a read-only services check.\n'
+            '<TOOL_REQUEST_PROPOSAL>{"tool_slug":"services_status","reason":"Check services","params":{"scope":"selected_server"}}</TOOL_REQUEST_PROPOSAL>',
+            wait_outcome=self.success_outcome("Final result exists."),
+        )
+        tool_run = ToolRun.objects.get()
+
+        self.assertTrue(
+            AdminChatMessage.objects.filter(
+                metadata_redacted__tool_run_id=str(tool_run.id),
+                metadata_redacted__source__in=["tool_result_summary", "tool_result_failed", "tool_result_timeout"],
+            ).exists()
+        )
 
     def test_non_staff_cannot_approve_or_reject_tool_request(self):
         self.create_tool()
@@ -419,6 +476,13 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual(AdminLiveAIRequestLog.objects.count(), 0)
         self.assertEqual(ToolRun.objects.count(), 0)
         self.assertEqual(AgentJob.objects.count(), 0)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_live_ai_header_reflects_auto_execution_copy(self):
+        response = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+
+        self.assertContains(response, "Approved read-only tools may run automatically")
+        self.assertNotContains(response, "Read-only tools require explicit approval")
 
     @override_settings(**LIVE_SETTINGS)
     def test_secret_like_proposal_reason_is_redacted_from_transcript_and_request(self):
