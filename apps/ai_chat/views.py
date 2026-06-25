@@ -70,6 +70,19 @@ def _live_ai_failure_log_extra(*, session_id, audit_log_id, status, error_class,
     }
 
 
+LIVE_AI_GENERATION_REQUEST_TYPES = {"threads.create", "threads.add_user_message", "threads.retry_after_item"}
+
+
+def _is_live_ai_generation_request(payload):
+    return payload.get("type") in LIVE_AI_GENERATION_REQUEST_TYPES
+
+
+def _response_size_bytes(value):
+    if isinstance(value, bytes):
+        return len(value)
+    return len(str(value).encode("utf-8"))
+
+
 async def _stream_live_ai_result(result, *, audit_log_id, session_id, started_at):
     try:
         async for chunk in result:
@@ -175,49 +188,44 @@ async def internal_chat_live(request, session_id):
         lambda: get_object_or_404(_scoped_internal_chat_sessions(), id=session_id),
         thread_sensitive=True,
     )()
-    audit_log_id = await sync_to_async(create_live_ai_request_log, thread_sensitive=True)(user, session)
-
-    if not settings.ADMIN_LIVE_AI_ENABLED:
-        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
-            audit_log_id,
-            status=AdminLiveAIRequestLog.Status.DENIED,
-            latency_ms=_elapsed_ms(started_at),
-            error_class=AdminLiveAIRequestLog.ErrorClass.DISABLED,
-            fallback_used=True,
-        )
-        return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=404)
-    configuration_error = live_ai_configuration_error()
-    if configuration_error:
-        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
-            audit_log_id,
-            status=AdminLiveAIRequestLog.Status.FAILED,
-            latency_ms=_elapsed_ms(started_at),
-            error_class=classify_configuration_error(configuration_error),
-            fallback_used=True,
-        )
-        return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=503)
 
     try:
         payload = json.loads(request.body)
     except (json.JSONDecodeError, UnicodeDecodeError):
-        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
-            audit_log_id,
-            status=AdminLiveAIRequestLog.Status.FAILED,
-            latency_ms=_elapsed_ms(started_at),
-            error_class=AdminLiveAIRequestLog.ErrorClass.VALIDATION_ERROR,
-            fallback_used=True,
-        )
         return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=400)
     requested_thread_id = (payload.get("params") or {}).get("thread_id")
     if requested_thread_id and str(requested_thread_id) != str(session.id):
-        await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
-            audit_log_id,
-            status=AdminLiveAIRequestLog.Status.DENIED,
-            latency_ms=_elapsed_ms(started_at),
-            error_class=AdminLiveAIRequestLog.ErrorClass.AUTH_ERROR,
-            fallback_used=True,
-        )
         return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=403)
+
+    is_generation_request = _is_live_ai_generation_request(payload)
+    audit_log_id = None
+
+    if not settings.ADMIN_LIVE_AI_ENABLED:
+        if is_generation_request:
+            audit_log_id = await sync_to_async(create_live_ai_request_log, thread_sensitive=True)(user, session)
+            await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+                audit_log_id,
+                status=AdminLiveAIRequestLog.Status.DENIED,
+                latency_ms=_elapsed_ms(started_at),
+                error_class=AdminLiveAIRequestLog.ErrorClass.DISABLED,
+                fallback_used=True,
+            )
+        return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=404)
+    configuration_error = live_ai_configuration_error()
+    if configuration_error:
+        if is_generation_request:
+            audit_log_id = await sync_to_async(create_live_ai_request_log, thread_sensitive=True)(user, session)
+            await sync_to_async(update_live_ai_request_log, thread_sensitive=True)(
+                audit_log_id,
+                status=AdminLiveAIRequestLog.Status.FAILED,
+                latency_ms=_elapsed_ms(started_at),
+                error_class=classify_configuration_error(configuration_error),
+                fallback_used=True,
+            )
+        return JsonResponse({"error": LIVE_AI_SAFE_ERROR_MESSAGE}, status=503)
+
+    if is_generation_request:
+        audit_log_id = await sync_to_async(create_live_ai_request_log, thread_sensitive=True)(user, session)
 
     safe_body = json.dumps(redact_json(payload), separators=(",", ":")).encode("utf-8")
     context = AdminChatKitContext(user=user, session=session, audit_log_id=audit_log_id)
@@ -272,7 +280,7 @@ async def internal_chat_live(request, session_id):
         audit_log_id,
         status=AdminLiveAIRequestLog.Status.SUCCEEDED,
         latency_ms=_elapsed_ms(started_at),
-        response_size_bytes=len(result.json.encode("utf-8")),
+        response_size_bytes=_response_size_bytes(result.json),
     )
     return HttpResponse(result.json, content_type="application/json")
 

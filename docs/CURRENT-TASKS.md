@@ -6,6 +6,37 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.8-H4 ChatKit History Hydration and Audit Scope
+
+Scope:
+- Hydrate Live Admin AI history from stored `AdminChatMessage` rows after refresh.
+- Use stable ChatKit item IDs from `metadata_redacted.chatkit_item_id` or deterministic `admin_msg_<id>` fallback.
+- Prevent `AdminLiveAIRequestLog` creation for ChatKit history/init/load requests.
+- Add focused tests while preserving prompt behavior, Safe Context, no-tools/actions, Portal, and Telegram boundaries.
+
+Out of scope:
+- New models, migrations, prompt changes, diagnostic behavior changes, Safe Context builder changes, tools/function calling, ToolRun/AgentJob creation, command execution, remediation, Portal AI, Telegram AI, and customer deterministic chat changes.
+
+Result:
+- Hydration continues to read from `AdminChatMessage` through `AdminChatKitStore.load_thread_items`.
+- Stored messages with `metadata_redacted.chatkit_item_id` keep that stable id; messages without one use deterministic `admin_msg_<id>`.
+- `AdminLiveAIRequestLog` is now created only for generation request types, not `items.list` or `threads.get_by_id` history/init requests.
+- Fixed non-streaming ChatKit byte responses so history/init requests return cleanly without audit rows.
+- Added H4 tests for stored history hydration, item role/text/id mapping, no history audit, one generation audit, no pending refresh audit, no ToolRun/AgentJob, and Portal boundary.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.8-H4 is complete.
+
 ## Archived Task: C10.8-H3 Live AI UI Cleanup and Message Persistence
 
 Scope:

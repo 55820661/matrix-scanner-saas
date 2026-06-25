@@ -135,7 +135,7 @@ class AdminChatKitStore(Store[AdminChatKitContext]):
 
     @staticmethod
     def _item_id(message: AdminChatMessage) -> str:
-        return str((message.metadata_redacted or {}).get("chatkit_item_id") or f"message-{message.id}")
+        return str((message.metadata_redacted or {}).get("chatkit_item_id") or f"admin_msg_{message.id}")
 
     def _to_item(self, message: AdminChatMessage, thread_id: str) -> ThreadItem | None:
         item_id = self._item_id(message)

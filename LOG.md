@@ -2,6 +2,40 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-25 - C10.8-H4 ChatKit History Hydration and Audit Scope Start
+
+Intent:
+- Fix Live Admin AI history hydration and stop creating Live AI audit rows for ChatKit history/init requests.
+
+Scope:
+- Ensure stored `AdminChatMessage` rows hydrate through `AdminChatKitStore.load_thread_items` with stable item IDs.
+- Restrict `AdminLiveAIRequestLog` creation to actual generation requests.
+- Add focused history/audit-scope tests while preserving prompt behavior, Safe Context, tools/actions, Portal, and Telegram boundaries.
+
+Out of scope:
+- New models, migrations, prompt changes, diagnostic behavior changes, tools, ToolRun, AgentJob, remediation, Portal AI, Telegram AI, and customer deterministic chat changes.
+
+## 2026-06-25 - C10.8-H4 ChatKit History Hydration and Audit Scope Complete
+
+Result:
+- Confirmed saved Live AI messages live in `AdminChatMessage`; the issue was hydration/audit scoping, not persistence.
+- Changed fallback ChatKit item IDs for stored messages without `chatkit_item_id` to stable `admin_msg_<id>` values.
+- Kept `AdminChatKitStore.load_thread_items` hydrating from the current `AdminChatSession` messages in ascending order.
+- Restricted `AdminLiveAIRequestLog` creation to generation request types only: `threads.create`, `threads.add_user_message`, and `threads.retry_after_item`.
+- Prevented `items.list`, `threads.get_by_id`, and other history/init requests from creating pending audit rows.
+- Fixed non-streaming ChatKit response sizing for byte payloads.
+- Added focused H4 tests for history hydration, item roles/text/IDs, no audit for history/init, generation audit finalization, no ToolRun/AgentJob, and Portal boundary.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-25 - C10.8-H3 Live AI UI Cleanup and Message Persistence Start
 
 Intent:
