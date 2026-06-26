@@ -6,6 +6,41 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.10 Multi-Tool Diagnostic Bundles
+
+Scope:
+- Add a code-only diagnostic bundle registry for Admin Live AI.
+- Resolve broad server/web-stack execution intent to approved read-only tool bundles.
+- Execute available bundle tools through existing allowlist, policy, plan, and selected-server validation.
+- Show one bundle start message and one combined Arabic result summary.
+
+Out of scope:
+- Migrations, new tool definitions, write/remediation tools, shell execution, uploads, Portal AI, Telegram AI, and customer-facing AI.
+
+Result:
+- Added `apps.ai_chat.diagnostic_bundles` with server health and web stack bundle definitions.
+- Added broad intent resolution for server-health requests while preserving specific single-tool requests.
+- Executed bundle tools through existing validation, ToolPolicy, PlanTool, selected-server scope, and read-only allowlist.
+- Added one bundle start message and one combined Arabic result message with bundle metadata and stable ChatKit IDs.
+- Suppressed per-tool chat start/result messages for bundle runs while preserving ToolRun/AdminChatToolRequest records.
+- Updated Live AI instructions and request analysis for diagnostic bundles.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 34 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.10 is complete.
+
 ## Archived Task: C10.9-H7 Idempotent Tool Result Chat Messages
 
 Scope:

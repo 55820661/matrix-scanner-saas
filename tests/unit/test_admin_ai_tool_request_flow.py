@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Account, User
 from apps.ai_chat.models import AdminChatMessage, AdminChatSession, AdminChatToolRequest, AdminLiveAIRequestLog
+from apps.ai_chat.diagnostic_bundles import resolve_diagnostic_bundle_intent
 from apps.ai_chat.services import (
     approve_tool_request,
     create_admin_chat_session,
@@ -206,6 +207,16 @@ class AdminAIToolRequestFlowTests(TestCase):
             "tool_run_id": "",
         }
 
+    def create_server_health_tools(self, *, include_gunicorn=True, include_postgres=False, plan_enabled=True, allow_admin=True):
+        keys = ["log_sources_discovery_v2", "systemd_services_discovery", "nginx_sites_discovery"]
+        if include_gunicorn:
+            keys.append("gunicorn_uvicorn_services_discovery")
+        if include_postgres:
+            keys.append("postgres_status_discovery")
+        for key in keys:
+            self.create_tool(key=key, plan_enabled=plan_enabled, allow_admin=allow_admin)
+        return keys
+
     def log_sources_result(self):
         return {
             "summary": {
@@ -368,6 +379,86 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual(AdminChatToolRequest.objects.count(), 0)
         self.assertEqual(ToolRun.objects.count(), 0)
         self.assertEqual(AgentJob.objects.count(), 0)
+
+    def test_diagnostic_bundle_resolver_prefers_broad_server_health_not_specific_log_sources(self):
+        self.assertEqual(resolve_diagnostic_bundle_intent("افحص حالة السيرفر").slug, "server_health")
+        self.assertEqual(resolve_diagnostic_bundle_intent("اعمل فحص شامل للسيرفر").slug, "server_health")
+        self.assertIsNone(resolve_diagnostic_bundle_intent("افحص مصادر السجلات"))
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_broad_server_health_request_runs_bundle_with_combined_messages(self):
+        self.create_server_health_tools()
+        streamed = self.post_live_with_provider_text(
+            "يمكنني اقتراح فحص صحة السيرفر.",
+            request_text="افحص حالة السيرفر باستخدام الأدوات المناسبة read-only ونفذ الفحوصات تلقائيًا.",
+            wait_side_effect=[
+                self.success_outcome("اكتمل فحص مصادر السجلات."),
+                self.success_outcome("اكتمل فحص خدمات systemd."),
+                self.success_outcome("اكتمل فحص إعدادات Nginx."),
+                self.timeout_outcome(),
+            ],
+        )
+        response = self.client.post(
+            self.live_url(),
+            data=json.dumps({"type": "items.list", "params": {"thread_id": str(self.session.id), "limit": 30, "order": "asc"}}),
+            content_type="application/json",
+        )
+        transcript = "\n".join(AdminChatMessage.objects.values_list("body_redacted", flat=True))
+        chatkit_ids = [
+            (message.metadata_redacted or {}).get("chatkit_item_id")
+            for message in AdminChatMessage.objects.filter(metadata_redacted__has_key="chatkit_item_id")
+        ]
+        populated_ids = [item_id for item_id in chatkit_ids if item_id]
+
+        self.assertEqual(AdminChatToolRequest.objects.count(), 4)
+        self.assertEqual(ToolRun.objects.count(), 4)
+        self.assertEqual(AgentJob.objects.count(), 4)
+        for tool_run in ToolRun.objects.all():
+            sync_chat_tool_requests_for_tool_run(tool_run)
+        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle", metadata_redacted__state="started").count(), 1)
+        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle").exclude(metadata_redacted__state="started").count(), 1)
+        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="tool_orchestrator").count(), 0)
+        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="tool_result_summary").count(), 0)
+        self.assertIn("بدأت فحص صحة السيرفر", streamed)
+        self.assertIn("نتائج الفحوصات", streamed)
+        self.assertIn("خدمات Gunicorn/Uvicorn", transcript)
+        self.assertIn("لم يكتمل خلال المهلة", transcript)
+        self.assertIn("فحص صحة السيرفر", response.content.decode())
+        self.assertEqual(len(populated_ids), len(set(populated_ids)))
+        self.assertNotIn("completed successfully", transcript)
+        self.assertNotIn("TOOL_REQUEST_PROPOSAL", transcript)
+        self.assertNotIn("{", transcript)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_bundle_skips_unavailable_and_disallowed_tools_in_summary(self):
+        self.create_tool(key="log_sources_discovery_v2")
+        self.create_tool(key="systemd_services_discovery", plan_enabled=False)
+        self.post_live_with_provider_text(
+            "سأقترح فحص صحة السيرفر.",
+            request_text="نفذ فحص صحة السيرفر",
+            wait_outcome=self.success_outcome("اكتمل فحص مصادر السجلات."),
+        )
+        final_message = AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle").exclude(
+            metadata_redacted__state="started"
+        ).get()
+
+        self.assertEqual(AdminChatToolRequest.objects.count(), 1)
+        self.assertEqual(ToolRun.objects.count(), 1)
+        self.assertIn("تم تخطيه", final_message.body_redacted)
+        self.assertIn("خدمات systemd", final_message.body_redacted)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_bundle_advice_question_does_not_execute(self):
+        self.create_server_health_tools()
+        streamed = self.post_live_with_provider_text(
+            "أقترح فحص صحة السيرفر كحزمة قراءة فقط.",
+            request_text="ماذا تقترح؟",
+        )
+
+        self.assertIn("أقترح فحص صحة السيرفر", streamed)
+        self.assertEqual(AdminChatToolRequest.objects.count(), 0)
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle").count(), 0)
 
     @override_settings(**LIVE_SETTINGS)
     def test_tool_success_within_followup_adds_safe_result_summary(self):

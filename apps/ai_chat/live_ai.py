@@ -30,10 +30,12 @@ from apps.ai_chat.models import AdminChatDecision, AdminChatMessage, AdminLiveAI
 from apps.ai_chat.services import (
     MAX_RESPONSE_LENGTH,
     create_ai_tool_requests_from_proposals,
+    execute_diagnostic_bundle_for_item,
     extract_tool_request_proposals,
     resolve_direct_execution_tool_proposals,
     strip_tool_request_proposals,
 )
+from apps.ai_chat.diagnostic_bundles import has_bundle_execution_intent, resolve_diagnostic_bundle_intent
 from apps.ai_context.services import build_safe_context, prepare_safe_context_for_ai
 from apps.audit.models import AuditLog
 from apps.core.redaction import redact_json, redact_secrets
@@ -61,6 +63,9 @@ Only propose tools from the available read-only tool list in Safe Context.
 If the admin explicitly asks to check, run, execute, start, or continue a read-only diagnostic check, do not ask for confirmation.
 For existing approved read-only tools, provide TOOL_REQUEST_PROPOSAL immediately.
 Only ask for confirmation when the admin is asking for advice or asking what could be checked, not when they explicitly requested execution.
+When the admin explicitly asks for a broad server check or health diagnosis, request the appropriate diagnostic bundle instead of a single tool when available.
+For existing approved read-only tools in a bundle, the system may execute them automatically.
+After bundle execution, summarize the combined safe results and clearly distinguish completed, failed, skipped, and timed-out checks.
 If no suitable tool is available, say what data is missing.
 When proposing a tool, include exactly one hidden internal block at the end of your answer:
 <TOOL_REQUEST_PROPOSAL>{"tool_slug":"available_tool_key","reason":"short safe reason","params":{"scope":"selected_server"}}</TOOL_REQUEST_PROPOSAL>
@@ -278,12 +283,17 @@ def _has_diagnostic_intent(messages: list[dict]) -> bool:
 
 def _request_analysis(messages: list[dict]) -> dict:
     diagnostic_intent = _has_diagnostic_intent(messages)
+    latest_text = _latest_user_text(messages)
+    bundle = resolve_diagnostic_bundle_intent(latest_text)
+    bundle_execution_intent = bool(bundle and has_bundle_execution_intent(latest_text))
     direct_execution_proposals = resolve_direct_execution_tool_proposals(
-        latest_user_text=_latest_user_text(messages),
+        latest_user_text=latest_text,
         conversation_text=_conversation_text(messages),
     )
     return {
         "diagnostic_intent": diagnostic_intent,
+        "diagnostic_bundle_slug": bundle.slug if bundle else "",
+        "diagnostic_bundle_execution_intent": bundle_execution_intent,
         "execution_intent": bool(direct_execution_proposals),
         "execution_intent_tool_slugs": [proposal["tool_slug"] for proposal in direct_execution_proposals],
         "response_mode": "contextual_diagnostic" if diagnostic_intent else "concise_assistant",
@@ -431,6 +441,27 @@ def _execute_direct_tool_proposals_for_item(*, user, session, context, item_id, 
     return tool_results, execution_started
 
 
+def _execute_diagnostic_bundle_for_item(*, user, session, context, item_id, bundle_slug, metadata, visible_output):
+    _record_direct_execution_ai_message(
+        context=context,
+        item_id=item_id,
+        metadata=metadata,
+    )
+    result = execute_diagnostic_bundle_for_item(
+        user=user,
+        session=session,
+        item_id=item_id,
+        bundle_slug=bundle_slug,
+    )
+    if not result.get("execution_started"):
+        AdminChatMessage.objects.filter(session=session, metadata_redacted__chatkit_item_id=item_id).update(
+            body_redacted=redact_secrets(visible_output or "")[:MAX_RESPONSE_LENGTH],
+            metadata_redacted=redact_json({**metadata, "source": "admin_live_chatkit", "chatkit_item_id": item_id}),
+            updated_at=timezone.now(),
+        )
+    return result
+
+
 def _build_live_ai_input(context: AdminChatKitContext):
     safe_context = build_safe_context(
         account=context.session.account,
@@ -473,6 +504,8 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
         context_metadata = {}
         messages = []
         direct_execution_proposals = []
+        diagnostic_bundle = None
+        diagnostic_bundle_execution = False
         started_at = monotonic()
         try:
             configuration_error = live_ai_configuration_error()
@@ -480,8 +513,11 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
                 raise LiveAIConfigurationError(configuration_error)
             await sync_to_async(_consume_rate_limit, thread_sensitive=True)(context.user.id)
             ai_context, provider_input, messages = await sync_to_async(_build_live_ai_input, thread_sensitive=True)(context)
+            latest_user_text = _latest_user_text(messages)
+            diagnostic_bundle = resolve_diagnostic_bundle_intent(latest_user_text)
+            diagnostic_bundle_execution = bool(diagnostic_bundle and has_bundle_execution_intent(latest_user_text))
             direct_execution_proposals = resolve_direct_execution_tool_proposals(
-                latest_user_text=_latest_user_text(messages),
+                latest_user_text=latest_user_text,
                 conversation_text=_conversation_text(messages),
             )
             context_metadata = {
@@ -507,7 +543,7 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
                     streamable_length = _streamable_visible_length(output, visible_output)
                     visible_delta = visible_output[streamed_visible_length:streamable_length]
                     streamed_visible_length = streamable_length
-                    if visible_delta and not direct_execution_proposals:
+                    if visible_delta and not direct_execution_proposals and not diagnostic_bundle_execution:
                         yield ThreadItemUpdatedEvent(
                             item_id=item_id,
                             update=AssistantMessageContentPartTextDelta(content_index=0, delta=visible_delta),
@@ -554,6 +590,7 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
         )
         proposals = extract_tool_request_proposals(output) if stream_status == "completed" else []
         direct_execution_requested = bool(direct_execution_proposals)
+        bundle_execution_requested = bool(diagnostic_bundle_execution and diagnostic_bundle)
         if stream_status == "completed" and not proposals:
             proposals = direct_execution_proposals
         item_metadata = {
@@ -567,6 +604,36 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
             "tool_request_handled": True,
         }
         context.item_metadata[item_id] = item_metadata
+        if bundle_execution_requested:
+            bundle_result = await sync_to_async(
+                _execute_diagnostic_bundle_for_item,
+                thread_sensitive=True,
+            )(
+                user=context.user,
+                session=context.session,
+                context=context,
+                item_id=item_id,
+                bundle_slug=diagnostic_bundle.slug,
+                metadata=item_metadata,
+                visible_output=visible_output,
+            )
+            final_visible_output = "" if bundle_result.get("execution_started") else visible_output
+            if final_visible_output:
+                yield ThreadItemUpdatedEvent(
+                    item_id=item_id,
+                    update=AssistantMessageContentPartTextDelta(content_index=0, delta=final_visible_output),
+                )
+            yield ThreadItemDoneEvent(
+                item=assistant_item.model_copy(update={"content": [AssistantMessageContent(text=final_visible_output)]})
+            )
+            for message_key in ("start_message", "followup_message"):
+                message = bundle_result.get(message_key)
+                if not message:
+                    continue
+                bundle_item = _message_to_assistant_item(message, thread.id)
+                yield ThreadItemAddedEvent(item=bundle_item)
+                yield ThreadItemDoneEvent(item=bundle_item)
+            return
         if direct_execution_requested and proposals:
             tool_results, execution_started = await sync_to_async(
                 _execute_direct_tool_proposals_for_item,

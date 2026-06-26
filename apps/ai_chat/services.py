@@ -21,6 +21,7 @@ from apps.tools.services import (
     sanitize_builder_text,
 )
 
+from .diagnostic_bundles import get_diagnostic_bundle
 from .models import AdminChatDecision, AdminChatMessage, AdminChatReportDraft, AdminChatSession, AdminChatToolRequest
 
 
@@ -45,6 +46,7 @@ AI_READ_ONLY_TOOL_ALLOWLIST = {
     "log_sources_discovery_v2",
     "systemd_services_discovery",
     "nginx_sites_discovery",
+    "gunicorn_uvicorn_services_discovery",
     "postgres_status_discovery",
 }
 DIRECT_EXECUTION_TERMS = (
@@ -1229,6 +1231,197 @@ def execute_ai_tool_request_with_followup(*, user, tool_request, timeout_seconds
     }
 
 
+TOOL_LABELS_AR = {
+    "log_sources_discovery_v2": "مصادر السجلات",
+    "systemd_services_discovery": "خدمات systemd",
+    "nginx_sites_discovery": "إعدادات Nginx",
+    "gunicorn_uvicorn_services_discovery": "خدمات Gunicorn/Uvicorn",
+    "postgres_status_discovery": "حالة PostgreSQL",
+}
+
+
+def _tool_label_ar(tool_key):
+    return TOOL_LABELS_AR.get(tool_key, tool_key)
+
+
+def _bundle_start_body(bundle, tool_keys):
+    lines = [
+        f"بدأت {bundle.label_ar} باستخدام أدوات قراءة فقط.",
+        "سأتابع تنفيذ الفحوصات وأعرض ملخصًا موحدًا عند اكتمالها.",
+    ]
+    if tool_keys:
+        lines.extend(["", "الفحوصات:"])
+        lines.extend(f"- {_tool_label_ar(tool_key)}" for tool_key in tool_keys)
+    return _safe_text("\n".join(lines), limit=MAX_RESPONSE_LENGTH)
+
+
+def _record_bundle_message(*, session, body, metadata):
+    item_id = metadata.get("chatkit_item_id")
+    existing = _find_existing_chatkit_message(session, item_id)
+    if existing:
+        return _update_tool_message(existing, body=body, metadata={**(existing.metadata_redacted or {}), **metadata})
+    message = AdminChatMessage.objects.create(
+        session=session,
+        sender_type=AdminChatMessage.SenderType.ASSISTANT,
+        body_redacted=body,
+        metadata_redacted=redact_json(metadata),
+    )
+    session.last_message_at = message.created_at
+    session.save(update_fields=["last_message_at", "updated_at"])
+    return message
+
+
+def _delete_tool_start_message(tool_request):
+    AdminChatMessage.objects.filter(
+        session=tool_request.session,
+        metadata_redacted__source="tool_orchestrator",
+        metadata_redacted__tool_request_id=str(tool_request.id),
+    ).delete()
+
+
+def _bundle_state(outcomes):
+    states = [item.get("state") for item in outcomes if item.get("kind") == "tool"]
+    skipped = any(item.get("state") == "skipped" for item in outcomes)
+    if states and all(state == "succeeded" for state in states) and not skipped:
+        return "succeeded"
+    if any(state in {"succeeded", "skipped"} for state in states) or skipped:
+        return "partial"
+    if any(state == "timeout" for state in states):
+        return "timeout"
+    return "failed"
+
+
+def summarize_diagnostic_bundle_results(bundle, outcomes, language="ar"):
+    lines = [f"اكتمل {bundle.label_ar}.", "", "نتائج الفحوصات:"]
+    for item in outcomes:
+        label = _tool_label_ar(item.get("tool_key") or "")
+        state = item.get("state") or "unknown"
+        status_label = {
+            "succeeded": "نجح",
+            "failed": "فشل",
+            "timeout": "لم يكتمل خلال المهلة",
+            "not_started": "لم يبدأ",
+            "skipped": "تم تخطيه",
+        }.get(state, state)
+        reason = item.get("reason") or ""
+        suffix = f" - {reason}" if reason else ""
+        lines.append(f"- {label}: {status_label}.{suffix}")
+    succeeded = sum(1 for item in outcomes if item.get("state") == "succeeded")
+    failed = sum(1 for item in outcomes if item.get("state") in {"failed", "timeout", "not_started"})
+    skipped = sum(1 for item in outcomes if item.get("state") == "skipped")
+    lines.extend(["", "الخلاصة العامة:"])
+    if failed:
+        lines.append(
+            f"اكتمل {succeeded} فحص بنجاح، وهناك {failed} فحص لم يكتمل أو فشل. لا توجد صلاحية لاستنتاج حالة نهائية بدون مراجعة الفحوصات الناقصة."
+        )
+    elif skipped:
+        lines.append(
+            f"اكتملت الفحوصات المتاحة بنجاح، وتم تخطي {skipped} فحص غير متاح أو غير مسموح. الحكم النهائي يحتاج استكمال الفحوصات الناقصة."
+        )
+    else:
+        lines.append("لا توجد مؤشرات حرجة من الفحوصات المتاحة، لكن الحكم النهائي يعتمد على اكتمال التغطية والبيانات المتاحة.")
+    lines.extend(["", "الفحص التالي المقترح:", "راجع أي فحص تم تخطيه أو لم يكتمل قبل اتخاذ قرار تشغيلي."])
+    return _safe_text("\n".join(lines), limit=MAX_RESPONSE_LENGTH)
+
+
+def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
+    bundle = get_diagnostic_bundle(bundle_slug)
+    if not bundle:
+        return {"start_message": None, "followup_message": None, "results": [], "execution_started": False}
+    message = AdminChatMessage.objects.get(metadata_redacted__chatkit_item_id=item_id)
+    available_tool_keys = []
+    skipped = []
+    for tool_key in bundle.tool_keys:
+        try:
+            _validate_ai_tool_definition(user, session, tool_key)
+        except (PermissionDenied, ValidationError) as exc:
+            skipped.append({"kind": "skip", "tool_key": tool_key, "state": "skipped", "reason": _safe_text(str(exc), limit=160)})
+            continue
+        available_tool_keys.append(tool_key)
+    start_message = _record_bundle_message(
+        session=session,
+        body=_bundle_start_body(bundle, available_tool_keys),
+        metadata={
+            "source": "diagnostic_bundle",
+            "bundle_slug": bundle.slug,
+            "state": "started",
+            "tool_keys": available_tool_keys,
+            "chatkit_item_id": f"bundle_start_{message.id}",
+        },
+    )
+    timeout_seconds = tool_followup_timeout_for_count(len(available_tool_keys))
+    tool_results = []
+    for tool_key in available_tool_keys:
+        proposal = {
+            "tool_slug": tool_key,
+            "reason": f"{bundle.label_ar}: {_tool_label_ar(tool_key)}",
+            "params": {"scope": "selected_server"},
+        }
+        try:
+            tool_definition = _validate_ai_tool_definition(user, session, tool_key)
+            tool_request = AdminChatToolRequest.objects.create(
+                session=session,
+                message=message,
+                tool_definition=tool_definition,
+                params_redacted=redact_json(
+                    {
+                        "tool_params": {},
+                        "scope": "selected_server",
+                        "reason": proposal["reason"],
+                        "source": "live_ai_diagnostic_bundle",
+                        "bundle_slug": bundle.slug,
+                    }
+                ),
+                status=AdminChatToolRequest.Status.SUGGESTED,
+            )
+            tool_run = approve_tool_request(user=user, tool_request=tool_request)
+            _delete_tool_start_message(tool_request)
+            outcome = wait_for_tool_execution_result(tool_run, timeout_seconds=timeout_seconds)
+            outcome["tool_run_id"] = outcome.get("tool_run_id") or tool_run.id
+            if outcome["state"] == "succeeded":
+                tool_request.status = AdminChatToolRequest.Status.SUCCEEDED
+            elif outcome["state"] == "failed":
+                tool_request.status = AdminChatToolRequest.Status.FAILED
+                tool_request.error_summary = _safe_text(outcome.get("summary") or "", limit=500)
+            else:
+                tool_request.status = AdminChatToolRequest.Status.QUEUED
+            tool_request.tool_run = tool_run
+            tool_request.save(update_fields=["status", "tool_run", "error_summary", "updated_at"])
+            tool_results.append(
+                {
+                    "kind": "tool",
+                    "tool_key": tool_key,
+                    "state": outcome.get("state"),
+                    "status": outcome.get("status"),
+                    "tool_request": tool_request,
+                    "tool_run": tool_run,
+                    "summary": outcome.get("summary") or "",
+                }
+            )
+        except (PermissionDenied, ValidationError, ToolPolicyDenied, ValueError) as exc:
+            tool_results.append({"kind": "tool", "tool_key": tool_key, "state": "not_started", "reason": _safe_text(str(exc), limit=160)})
+    outcomes = tool_results + skipped
+    state = _bundle_state(outcomes)
+    followup_message = _record_bundle_message(
+        session=session,
+        body=summarize_diagnostic_bundle_results(bundle, outcomes),
+        metadata={
+            "source": "diagnostic_bundle",
+            "bundle_slug": bundle.slug,
+            "tool_run_ids": [str(item["tool_run"].id) for item in tool_results if item.get("tool_run")],
+            "tool_request_ids": [str(item["tool_request"].id) for item in tool_results if item.get("tool_request")],
+            "state": state,
+            "chatkit_item_id": f"bundle_result_{message.id}",
+        },
+    )
+    return {
+        "start_message": start_message,
+        "followup_message": followup_message,
+        "results": outcomes,
+        "execution_started": bool(tool_results),
+    }
+
+
 def reject_tool_request(*, user, tool_request):
     session = tool_request.session
     _require_session_writer(user, session)
@@ -1275,6 +1468,8 @@ def sync_chat_tool_requests_for_tool_run(tool_run):
             tool_request.error_summary = _safe_text(tool_run.error_message, limit=500)
             update_fields.append("error_summary")
         tool_request.save(update_fields=update_fields)
+        if (tool_request.params_redacted or {}).get("source") == "live_ai_diagnostic_bundle":
+            continue
         existing_summary = AdminChatMessage.objects.filter(
             session=tool_request.session,
             metadata_redacted__source="tool_result_summary",

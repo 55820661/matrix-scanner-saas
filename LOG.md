@@ -2,6 +2,45 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-26 - C10.10 Multi-Tool Diagnostic Bundles Start
+
+Intent:
+- Add Admin Live AI diagnostic bundles for broad read-only server checks.
+- Keep execution restricted to existing approved read-only tools and produce one combined Arabic result.
+
+Scope:
+- Add code-only bundle registry/resolver.
+- Execute bundle tools through existing ToolPolicy, PlanTool, allowlist, and selected-server validation.
+- Preserve idempotent start/result messages and no raw output exposure.
+
+Out of scope:
+- Migrations, new tool definitions, write/destructive actions, remediation, shell execution, uploads, Portal AI, Telegram AI, and customer-facing AI.
+
+## 2026-06-26 - C10.10 Multi-Tool Diagnostic Bundles Complete
+
+Result:
+- Added a code-only diagnostic bundle registry for server health and web stack checks.
+- Resolved broad server-health execution intent to bundle execution while preserving specific single-tool requests such as log-source checks.
+- Executed bundle tools through the existing read-only allowlist, ToolPolicy, PlanTool, selected-server validation, ToolRun, and AgentJob path.
+- Added one bundle start message and one combined Arabic result summary with stable ChatKit IDs and bundle metadata.
+- Suppressed per-tool chat start/result messages for bundle-triggered ToolRuns so the chat shows a unified bundle experience.
+- Skipped unavailable/disallowed bundle tools with safe reasons in the final summary.
+- Updated Live AI instructions and request analysis for diagnostic bundle behavior.
+- No migrations, Portal changes, Telegram changes, write tools, remediation, uploads, or shell execution were added.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 34 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-26 - C10.9-H7 Idempotent Tool Result Chat Messages Start
 
 Intent:
