@@ -27,7 +27,12 @@ from chatkit.types import (
 
 from apps.ai_chat.chatkit_store import AdminChatKitContext, AdminChatKitStore
 from apps.ai_chat.models import AdminChatMessage, AdminLiveAIRequestLog
-from apps.ai_chat.services import create_ai_tool_requests_from_proposals, extract_tool_request_proposals, strip_tool_request_proposals
+from apps.ai_chat.services import (
+    create_ai_tool_requests_from_proposals,
+    extract_tool_request_proposals,
+    resolve_direct_execution_tool_proposals,
+    strip_tool_request_proposals,
+)
 from apps.ai_context.services import build_safe_context, prepare_safe_context_for_ai
 from apps.audit.models import AuditLog
 from apps.core.redaction import redact_secrets
@@ -52,6 +57,9 @@ You may propose read-only tool requests when the Safe Context is insufficient.
 You must not claim that tools were executed.
 Do not tell the admin to wait unless a tool execution has actually been queued or started and the backend will check the result.
 Only propose tools from the available read-only tool list in Safe Context.
+If the admin explicitly asks to check, run, execute, start, or continue a read-only diagnostic check, do not ask for confirmation.
+For existing approved read-only tools, provide TOOL_REQUEST_PROPOSAL immediately.
+Only ask for confirmation when the admin is asking for advice or asking what could be checked, not when they explicitly requested execution.
 If no suitable tool is available, say what data is missing.
 When proposing a tool, include exactly one hidden internal block at the end of your answer:
 <TOOL_REQUEST_PROPOSAL>{"tool_slug":"available_tool_key","reason":"short safe reason","params":{"scope":"selected_server"}}</TOOL_REQUEST_PROPOSAL>
@@ -269,11 +277,29 @@ def _has_diagnostic_intent(messages: list[dict]) -> bool:
 
 def _request_analysis(messages: list[dict]) -> dict:
     diagnostic_intent = _has_diagnostic_intent(messages)
+    direct_execution_proposals = resolve_direct_execution_tool_proposals(
+        latest_user_text=_latest_user_text(messages),
+        conversation_text=_conversation_text(messages),
+    )
     return {
         "diagnostic_intent": diagnostic_intent,
+        "execution_intent": bool(direct_execution_proposals),
+        "execution_intent_tool_slugs": [proposal["tool_slug"] for proposal in direct_execution_proposals],
         "response_mode": "contextual_diagnostic" if diagnostic_intent else "concise_assistant",
         "source": "redacted_conversation_only",
     }
+
+
+def _latest_user_text(messages: list[dict]) -> str:
+    for message in reversed(messages):
+        if message.get("role") == "user":
+            return message.get("content") or ""
+    return ""
+
+
+def _conversation_text(messages: list[dict], *, limit=6) -> str:
+    selected = messages[-limit:] if messages else []
+    return "\n".join(redact_secrets(message.get("content") or "") for message in selected)
 
 
 def _build_provider_input(safe_context: dict, messages: list[dict]) -> str:
@@ -339,7 +365,7 @@ def _build_live_ai_input(context: AdminChatKitContext):
     context_budget = max(2048, min(settings.AI_SAFE_CONTEXT_MAX_BYTES, settings.OPENAI_MAX_INPUT_TOKENS * 2))
     ai_context = prepare_safe_context_for_ai(safe_context, max_bytes=context_budget)
     messages = _recent_redacted_messages(context.session)
-    return ai_context, _build_provider_input(ai_context, messages)
+    return ai_context, _build_provider_input(ai_context, messages), messages
 
 
 class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
@@ -370,13 +396,14 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
         stream_status = "completed"
         error_code = ""
         context_metadata = {}
+        messages = []
         started_at = monotonic()
         try:
             configuration_error = live_ai_configuration_error()
             if configuration_error:
                 raise LiveAIConfigurationError(configuration_error)
             await sync_to_async(_consume_rate_limit, thread_sensitive=True)(context.user.id)
-            ai_context, provider_input = await sync_to_async(_build_live_ai_input, thread_sensitive=True)(context)
+            ai_context, provider_input, messages = await sync_to_async(_build_live_ai_input, thread_sensitive=True)(context)
             context_metadata = {
                 "final_size_bytes": ai_context["metadata"]["final_size_bytes"],
                 "truncated": ai_context["metadata"]["truncated"],
@@ -446,6 +473,11 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
             fallback_used=stream_status != "completed",
         )
         proposals = extract_tool_request_proposals(output) if stream_status == "completed" else []
+        if stream_status == "completed" and not proposals:
+            proposals = resolve_direct_execution_tool_proposals(
+                latest_user_text=_latest_user_text(messages),
+                conversation_text=_conversation_text(messages),
+            )
         context.item_metadata[item_id] = {
             "model": state.model,
             "provider_request_id": state.provider_request_id,

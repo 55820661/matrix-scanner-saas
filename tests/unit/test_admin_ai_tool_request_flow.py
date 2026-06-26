@@ -159,7 +159,7 @@ class AdminAIToolRequestFlowTests(TestCase):
             return async_to_sync(self._consume_async)(response.streaming_content)
         return b"".join(response.streaming_content)
 
-    def post_live_with_provider_text(self, text, *, wait_outcome=None, wait_side_effect=None):
+    def post_live_with_provider_text(self, text, *, request_text="What do you suggest?", wait_outcome=None, wait_side_effect=None):
         patches = [patch("apps.ai_chat.live_ai.get_live_ai_provider", return_value=ProposalProvider(text))]
         if wait_side_effect is not None:
             patches.append(patch("apps.ai_chat.services.wait_for_tool_execution_result", side_effect=wait_side_effect))
@@ -171,7 +171,7 @@ class AdminAIToolRequestFlowTests(TestCase):
             try:
                 response = self.client.post(
                     self.live_url(),
-                    data=json.dumps(self.live_payload()),
+                    data=json.dumps(self.live_payload(request_text)),
                     content_type="application/json",
                 )
                 content = self.consume_stream(response)
@@ -267,6 +267,67 @@ class AdminAIToolRequestFlowTests(TestCase):
     def test_free_text_tool_name_without_proposal_does_not_execute(self):
         self.create_tool()
         self.post_live_with_provider_text("بدأت فحص services_status وسأتابع النتيجة، لكن بدون proposal block.")
+
+        self.assertEqual(AdminChatToolRequest.objects.count(), 0)
+        self.assertEqual(ToolRun.objects.count(), 0)
+        self.assertEqual(AgentJob.objects.count(), 0)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_arabic_direct_log_sources_intent_executes_without_proposal(self):
+        definition = self.create_tool(key="log_sources_discovery_v2")
+        streamed = self.post_live_with_provider_text(
+            "أقترح فحص مصادر السجلات، لكن لم أرسل proposal block.",
+            request_text="افحص مصادر السجلات باستخدام أداة read-only مناسبة، وبعد انتهاء التنفيذ اعرض النتيجة بالعربية.",
+            wait_outcome=self.success_outcome("اكتمل فحص مصادر السجلات."),
+        )
+
+        tool_request = AdminChatToolRequest.objects.get()
+        self.assertEqual(tool_request.tool_definition, definition)
+        self.assertEqual(tool_request.status, AdminChatToolRequest.Status.SUCCEEDED)
+        self.assertEqual(ToolRun.objects.count(), 1)
+        self.assertEqual(AgentJob.objects.count(), 1)
+        self.assertIn("بدأت فحص قراءة فقط", streamed)
+        self.assertNotIn("هل توافق", streamed)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_arabic_execute_log_sources_intent_executes_without_proposal(self):
+        self.create_tool(key="log_sources_discovery_v2")
+        self.post_live_with_provider_text(
+            "سأقترح الفحص فقط بدون proposal.",
+            request_text="نفذ فحص مصادر السجلات الآن.",
+            wait_outcome=self.success_outcome("اكتمل الفحص."),
+        )
+
+        self.assertEqual(AdminChatToolRequest.objects.get().tool_definition.key, "log_sources_discovery_v2")
+        self.assertEqual(ToolRun.objects.count(), 1)
+        self.assertEqual(AgentJob.objects.count(), 1)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_continue_after_prior_log_sources_scope_executes_without_proposal(self):
+        self.create_tool(key="log_sources_discovery_v2")
+        AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="يمكن فحص مصادر السجلات كفحص قراءة فقط.",
+            metadata_redacted={"source": "admin_live_chatkit"},
+        )
+        self.post_live_with_provider_text(
+            "تمام، سأتابع الاقتراح.",
+            request_text="متابعة",
+            wait_outcome=self.success_outcome("اكتمل فحص مصادر السجلات."),
+        )
+
+        self.assertEqual(AdminChatToolRequest.objects.get().tool_definition.key, "log_sources_discovery_v2")
+        self.assertEqual(ToolRun.objects.count(), 1)
+        self.assertEqual(AgentJob.objects.count(), 1)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_advice_question_does_not_direct_execute_without_proposal(self):
+        self.create_tool(key="log_sources_discovery_v2")
+        self.post_live_with_provider_text(
+            "أقترح فحص مصادر السجلات لأنه قراءة فقط.",
+            request_text="ماذا تقترح؟",
+        )
 
         self.assertEqual(AdminChatToolRequest.objects.count(), 0)
         self.assertEqual(ToolRun.objects.count(), 0)
@@ -450,6 +511,77 @@ class AdminAIToolRequestFlowTests(TestCase):
 
         self.assertEqual(outcome["state"], "succeeded")
         sleep_mock.assert_called_once_with(5)
+
+    def test_log_sources_result_summary_uses_redacted_result_counts_and_paths(self):
+        definition = self.create_tool(key="log_sources_discovery_v2")
+        tool_run = ToolRun.objects.create(
+            account=self.account,
+            server=self.server,
+            agent=ScannerAgent.objects.get(server=self.server),
+            tool_definition=definition,
+            requested_by=self.staff,
+            requested_by_type=ToolRun.RequestedByType.ADMIN,
+            status=ToolRun.Status.SUCCEEDED,
+            result_redacted={
+                "summary": {
+                    "notes": ["metadata_only", "no_content_reads"],
+                    "sources_total": 5,
+                    "sources_missing": 2,
+                    "sources_existing": 3,
+                    "permission_denied": 0,
+                },
+                "log_sources": [
+                    {"path": "/var/log/nginx", "type": "nginx_log_dir", "exists": True, "is_dir": True},
+                    {"path": "/var/log/postgresql", "type": "postgresql_log_dir", "exists": True, "is_dir": True},
+                    {"path": "/var/log/syslog", "type": "system_log_file", "exists": False},
+                    {"path": "/var/log/messages", "type": "system_log_file", "exists": False},
+                    {"path": "/opt/taskaai-suite/tos-translation/logs", "type": "app_logs_dir", "exists": True},
+                ],
+            },
+        )
+
+        outcome = wait_for_tool_execution_result(tool_run, timeout_seconds=0, poll_interval_seconds=1)
+
+        self.assertEqual(outcome["state"], "succeeded")
+        self.assertIn("تم فحص 5", outcome["summary"])
+        self.assertIn("يوجد 3", outcome["summary"])
+        self.assertIn("يوجد 2", outcome["summary"])
+        self.assertIn("/var/log/nginx", outcome["summary"])
+        self.assertIn("/var/log/syslog", outcome["summary"])
+        self.assertIn("الميتاداتا", outcome["summary"])
+        self.assertNotIn("{", outcome["summary"])
+        self.assertNotIn("completed successfully", outcome["summary"])
+
+    def test_log_sources_result_summary_redacts_secrets_and_raw_log_content(self):
+        definition = self.create_tool(key="log_sources_discovery_v2")
+        tool_run = ToolRun.objects.create(
+            account=self.account,
+            server=self.server,
+            agent=ScannerAgent.objects.get(server=self.server),
+            tool_definition=definition,
+            requested_by=self.staff,
+            requested_by_type=ToolRun.RequestedByType.ADMIN,
+            status=ToolRun.Status.SUCCEEDED,
+            result_redacted={
+                "summary": {
+                    "notes": ["metadata_only"],
+                    "sources_total": 1,
+                    "sources_missing": 0,
+                    "sources_existing": 1,
+                    "permission_denied": 0,
+                },
+                "log_sources": [
+                    {"path": "/var/log/nginx/sk-test-secret-token", "exists": True},
+                ],
+                "raw_logs": "secret raw log content should not be displayed",
+            },
+        )
+
+        outcome = wait_for_tool_execution_result(tool_run, timeout_seconds=0, poll_interval_seconds=1)
+
+        self.assertIn("[REDACTED]", outcome["summary"])
+        self.assertNotIn("sk-test-secret-token", outcome["summary"])
+        self.assertNotIn("secret raw log content", outcome["summary"])
 
     def test_multi_tool_timeout_window_scales_to_cap(self):
         self.assertEqual(tool_followup_timeout_for_count(1), 45)

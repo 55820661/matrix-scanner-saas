@@ -12,7 +12,7 @@ from apps.core.redaction import redact_json, redact_secrets
 from apps.reports.models import Report, ReportSection
 from apps.servers.models import Server
 from apps.tools.models import ToolBuildProposal, ToolBuildRequest, ToolDefinition, ToolPolicy, ToolRun, ToolTemplate
-from apps.tools.result_summaries import summarize_tool_run_result
+from apps.tools.result_summaries import summarize_tool_result_for_chat, summarize_tool_run_result
 from apps.tools.services import (
     ToolPolicyDenied,
     create_tool_run_job,
@@ -47,6 +47,94 @@ AI_READ_ONLY_TOOL_ALLOWLIST = {
     "nginx_sites_discovery",
     "postgres_status_discovery",
 }
+DIRECT_EXECUTION_TERMS = (
+    "افحص",
+    "نفذ",
+    "ابدأ",
+    "شغل",
+    "تابع",
+    "متابعة",
+    "اعمل فحص",
+    "راجع",
+    "check",
+    "run",
+    "execute",
+    "start",
+    "continue",
+)
+DIRECT_EXECUTION_ADVICE_TERMS = (
+    "ماذا تقترح",
+    "ماذا تنصح",
+    "ايه الفحوصات",
+    "إيه الفحوصات",
+    "هل نحتاج",
+    "what do you suggest",
+    "what should",
+    "should we",
+)
+DIRECT_EXECUTION_TOOL_SCOPES = (
+    (
+        "log_sources_discovery_v2",
+        (
+            "مصادر السجلات",
+            "السجلات",
+            "logs",
+            "log sources",
+            "log_sources",
+        ),
+        "فحص مصادر السجلات بناءً على طلب مباشر من المستخدم.",
+    ),
+    (
+        "services_status",
+        (
+            "حالة السيرفر",
+            "حالة الخادم",
+            "services",
+            "service status",
+            "server status",
+            "system status",
+        ),
+        "فحص حالة الخدمات بناءً على طلب مباشر من المستخدم.",
+    ),
+    (
+        "systemd_services_discovery",
+        (
+            "systemd",
+            "خدمات systemd",
+            "systemctl",
+            "الخدمات",
+        ),
+        "فحص خدمات systemd بناءً على طلب مباشر من المستخدم.",
+    ),
+    (
+        "nginx_sites_discovery",
+        (
+            "nginx",
+            "مواقع nginx",
+            "nginx sites",
+        ),
+        "فحص إعدادات nginx بناءً على طلب مباشر من المستخدم.",
+    ),
+    (
+        "postgres_status_discovery",
+        (
+            "postgres",
+            "postgresql",
+            "قاعدة البيانات",
+            "database",
+        ),
+        "فحص حالة PostgreSQL بناءً على طلب مباشر من المستخدم.",
+    ),
+    (
+        "system_identity",
+        (
+            "هوية النظام",
+            "system identity",
+            "server identity",
+        ),
+        "فحص هوية النظام بناءً على طلب مباشر من المستخدم.",
+    ),
+)
 
 
 def _safe_text(value, *, limit):
@@ -71,6 +159,37 @@ def extract_tool_request_proposals(text):
         proposal = _parse_tool_request_proposal(match.group("payload"))
         if proposal:
             proposals.append(proposal)
+    return proposals
+
+
+def resolve_direct_execution_tool_proposals(*, latest_user_text, conversation_text=""):
+    normalized_user = (latest_user_text or "").casefold()
+    if not normalized_user:
+        return []
+    if any(term.casefold() in normalized_user for term in DIRECT_EXECUTION_ADVICE_TERMS):
+        return []
+    has_execution_intent = any(term.casefold() in normalized_user for term in DIRECT_EXECUTION_TERMS)
+    if not has_execution_intent:
+        return []
+
+    search_text = normalized_user
+    if normalized_user.strip() in {"تابع", "متابعة", "continue"}:
+        search_text = f"{normalized_user}\n{(conversation_text or '').casefold()}"
+
+    proposals = []
+    seen = set()
+    for tool_slug, scope_terms, reason in DIRECT_EXECUTION_TOOL_SCOPES:
+        if tool_slug in seen:
+            continue
+        if any(term.casefold() in search_text for term in scope_terms):
+            proposals.append(
+                {
+                    "tool_slug": tool_slug,
+                    "reason": reason,
+                    "params": {"scope": "selected_server"},
+                }
+            )
+            seen.add(tool_slug)
     return proposals
 
 
@@ -407,6 +526,11 @@ def _render_multiline_rows(rows, *, empty_text):
 
 
 def _safe_tool_result_summary(tool_run):
+    result = tool_run.result_redacted if isinstance(tool_run.result_redacted, dict) else {}
+    if result:
+        chat_summary = summarize_tool_result_for_chat(tool_run.tool_definition, result, language="ar")
+        if chat_summary:
+            return _safe_text(chat_summary, limit=MAX_RESPONSE_LENGTH)
     base_summary = _safe_text(summarize_tool_run_result(tool_run), limit=MAX_RESPONSE_LENGTH)
     result = tool_run.result_redacted if isinstance(tool_run.result_redacted, dict) else {}
     bullets = []

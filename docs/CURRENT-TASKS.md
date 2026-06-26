@@ -6,6 +6,40 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.9-H4 Direct Execution Intent and Real Tool Result Summaries
+
+Scope:
+- Detect explicit admin execution intent for approved read-only diagnostic checks.
+- Add a deterministic fallback resolver from the user's latest message when the AI omits a proposal block.
+- Improve safe Arabic summaries from `ToolRun.result_redacted`, especially `log_sources_discovery_v2`.
+- Preserve existing allowlist, policy, plan, selected-server scope, and no write/remediation behavior.
+
+Out of scope:
+- Write/destructive tools, shell execution, remediation, uploads, Portal AI, Telegram AI, customer-facing AI, migrations, and policy expansion.
+
+Result:
+- Added direct execution-intent detection for explicit Arabic/English run/check/start/continue wording.
+- Added deterministic mapping from user intent/scope to approved read-only tool proposals when the model omits a proposal block.
+- Updated Live AI instructions and request analysis so explicit execution does not ask for extra approval.
+- Added Arabic chat summaries for real `log_sources_discovery_v2` redacted results with counts, existing/missing paths, permission state, and metadata-only explanation.
+- Added safe generic result-summary fallback without raw JSON, raw logs, or secrets.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 27 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests after rerun sequentially following a parallel database deadlock.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests after rerun sequentially following a parallel database deadlock.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.9-H4 is complete.
+
 ## Archived Task: C10.9-H3 Adaptive Tool Follow-up and Arabic Result Summary
 
 Scope:

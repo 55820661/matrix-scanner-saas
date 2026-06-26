@@ -2,6 +2,43 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-26 - C10.9-H4 Direct Execution Intent and Real Tool Result Summaries Start
+
+Intent:
+- Fix Live Admin AI read-only tool handling when an admin explicitly asks to run a safe diagnostic check.
+- Improve Arabic chat summaries from real redacted tool results instead of generic success text.
+
+Scope:
+- Add deterministic execution-intent resolution from the user's latest message only.
+- Keep execution restricted to enabled approved read-only tools, existing allowlist, policy, plan, and selected-server scope.
+- Add a real `log_sources_discovery_v2` summary and safe generic fallback without raw JSON, raw logs, or secrets.
+
+Out of scope:
+- Write/destructive tools, arbitrary commands, remediation, uploads, Portal AI, Telegram AI, customer-facing AI, migrations, and tool policy expansion.
+
+## 2026-06-26 - C10.9-H4 Direct Execution Intent and Real Tool Result Summaries Complete
+
+Result:
+- Added explicit direct execution-intent detection for approved read-only diagnostic checks.
+- Added a deterministic resolver from the user's latest message/scope to safe tool proposals when Live AI omits `TOOL_REQUEST_PROPOSAL`.
+- Updated Live AI instructions and request analysis so direct admin execution requests do not ask for extra approval.
+- Added Arabic result summaries from `ToolRun.result_redacted`, including a structured `log_sources_discovery_v2` summary with counts, existing/missing paths, permission status, and metadata-only/no raw log explanation.
+- Kept execution behind the existing allowlist, available-tools context, read-only enablement, policy, plan, and selected-server validation.
+- No migrations, Portal changes, Telegram changes, write tools, remediation, uploads, or shell execution were added.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 27 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests after sequential rerun because the first parallel run hit a database deadlock.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests after sequential rerun because the first parallel run hit a database deadlock.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-25 - C10.8-H4 ChatKit History Hydration and Audit Scope Start
 
 Intent:
