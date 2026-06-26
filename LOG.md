@@ -2,6 +2,43 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-26 - C10.9-H6 Remove Duplicate Generic Tool Success Messages Start
+
+Intent:
+- Prevent generic tool success chat messages from being saved when detailed Arabic result summaries exist.
+- Add safe cleanup for legacy duplicate generic success messages.
+
+Scope:
+- Review Live AI/tool result message creation paths.
+- Keep detailed Arabic `tool_result_summary` messages visible with stable ChatKit IDs.
+- Extend cleanup support with dry-run/apply coverage for old duplicate generic messages.
+
+Out of scope:
+- Migrations, Portal/Telegram/customer-facing changes, write/destructive tools, remediation, shell execution, uploads, and policy expansion.
+
+## 2026-06-26 - C10.9-H6 Remove Duplicate Generic Tool Success Messages Complete
+
+Result:
+- Stopped tool-result sync from creating generic `<tool_key> completed successfully.` messages when a detailed result message already exists for the same `ToolRun`.
+- Switched sync-created chat result messages to the chat-safe summary path and ensured stable `chatkit_item_id` assignment.
+- Preserved the existing Apache 5xx result summarizer used by C8.
+- Extended `cleanup_live_ai_legacy_test_data` with dry-run/apply cleanup for old generic duplicate tool-result messages that have a later detailed message for the same run.
+- Added regressions for no duplicate generic message, ChatKit history visibility, cleanup dry-run/apply, preserving detailed messages, and preserving non-matching tool messages.
+- No migrations, Portal changes, Telegram changes, write tools, remediation, uploads, or shell execution were added.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 29 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-26 - C10.9-H5 Clean Direct Execution Chat Output Start
 
 Intent:

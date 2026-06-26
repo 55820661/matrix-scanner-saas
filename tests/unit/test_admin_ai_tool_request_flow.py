@@ -17,6 +17,7 @@ from apps.ai_chat.services import (
     create_admin_chat_session,
     create_chat_session,
     reject_tool_request,
+    sync_chat_tool_requests_for_tool_run,
     tool_followup_timeout_for_count,
     wait_for_tool_execution_result,
 )
@@ -203,6 +204,24 @@ class AdminAIToolRequestFlowTests(TestCase):
             "status": ToolRun.Status.FAILED,
             "summary": summary,
             "tool_run_id": "",
+        }
+
+    def log_sources_result(self):
+        return {
+            "summary": {
+                "notes": ["metadata_only", "no_content_reads"],
+                "sources_total": 5,
+                "sources_missing": 2,
+                "sources_existing": 3,
+                "permission_denied": 0,
+            },
+            "log_sources": [
+                {"path": "/var/log/nginx", "type": "nginx_log_dir", "exists": True, "is_dir": True},
+                {"path": "/var/log/postgresql", "type": "postgresql_log_dir", "exists": True, "is_dir": True},
+                {"path": "/var/log/syslog", "type": "system_log_file", "exists": False},
+                {"path": "/var/log/messages", "type": "system_log_file", "exists": False},
+                {"path": "/opt/taskaai-suite/tos-translation/logs", "type": "app_logs_dir", "exists": True},
+            ],
         }
 
     @override_settings(**LIVE_SETTINGS)
@@ -600,6 +619,53 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertNotIn("sk-test-secret-token", outcome["summary"])
         self.assertNotIn("secret raw log content", outcome["summary"])
 
+    @override_settings(**LIVE_SETTINGS)
+    def test_tool_result_sync_does_not_add_generic_success_after_detailed_summary(self):
+        self.create_tool(key="log_sources_discovery_v2")
+        detailed_summary = (
+            "اكتمل فحص مصادر السجلات بنجاح.\n\n"
+            "الخلاصة:\n"
+            "- تم فحص 5 مصادر سجلات.\n"
+            "- يوجد 3 مصادر متاحة.\n"
+            "- يوجد 2 مصادر غير موجودة.\n\n"
+            "المصادر الموجودة:\n"
+            "- /var/log/nginx\n\n"
+            "المصادر غير الموجودة:\n"
+            "- /var/log/syslog\n\n"
+            "التفسير:\n"
+            "الفحص اعتمد على الميتاداتا فقط ولم يقرأ محتوى السجلات الخام."
+        )
+        self.post_live_with_provider_text(
+            "يمكنني اقتراح فحص مصادر السجلات. هل ترغب؟",
+            request_text="افحص مصادر السجلات",
+            wait_outcome=self.success_outcome(detailed_summary),
+        )
+        tool_run = ToolRun.objects.get()
+        tool_run.status = ToolRun.Status.SUCCEEDED
+        tool_run.result_redacted = self.log_sources_result()
+        tool_run.save(update_fields=["status", "result_redacted", "updated_at"])
+
+        sync_chat_tool_requests_for_tool_run(tool_run)
+        response = self.client.post(
+            self.live_url(),
+            data=json.dumps({"type": "items.list", "params": {"thread_id": str(self.session.id), "limit": 20, "order": "asc"}}),
+            content_type="application/json",
+        )
+        transcript = "\n".join(AdminChatMessage.objects.values_list("body_redacted", flat=True))
+        history = response.content.decode()
+
+        self.assertEqual(
+            AdminChatMessage.objects.filter(
+                metadata_redacted__source="tool_result_summary",
+                metadata_redacted__tool_run_id=str(tool_run.id),
+            ).count(),
+            1,
+        )
+        self.assertNotIn("log_sources_discovery_v2 completed successfully.", transcript)
+        self.assertNotIn("log_sources_discovery_v2 completed successfully.", history)
+        self.assertIn("اكتمل فحص مصادر السجلات بنجاح", history)
+        self.assertNotIn("{", transcript)
+
     def test_multi_tool_timeout_window_scales_to_cap(self):
         self.assertEqual(tool_followup_timeout_for_count(1), 45)
         self.assertEqual(tool_followup_timeout_for_count(2), 65)
@@ -684,6 +750,63 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual(old_pending.error_class, AdminLiveAIRequestLog.ErrorClass.UNKNOWN_ERROR)
         self.assertEqual(recent_pending.status, AdminLiveAIRequestLog.Status.PENDING)
         self.assertEqual(succeeded.status, AdminLiveAIRequestLog.Status.SUCCEEDED)
+
+    def test_cleanup_removes_only_legacy_generic_duplicate_tool_messages(self):
+        generic = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="log_sources_discovery_v2 completed successfully.",
+            metadata_redacted={
+                "source": "tool_result_summary",
+                "tool_run_id": "run-legacy",
+                "tool_key": "log_sources_discovery_v2",
+            },
+        )
+        detailed = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="اكتمل فحص مصادر السجلات بنجاح.\n\nالخلاصة:\n- تم فحص 5 مصادر سجلات.",
+            metadata_redacted={
+                "source": "tool_result_summary",
+                "tool_run_id": "run-legacy",
+                "tool_key": "log_sources_discovery_v2",
+                "chatkit_item_id": "tool_result_legacy",
+            },
+        )
+        unrelated_without_pair = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="services_status completed successfully.",
+            metadata_redacted={
+                "source": "tool_result_summary",
+                "tool_run_id": "run-other",
+                "tool_key": "services_status",
+            },
+        )
+        generic_with_chatkit_id = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="log_sources_discovery_v2 completed successfully.",
+            metadata_redacted={
+                "source": "tool_result_summary",
+                "tool_run_id": "run-kept",
+                "tool_key": "log_sources_discovery_v2",
+                "chatkit_item_id": "tool_result_kept",
+            },
+        )
+        AdminChatMessage.objects.filter(id=generic.id).update(created_at=timezone.now() - timedelta(minutes=5))
+        stdout = io.StringIO()
+
+        call_command("cleanup_live_ai_legacy_test_data", "--dry-run", stdout=stdout)
+        self.assertIn("found 1 legacy generic duplicate tool result message", stdout.getvalue())
+        self.assertTrue(AdminChatMessage.objects.filter(id=generic.id).exists())
+
+        call_command("cleanup_live_ai_legacy_test_data", "--apply", stdout=io.StringIO())
+
+        self.assertFalse(AdminChatMessage.objects.filter(id=generic.id).exists())
+        self.assertTrue(AdminChatMessage.objects.filter(id=detailed.id).exists())
+        self.assertTrue(AdminChatMessage.objects.filter(id=unrelated_without_pair.id).exists())
+        self.assertTrue(AdminChatMessage.objects.filter(id=generic_with_chatkit_id.id).exists())
 
     @override_settings(**LIVE_SETTINGS)
     def test_portal_customer_deterministic_chat_unchanged(self):

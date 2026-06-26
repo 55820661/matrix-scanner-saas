@@ -1202,7 +1202,7 @@ def sync_chat_tool_requests_for_tool_run(tool_run):
     request_status = terminal_status_map.get(tool_run.status)
     if not request_status:
         return
-    result_summary = _safe_text(summarize_tool_run_result(tool_run), limit=MAX_RESPONSE_LENGTH)
+    result_summary = _safe_tool_result_summary(tool_run)
     for tool_request in tool_run.chat_tool_requests.select_related("session", "tool_definition"):
         update_fields = ["status", "updated_at"]
         tool_request.status = request_status
@@ -1210,19 +1210,29 @@ def sync_chat_tool_requests_for_tool_run(tool_run):
             tool_request.error_summary = _safe_text(tool_run.error_message, limit=500)
             update_fields.append("error_summary")
         tool_request.save(update_fields=update_fields)
+        existing_summary = AdminChatMessage.objects.filter(
+            session=tool_request.session,
+            metadata_redacted__source="tool_result_summary",
+            metadata_redacted__tool_run_id=str(tool_run.id),
+        ).first()
+        if existing_summary:
+            if not (existing_summary.metadata_redacted or {}).get("chatkit_item_id"):
+                _assign_chatkit_item_id(existing_summary, f"tool_result_{tool_request.id}")
+            continue
         body = result_summary or f"Tool result received for {tool_request.tool_definition.key}."
         message = AdminChatMessage.objects.create(
             session=tool_request.session,
             sender_type=AdminChatMessage.SenderType.ASSISTANT,
             body_redacted=body,
-            metadata_redacted={
+            metadata_redacted=redact_json({
                 "source": "tool_result_summary",
                 "tool_request_id": str(tool_request.id),
                 "tool_run_id": str(tool_run.id),
                 "tool_key": tool_request.tool_definition.key,
                 "tool_status": tool_run.status,
-            },
+            }),
         )
+        _assign_chatkit_item_id(message, f"tool_result_{tool_request.id}")
         tool_request.session.last_message_at = message.created_at
         tool_request.session.save(update_fields=["last_message_at", "updated_at"])
         AdminChatDecision.objects.create(

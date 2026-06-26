@@ -61,6 +61,8 @@ def summarize_tool_result_for_chat(tool_definition, result_redacted, language="a
             "يمكن مراجعة سجل التشغيل للتفاصيل."
         )
     tool_key = getattr(tool_definition, "key", "") or ""
+    if tool_key == "apache_5xx_summary":
+        return summarize_tool_run_result_like(tool_definition, result_redacted)
     if tool_key == "log_sources_discovery_v2":
         summary = _summarize_log_sources_discovery_v2_for_chat(result)
         if summary:
