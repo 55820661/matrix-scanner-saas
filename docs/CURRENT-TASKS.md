@@ -6,6 +6,39 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.9-H7 Idempotent Tool Result Chat Messages
+
+Scope:
+- Make Live AI tool start/result chat messages idempotent across follow-up and sync paths.
+- Prevent duplicates by `chatkit_item_id` and by `tool_run_id + tool_request_id + source`.
+- Extend cleanup for duplicate detailed tool result summaries while preserving the best message.
+
+Out of scope:
+- Migrations, Portal/Telegram/customer-facing changes, write/remediation tools, shell execution, uploads, and policy expansion.
+
+Result:
+- Made tool result follow-up creation idempotent by stable `chatkit_item_id` and by `tool_request_id/tool_run_id/source`.
+- Added start-message dedupe for `tool_orchestrator` messages per tool request.
+- Kept repeated sync calls from creating duplicate detailed summaries.
+- Extended cleanup to detect duplicate detailed result summaries and keep the best message by state/status, `chatkit_item_id`, and recency.
+- Added tests for repeated sync, no duplicate ChatKit IDs, one start message, and detailed duplicate cleanup.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 30 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.9-H7 is complete.
+
 ## Archived Task: C10.9-H6 Remove Duplicate Generic Tool Success Messages
 
 Scope:

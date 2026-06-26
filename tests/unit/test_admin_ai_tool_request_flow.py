@@ -646,6 +646,7 @@ class AdminAIToolRequestFlowTests(TestCase):
         tool_run.save(update_fields=["status", "result_redacted", "updated_at"])
 
         sync_chat_tool_requests_for_tool_run(tool_run)
+        sync_chat_tool_requests_for_tool_run(tool_run)
         response = self.client.post(
             self.live_url(),
             data=json.dumps({"type": "items.list", "params": {"thread_id": str(self.session.id), "limit": 20, "order": "asc"}}),
@@ -658,9 +659,23 @@ class AdminAIToolRequestFlowTests(TestCase):
             AdminChatMessage.objects.filter(
                 metadata_redacted__source="tool_result_summary",
                 metadata_redacted__tool_run_id=str(tool_run.id),
+                metadata_redacted__tool_request_id=str(AdminChatToolRequest.objects.get().id),
             ).count(),
             1,
         )
+        self.assertEqual(
+            AdminChatMessage.objects.filter(
+                metadata_redacted__source="tool_orchestrator",
+                metadata_redacted__tool_request_id=str(AdminChatToolRequest.objects.get().id),
+            ).count(),
+            1,
+        )
+        chatkit_ids = [
+            (message.metadata_redacted or {}).get("chatkit_item_id")
+            for message in AdminChatMessage.objects.filter(metadata_redacted__has_key="chatkit_item_id")
+        ]
+        populated_ids = [item_id for item_id in chatkit_ids if item_id]
+        self.assertEqual(len(populated_ids), len(set(populated_ids)))
         self.assertNotIn("log_sources_discovery_v2 completed successfully.", transcript)
         self.assertNotIn("log_sources_discovery_v2 completed successfully.", history)
         self.assertIn("اكتمل فحص مصادر السجلات بنجاح", history)
@@ -807,6 +822,58 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertTrue(AdminChatMessage.objects.filter(id=detailed.id).exists())
         self.assertTrue(AdminChatMessage.objects.filter(id=unrelated_without_pair.id).exists())
         self.assertTrue(AdminChatMessage.objects.filter(id=generic_with_chatkit_id.id).exists())
+
+    def test_cleanup_removes_duplicate_detailed_tool_messages_and_keeps_best_metadata(self):
+        older_duplicate = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="اكتمل فحص مصادر السجلات بنجاح.\n\nالخلاصة:\n- تم فحص 5 مصادر سجلات.",
+            metadata_redacted={
+                "source": "tool_result_summary",
+                "tool_run_id": "run-detailed",
+                "tool_request_id": "request-detailed",
+                "tool_key": "log_sources_discovery_v2",
+                "chatkit_item_id": "tool_result_request-detailed",
+            },
+        )
+        best = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="اكتمل فحص مصادر السجلات بنجاح.\n\nالخلاصة:\n- تم فحص 5 مصادر سجلات.\n\nالتفسير:\nقراءة فقط.",
+            metadata_redacted={
+                "source": "tool_result_summary",
+                "tool_run_id": "run-detailed",
+                "tool_request_id": "request-detailed",
+                "tool_key": "log_sources_discovery_v2",
+                "chatkit_item_id": "tool_result_request-detailed",
+                "state": "succeeded",
+                "status": "succeeded",
+            },
+        )
+        unique = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="اكتمل فحص مصادر السجلات بنجاح.\n\nالخلاصة:\n- تم فحص 1 مصادر سجلات.",
+            metadata_redacted={
+                "source": "tool_result_summary",
+                "tool_run_id": "run-unique",
+                "tool_request_id": "request-unique",
+                "tool_key": "log_sources_discovery_v2",
+                "chatkit_item_id": "tool_result_request-unique",
+            },
+        )
+        AdminChatMessage.objects.filter(id=older_duplicate.id).update(created_at=timezone.now() - timedelta(minutes=5))
+        stdout = io.StringIO()
+
+        call_command("cleanup_live_ai_legacy_test_data", "--dry-run", stdout=stdout)
+        self.assertIn("found 1 duplicate detailed tool result message", stdout.getvalue())
+        self.assertTrue(AdminChatMessage.objects.filter(id=older_duplicate.id).exists())
+
+        call_command("cleanup_live_ai_legacy_test_data", "--apply", stdout=io.StringIO())
+
+        self.assertFalse(AdminChatMessage.objects.filter(id=older_duplicate.id).exists())
+        self.assertTrue(AdminChatMessage.objects.filter(id=best.id).exists())
+        self.assertTrue(AdminChatMessage.objects.filter(id=unique.id).exists())
 
     @override_settings(**LIVE_SETTINGS)
     def test_portal_customer_deterministic_chat_unchanged(self):

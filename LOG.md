@@ -2,6 +2,43 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-26 - C10.9-H7 Idempotent Tool Result Chat Messages Start
+
+Intent:
+- Ensure each Live AI ToolRun has one visible start message and one visible final result/failure/timeout message.
+- Add safe cleanup for duplicate detailed result summaries already present in data.
+
+Scope:
+- Make tool result/start message creation idempotent by ChatKit item ID and tool run/request/source metadata.
+- Preserve the best existing detailed result message when duplicates are found.
+- Add focused tests and run the required regression suite.
+
+Out of scope:
+- Migrations, Portal/Telegram/customer-facing changes, write/destructive tools, remediation, shell execution, uploads, and policy expansion.
+
+## 2026-06-26 - C10.9-H7 Idempotent Tool Result Chat Messages Complete
+
+Result:
+- Made Live AI tool result follow-up messages idempotent by stable ChatKit item ID and by tool request/run/source metadata.
+- Added start-message dedupe for `tool_orchestrator` messages so each tool request keeps one start message.
+- Kept repeated sync calls from creating duplicate result messages after a follow-up already exists.
+- Extended `cleanup_live_ai_legacy_test_data` to find duplicate detailed result summaries and keep the best message by state/status metadata, ChatKit ID, and recency.
+- Added focused tests for repeated sync, no duplicate ChatKit IDs, one start message, and cleanup of duplicate detailed summaries.
+- No migrations, Portal changes, Telegram changes, write tools, remediation, uploads, or shell execution were added.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 30 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-26 - C10.9-H6 Remove Duplicate Generic Tool Success Messages Start
 
 Intent:

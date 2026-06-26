@@ -901,6 +901,7 @@ def approve_tool_request(*, user, tool_request):
             "execution_started": True,
         },
     )
+    _dedupe_tool_start_messages(tool_request)
     AdminChatDecision.objects.create(
         session=session,
         decision_type=AdminChatDecision.DecisionType.TOOL_REQUEST,
@@ -976,6 +977,40 @@ def _summary_is_full_chat_body(summary):
     return any(marker in normalized for marker in heading_markers)
 
 
+def _find_existing_chatkit_message(session, chatkit_item_id):
+    if not chatkit_item_id:
+        return None
+    return (
+        AdminChatMessage.objects.filter(
+            session=session,
+            metadata_redacted__chatkit_item_id=chatkit_item_id,
+        )
+        .order_by("-created_at", "-id")
+        .first()
+    )
+
+
+def _find_existing_tool_result_message(session, *, source, tool_request_id, tool_run_id="", chatkit_item_id=""):
+    existing = _find_existing_chatkit_message(session, chatkit_item_id)
+    if existing:
+        return existing
+    queryset = AdminChatMessage.objects.filter(
+        session=session,
+        metadata_redacted__source=source,
+        metadata_redacted__tool_request_id=str(tool_request_id),
+    )
+    if tool_run_id:
+        queryset = queryset.filter(metadata_redacted__tool_run_id=str(tool_run_id))
+    return queryset.order_by("-created_at", "-id").first()
+
+
+def _update_tool_message(message, *, body, metadata):
+    message.body_redacted = body
+    message.metadata_redacted = redact_json(metadata)
+    message.save(update_fields=["body_redacted", "metadata_redacted", "updated_at"])
+    return message
+
+
 def _tool_followup_body(tool_request, outcome):
     tool_key = tool_request.tool_definition.key
     state = outcome.get("state")
@@ -1019,21 +1054,32 @@ def _record_tool_followup_message(tool_request, outcome):
         "not_started": "tool_result_not_started",
     }
     source = source_by_state.get(outcome.get("state"), "tool_result_timeout")
-    message = AdminChatMessage.objects.create(
-        session=tool_request.session,
-        sender_type=AdminChatMessage.SenderType.ASSISTANT,
-        body_redacted=body,
-        metadata_redacted=redact_json(
-            {
-                "source": source,
-                "tool_request_id": str(tool_request.id),
-                "tool_run_id": str(outcome.get("tool_run_id") or ""),
-                "tool_key": tool_request.tool_definition.key,
-                "state": outcome.get("state"),
-                "status": outcome.get("status"),
-            }
-        ),
+    chatkit_item_id = f"tool_result_{tool_request.id}"
+    metadata = {
+        "source": source,
+        "tool_request_id": str(tool_request.id),
+        "tool_run_id": str(outcome.get("tool_run_id") or ""),
+        "tool_key": tool_request.tool_definition.key,
+        "state": outcome.get("state"),
+        "status": outcome.get("status"),
+        "chatkit_item_id": chatkit_item_id,
+    }
+    existing = _find_existing_tool_result_message(
+        tool_request.session,
+        source=source,
+        tool_request_id=tool_request.id,
+        tool_run_id=outcome.get("tool_run_id") or "",
+        chatkit_item_id=chatkit_item_id,
     )
+    if existing:
+        message = _update_tool_message(existing, body=body, metadata={**(existing.metadata_redacted or {}), **metadata})
+    else:
+        message = AdminChatMessage.objects.create(
+            session=tool_request.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted=body,
+            metadata_redacted=redact_json(metadata),
+        )
     tool_request.session.last_message_at = message.created_at
     tool_request.session.save(update_fields=["last_message_at", "updated_at"])
     AdminChatDecision.objects.create(
@@ -1066,6 +1112,25 @@ def _latest_tool_start_message(tool_request):
         .order_by("-created_at")
         .first()
     )
+
+
+def _dedupe_tool_start_messages(tool_request):
+    item_id = f"tool_start_{tool_request.id}"
+    messages = list(
+        AdminChatMessage.objects.filter(
+            session=tool_request.session,
+            metadata_redacted__source="tool_orchestrator",
+            metadata_redacted__tool_request_id=str(tool_request.id),
+        ).order_by("-created_at", "-id")
+    )
+    if not messages:
+        return None
+    keep = messages[0]
+    _assign_chatkit_item_id(keep, item_id)
+    duplicate_ids = [message.id for message in messages[1:]]
+    if duplicate_ids:
+        AdminChatMessage.objects.filter(id__in=duplicate_ids).delete()
+    return keep
 
 
 def _assign_chatkit_item_id(message, item_id):

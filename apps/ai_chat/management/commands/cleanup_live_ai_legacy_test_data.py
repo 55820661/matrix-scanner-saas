@@ -32,9 +32,12 @@ class Command(BaseCommand):
         count = queryset.count()
         duplicate_messages = self._generic_duplicate_tool_messages()
         duplicate_count = len(duplicate_messages)
+        detailed_duplicate_messages = self._detailed_duplicate_tool_messages()
+        detailed_duplicate_count = len(detailed_duplicate_messages)
         mode = "apply" if apply else "dry-run"
         self.stdout.write(f"{mode}: found {count} stale legacy pending Live AI audit row(s).")
         self.stdout.write(f"{mode}: found {duplicate_count} legacy generic duplicate tool result message(s).")
+        self.stdout.write(f"{mode}: found {detailed_duplicate_count} duplicate detailed tool result message(s).")
         if not apply:
             return
         updated = queryset.update(
@@ -48,6 +51,12 @@ class Command(BaseCommand):
         if duplicate_messages:
             deleted, _ = AdminChatMessage.objects.filter(id__in=[message.id for message in duplicate_messages]).delete()
         self.stdout.write(f"apply: deleted {deleted} legacy generic duplicate tool result message(s).")
+        detailed_deleted = 0
+        if detailed_duplicate_messages:
+            detailed_deleted, _ = AdminChatMessage.objects.filter(
+                id__in=[message.id for message in detailed_duplicate_messages]
+            ).delete()
+        self.stdout.write(f"apply: deleted {detailed_deleted} duplicate detailed tool result message(s).")
 
     def _generic_duplicate_tool_messages(self):
         candidates = AdminChatMessage.objects.filter(
@@ -75,3 +84,43 @@ class Command(BaseCommand):
             ).exclude(id=message.id).exclude(body_redacted=message.body_redacted).exists():
                 duplicates.append(message)
         return duplicates
+
+    def _detailed_duplicate_tool_messages(self):
+        candidates = list(
+            AdminChatMessage.objects.filter(
+                sender_type=AdminChatMessage.SenderType.ASSISTANT,
+                metadata_redacted__source="tool_result_summary",
+                metadata_redacted__has_key="tool_run_id",
+            )
+            .filter(metadata_redacted__has_key="tool_request_id")
+            .order_by("created_at", "id")
+        )
+        groups = {}
+        for message in candidates:
+            metadata = message.metadata_redacted or {}
+            tool_run_id = metadata.get("tool_run_id") or ""
+            tool_request_id = metadata.get("tool_request_id") or ""
+            source = metadata.get("source") or ""
+            chatkit_item_id = metadata.get("chatkit_item_id") or ""
+            if not tool_run_id or not tool_request_id or not source:
+                continue
+            groups.setdefault(("tool", tool_run_id, tool_request_id, source), []).append(message)
+            if chatkit_item_id:
+                groups.setdefault(("chatkit", chatkit_item_id), []).append(message)
+
+        duplicate_ids = set()
+        for messages in groups.values():
+            if len(messages) < 2:
+                continue
+            keep = self._best_tool_result_message(messages)
+            duplicate_ids.update(message.id for message in messages if message.id != keep.id)
+        return list(AdminChatMessage.objects.filter(id__in=duplicate_ids))
+
+    def _best_tool_result_message(self, messages):
+        def score(message):
+            metadata = message.metadata_redacted or {}
+            has_state_status = bool(metadata.get("state") or metadata.get("status"))
+            has_chatkit_id = bool(metadata.get("chatkit_item_id"))
+            return (has_state_status, has_chatkit_id, message.created_at, message.id)
+
+        return sorted(messages, key=score, reverse=True)[0]
