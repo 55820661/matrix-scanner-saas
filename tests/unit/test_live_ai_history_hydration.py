@@ -131,6 +131,94 @@ class LiveAIHistoryHydrationTests(TestCase):
         self.assertEqual(page.data[2].content[0].text, fallback_id_message.body_redacted)
         self.assertFalse(AdminLiveAIRequestLog.objects.exists())
 
+    def test_delete_thread_item_missing_item_is_idempotent_noop(self):
+        async_to_sync(AdminChatKitStore().delete_thread_item)(
+            str(self.session.id),
+            "missing-chatkit-item",
+            context=AdminChatKitContext(user=self.staff, session=self.session),
+        )
+
+        self.assertEqual(self.session.messages.count(), 0)
+
+    def test_delete_thread_item_removes_empty_suppressed_placeholder_only(self):
+        placeholder = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="",
+            metadata_redacted={
+                "source": "admin_live_chatkit",
+                "chatkit_item_id": "ck_hidden_placeholder",
+                "suppress_from_history": True,
+                "tool_request_handled": True,
+            },
+        )
+        visible = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="Visible bundle summary",
+            metadata_redacted={
+                "source": "diagnostic_bundle_result",
+                "chatkit_item_id": "ck_visible_bundle_summary",
+            },
+        )
+
+        async_to_sync(AdminChatKitStore().delete_thread_item)(
+            str(self.session.id),
+            "ck_hidden_placeholder",
+            context=AdminChatKitContext(user=self.staff, session=self.session),
+        )
+
+        self.assertFalse(AdminChatMessage.objects.filter(id=placeholder.id).exists())
+        self.assertTrue(AdminChatMessage.objects.filter(id=visible.id).exists())
+        page = async_to_sync(AdminChatKitStore().load_thread_items)(
+            str(self.session.id),
+            after=None,
+            limit=20,
+            order="asc",
+            context=AdminChatKitContext(user=self.staff, session=self.session),
+        )
+        history_text = "\n".join("".join(part.text for part in item.content) for item in page.data)
+        self.assertNotIn("ck_hidden_placeholder", [item.id for item in page.data])
+        self.assertIn("Visible bundle summary", history_text)
+
+    def test_delete_thread_item_keeps_visible_user_message_without_exception(self):
+        user_message = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.USER,
+            body_redacted="Keep visible user text",
+            metadata_redacted={"source": "admin_live_chatkit", "chatkit_item_id": "ck_visible_user"},
+        )
+
+        async_to_sync(AdminChatKitStore().delete_thread_item)(
+            str(self.session.id),
+            "ck_visible_user",
+            context=AdminChatKitContext(user=self.staff, session=self.session),
+        )
+
+        user_message.refresh_from_db()
+        self.assertEqual(user_message.body_redacted, "Keep visible user text")
+
+    def test_delete_thread_item_keeps_visible_tool_result_summary_without_exception(self):
+        summary = AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="اكتمل فحص حالة السيرفر بنجاح.",
+            metadata_redacted={
+                "source": "tool_result_summary",
+                "chatkit_item_id": "tool_result_summary_123",
+                "tool_key": "log_sources_discovery_v2",
+            },
+        )
+
+        async_to_sync(AdminChatKitStore().delete_thread_item)(
+            str(self.session.id),
+            "tool_result_summary_123",
+            context=AdminChatKitContext(user=self.staff, session=self.session),
+        )
+
+        summary.refresh_from_db()
+        self.assertEqual(summary.body_redacted, "اكتمل فحص حالة السيرفر بنجاح.")
+
     @override_settings(**LIVE_SETTINGS)
     def test_items_list_history_request_returns_stored_messages_without_audit(self):
         self.create_stored_messages()

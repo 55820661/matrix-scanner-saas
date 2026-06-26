@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -29,6 +30,9 @@ from apps.ai_chat.services import (
 )
 from apps.audit.models import AuditLog
 from apps.core.redaction import redact_json, redact_secrets
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -112,7 +116,7 @@ class AdminChatKitStore(Store[AdminChatKitContext]):
 
     async def delete_thread_item(self, thread_id: str, item_id: str, context: AdminChatKitContext) -> None:
         self._require_thread(thread_id, context)
-        raise PermissionDenied("Message deletion is not available in Live Admin Chat.")
+        await sync_to_async(self._delete_thread_item, thread_sensitive=True)(context.session, item_id)
 
     async def save_attachment(self, attachment: Attachment, context: AdminChatKitContext) -> None:
         raise PermissionDenied("Attachments are disabled.")
@@ -177,6 +181,33 @@ class AdminChatKitStore(Store[AdminChatKitContext]):
             if AdminChatKitStore._item_id(message) == item_id:
                 return message
         return None
+
+    @staticmethod
+    def _is_deletable_placeholder(message: AdminChatMessage) -> bool:
+        metadata = message.metadata_redacted or {}
+        body = (message.body_redacted or "").strip()
+        if body:
+            return False
+        if metadata.get("suppress_from_history"):
+            return True
+        return metadata.get("source") == "admin_live_chatkit" and metadata.get("tool_request_handled") is True
+
+    def _delete_thread_item(self, session: AdminChatSession, item_id: str) -> None:
+        message = self._find_message(session, item_id)
+        if message is None:
+            return
+        if self._is_deletable_placeholder(message):
+            message.delete()
+            return
+        logger.warning(
+            "Ignored ChatKit delete_thread_item for visible admin chat message.",
+            extra={
+                "admin_chat_session_id": str(session.id),
+                "admin_chat_message_id": str(message.id),
+                "chatkit_item_id": str(item_id),
+                "message_source": (message.metadata_redacted or {}).get("source", ""),
+            },
+        )
 
     @staticmethod
     def _user_text(item: UserMessageItem) -> str:

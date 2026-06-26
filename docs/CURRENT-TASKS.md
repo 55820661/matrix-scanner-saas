@@ -6,6 +6,39 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.10-H1 Make ChatKit Delete Thread Item Idempotent
+
+Scope:
+- Make `AdminChatKitStore.delete_thread_item` safe for ChatKit internal lifecycle cleanup.
+- Hard-delete only empty suppressed placeholders when requested by ChatKit.
+- Treat missing items and visible-message delete attempts as no-op without breaking streams.
+
+Out of scope:
+- User-facing message deletion, Portal/Telegram/customer-facing behavior, migrations, tools/actions/remediation changes.
+
+Result:
+- Replaced the ChatKit item delete `PermissionDenied` with idempotent store handling.
+- Missing items now return safely.
+- Empty suppressed/internal handled placeholders are hard-deleted.
+- Visible user messages, tool summaries, and bundle summaries are preserved with an internal warning only.
+- Added focused coverage for missing deletes, placeholder cleanup, visible user preservation, visible tool summary preservation, and history hydration.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 34 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.10-H1 is complete.
+
 ## Archived Task: C10.10 Multi-Tool Diagnostic Bundles
 
 Scope:

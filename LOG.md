@@ -2416,6 +2416,43 @@ Verification:
 
 Remaining:
 - C10.9-H2 is complete within scope.
+## 2026-06-26 - C10.10-H1 ChatKit Delete Thread Item Idempotency Start
+
+Intent:
+- Prevent ChatKit internal `delete_thread_item` lifecycle calls from breaking Live Admin AI streams.
+
+Scope:
+- Make missing item deletes no-op.
+- Allow cleanup of empty suppressed placeholders only.
+- Preserve visible admin chat history, tool result summaries, Portal, Telegram, and customer-facing behavior.
+
+Out of scope:
+- User-facing message deletion, migrations, new tool capabilities, remediation/write actions, uploads, Portal AI, and Telegram AI.
+
+Result:
+- Made `AdminChatKitStore.delete_thread_item` idempotent for ChatKit lifecycle calls.
+- Missing items return safely without exception.
+- Empty suppressed/internal handled placeholders are hard-deleted.
+- Visible user messages, visible assistant messages, tool result summaries, and diagnostic bundle summaries are preserved and only logged internally when ChatKit asks to delete them.
+- Added focused regression tests for missing deletes, placeholder cleanup, visible history preservation, and refresh history behavior.
+
+Verification:
+- `python manage.py check` failed because the global Python environment has no Django installed.
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 34 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- C10.10-H1 is complete within scope.
+
 ## 2026-06-25 - C10.9-H3 Adaptive Tool Follow-up and Arabic Result Summary Start
 
 Intent:
