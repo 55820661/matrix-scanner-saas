@@ -2,6 +2,45 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-26 - C10.9-H5 Clean Direct Execution Chat Output Start
+
+Intent:
+- Clean Live Admin AI chat output when explicit read-only tool execution succeeds.
+- Avoid showing AI suggestion/approval wording before backend start/result messages.
+- Remove duplicated Arabic summary/explanation headings from result output.
+
+Scope:
+- Suppress suggestion text only after explicit user execution intent creates a ToolRun/AgentJob.
+- Preserve normal advisory suggestions when the user asks what to check.
+- Keep existing read-only allowlist, policy, plan, selected-server, and no-remediation constraints.
+
+Out of scope:
+- New tools, policy expansion, write/destructive actions, shell execution, uploads, Portal AI, Telegram AI, customer-facing behavior, and migrations.
+
+## 2026-06-26 - C10.9-H5 Clean Direct Execution Chat Output Complete
+
+Result:
+- Buffered Live AI provider text when explicit direct execution intent maps to safe read-only tool proposals.
+- Suppressed AI suggestion/approval wording only after backend orchestration created a ToolRun/AgentJob.
+- Stored suppressed direct-execution AI text as a hidden placeholder so tool requests still retain a message reference.
+- Excluded hidden placeholders from ChatKit history hydration.
+- Kept advisory suggestion text visible for non-execution questions.
+- Prevented duplicate `الخلاصة:` and `التفسير:` headings when the result summary is already a complete chat body.
+- No migrations, Portal changes, Telegram changes, write tools, remediation, uploads, or shell execution were added.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 27 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-26 - C10.9-H4 Direct Execution Intent and Real Tool Result Summaries Start
 
 Intent:

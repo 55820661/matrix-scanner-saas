@@ -6,6 +6,40 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.9-H5 Clean Direct Execution Chat Output
+
+Scope:
+- Hide confusing AI suggestion/approval wording only after explicit user execution intent actually creates a ToolRun/AgentJob.
+- Keep backend start/result messages as the visible direct-execution output.
+- Remove duplicate Arabic section headings from tool result summaries.
+- Preserve advisory suggestions for non-execution questions.
+
+Out of scope:
+- Tool policy expansion, write/remediation tools, shell execution, uploads, Portal AI, Telegram AI, customer-facing changes, and migrations.
+
+Result:
+- Buffered Live AI text for deterministic direct-execution intent until tool orchestration confirms whether execution started.
+- When ToolRun/AgentJob starts, stored the AI suggestion text as a hidden placeholder and displayed only backend start/result messages.
+- Kept advisory suggestion text visible when the user asks what to check.
+- Skipped hidden direct-execution placeholders during ChatKit history hydration.
+- Avoided duplicate `الخلاصة:` / `التفسير:` headings when result summaries are already complete chat bodies.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 27 tests.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 13 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.9-H5 is complete.
+
 ## Archived Task: C10.9-H4 Direct Execution Intent and Real Tool Result Summaries
 
 Scope:

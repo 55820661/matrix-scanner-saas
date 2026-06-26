@@ -144,6 +144,9 @@ class AdminChatKitStore(Store[AdminChatKitContext]):
         return str((message.metadata_redacted or {}).get("chatkit_item_id") or f"admin_msg_{message.id}")
 
     def _to_item(self, message: AdminChatMessage, thread_id: str) -> ThreadItem | None:
+        metadata = message.metadata_redacted or {}
+        if metadata.get("suppress_from_history") and not (message.body_redacted or "").strip():
+            return None
         item_id = self._item_id(message)
         if message.sender_type == AdminChatMessage.SenderType.USER:
             return UserMessageItem(

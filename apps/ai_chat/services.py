@@ -965,12 +965,25 @@ def wait_for_tool_execution_result(
         time.sleep(max(0.1, poll_interval_seconds))
 
 
+def _summary_is_full_chat_body(summary):
+    normalized = summary or ""
+    heading_markers = (
+        "\u0627\u0644\u062e\u0644\u0627\u0635\u0629:",
+        "\u0627\u0644\u062a\u0641\u0633\u064a\u0631:",
+        "Ø§Ù„Ø®Ù„Ø§ØµØ©:",
+        "Ø§Ù„ØªÙØ³ÙŠØ±:",
+    )
+    return any(marker in normalized for marker in heading_markers)
+
+
 def _tool_followup_body(tool_request, outcome):
     tool_key = tool_request.tool_definition.key
     state = outcome.get("state")
     status = outcome.get("status") or "unknown"
     summary = _safe_text(outcome.get("summary") or "", limit=MAX_RESPONSE_LENGTH)
     if state == "succeeded":
+        if _summary_is_full_chat_body(summary):
+            return _safe_text(summary, limit=MAX_RESPONSE_LENGTH)
         return _safe_text(
             f'اكتمل الفحص بنجاح: "{tool_key}".\n\n'
             f"الخلاصة:\n{summary}\n\n"

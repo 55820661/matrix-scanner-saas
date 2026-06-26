@@ -275,19 +275,35 @@ class AdminAIToolRequestFlowTests(TestCase):
     @override_settings(**LIVE_SETTINGS)
     def test_arabic_direct_log_sources_intent_executes_without_proposal(self):
         definition = self.create_tool(key="log_sources_discovery_v2")
+        full_summary = (
+            "اكتمل فحص مصادر السجلات بنجاح.\n\n"
+            "الخلاصة:\n"
+            "- تم فحص 5 مصادر سجلات.\n"
+            "- يوجد 3 مصادر متاحة.\n"
+            "- يوجد 2 مصادر غير موجودة.\n\n"
+            "التفسير:\n"
+            "الفحص اعتمد على الميتاداتا فقط ولم يقرأ محتوى السجلات الخام."
+        )
         streamed = self.post_live_with_provider_text(
-            "أقترح فحص مصادر السجلات، لكن لم أرسل proposal block.",
+            "يمكنني اقتراح إعادة فحص مصادر السجلات. هل ترغب أن أقوم باقتراح تشغيلها؟",
             request_text="افحص مصادر السجلات باستخدام أداة read-only مناسبة، وبعد انتهاء التنفيذ اعرض النتيجة بالعربية.",
-            wait_outcome=self.success_outcome("اكتمل فحص مصادر السجلات."),
+            wait_outcome=self.success_outcome(full_summary),
         )
 
         tool_request = AdminChatToolRequest.objects.get()
+        transcript = "\n".join(AdminChatMessage.objects.values_list("body_redacted", flat=True))
         self.assertEqual(tool_request.tool_definition, definition)
         self.assertEqual(tool_request.status, AdminChatToolRequest.Status.SUCCEEDED)
         self.assertEqual(ToolRun.objects.count(), 1)
         self.assertEqual(AgentJob.objects.count(), 1)
         self.assertIn("بدأت فحص قراءة فقط", streamed)
-        self.assertNotIn("هل توافق", streamed)
+        self.assertNotIn("يمكنني اقتراح", streamed)
+        self.assertNotIn("هل ترغب", streamed)
+        self.assertNotIn("يمكنني اقتراح", transcript)
+        self.assertNotIn("هل ترغب", transcript)
+        followup = AdminChatMessage.objects.filter(metadata_redacted__source="tool_result_summary").get()
+        self.assertEqual(followup.body_redacted.count("الخلاصة:"), 1)
+        self.assertEqual(followup.body_redacted.count("التفسير:"), 1)
 
     @override_settings(**LIVE_SETTINGS)
     def test_arabic_execute_log_sources_intent_executes_without_proposal(self):
@@ -324,11 +340,12 @@ class AdminAIToolRequestFlowTests(TestCase):
     @override_settings(**LIVE_SETTINGS)
     def test_advice_question_does_not_direct_execute_without_proposal(self):
         self.create_tool(key="log_sources_discovery_v2")
-        self.post_live_with_provider_text(
+        streamed = self.post_live_with_provider_text(
             "أقترح فحص مصادر السجلات لأنه قراءة فقط.",
             request_text="ماذا تقترح؟",
         )
 
+        self.assertIn("أقترح فحص مصادر السجلات", streamed)
         self.assertEqual(AdminChatToolRequest.objects.count(), 0)
         self.assertEqual(ToolRun.objects.count(), 0)
         self.assertEqual(AgentJob.objects.count(), 0)

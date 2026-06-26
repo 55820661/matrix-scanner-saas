@@ -26,8 +26,9 @@ from chatkit.types import (
 )
 
 from apps.ai_chat.chatkit_store import AdminChatKitContext, AdminChatKitStore
-from apps.ai_chat.models import AdminChatMessage, AdminLiveAIRequestLog
+from apps.ai_chat.models import AdminChatDecision, AdminChatMessage, AdminLiveAIRequestLog
 from apps.ai_chat.services import (
+    MAX_RESPONSE_LENGTH,
     create_ai_tool_requests_from_proposals,
     extract_tool_request_proposals,
     resolve_direct_execution_tool_proposals,
@@ -35,7 +36,7 @@ from apps.ai_chat.services import (
 )
 from apps.ai_context.services import build_safe_context, prepare_safe_context_for_ai
 from apps.audit.models import AuditLog
-from apps.core.redaction import redact_secrets
+from apps.core.redaction import redact_json, redact_secrets
 
 
 logger = logging.getLogger(__name__)
@@ -356,6 +357,80 @@ def _execute_tool_proposals_for_item(*, user, session, item_id, proposals):
     )
 
 
+def _record_direct_execution_ai_message(*, context, item_id, metadata):
+    if AdminChatMessage.objects.filter(session=context.session, metadata_redacted__chatkit_item_id=item_id).exists():
+        return
+    safe_metadata = {
+        "source": "admin_live_chatkit",
+        "chatkit_item_id": item_id,
+        "suppress_from_history": True,
+        **metadata,
+    }
+    message = AdminChatMessage.objects.create(
+        session=context.session,
+        sender_type=AdminChatMessage.SenderType.ASSISTANT,
+        body_redacted="",
+        metadata_redacted=redact_json(safe_metadata),
+    )
+    context.session.last_message_at = message.created_at
+    context.session.save(update_fields=["last_message_at", "updated_at"])
+    AdminChatDecision.objects.create(
+        session=context.session,
+        decision_type=AdminChatDecision.DecisionType.ANSWER,
+        input_context_redacted={
+            "source": "admin_live_chatkit",
+            "context": safe_metadata.get("context", {}),
+            "suppressed_direct_execution_text": True,
+        },
+        output_json_redacted={
+            "message_id": str(message.id),
+            "model": safe_metadata.get("model", ""),
+            "stream_status": safe_metadata.get("stream_status", "completed"),
+            "visible_response_replaced_by_tool_messages": True,
+        },
+        reasoning_summary="Live AI direct execution text suppressed after backend tool orchestration.",
+    )
+    AuditLog.objects.create(
+        actor_user=context.user,
+        actor_type=AuditLog.ActorType.ADMIN,
+        account=context.session.account,
+        action="admin_live_ai.response",
+        target_type="AdminChatSession",
+        target_id=str(context.session.id),
+        result=AuditLog.Result.SUCCESS,
+        metadata={
+            "model": safe_metadata.get("model", ""),
+            "provider_request_id": safe_metadata.get("provider_request_id", ""),
+            "latency_ms": safe_metadata.get("latency_ms", 0),
+            "stream_status": safe_metadata.get("stream_status", "completed"),
+            "usage": safe_metadata.get("usage", {}),
+            "suppressed_direct_execution_text": True,
+        },
+    )
+
+
+def _execute_direct_tool_proposals_for_item(*, user, session, context, item_id, proposals, metadata, visible_output):
+    _record_direct_execution_ai_message(
+        context=context,
+        item_id=item_id,
+        metadata=metadata,
+    )
+    tool_results = _execute_tool_proposals_for_item(
+        user=user,
+        session=session,
+        item_id=item_id,
+        proposals=proposals,
+    )
+    execution_started = any(result.get("tool_run") is not None and result.get("start_message") for result in tool_results)
+    if not execution_started:
+        AdminChatMessage.objects.filter(session=session, metadata_redacted__chatkit_item_id=item_id).update(
+            body_redacted=redact_secrets(visible_output or "")[:MAX_RESPONSE_LENGTH],
+            metadata_redacted=redact_json({**metadata, "source": "admin_live_chatkit", "chatkit_item_id": item_id}),
+            updated_at=timezone.now(),
+        )
+    return tool_results, execution_started
+
+
 def _build_live_ai_input(context: AdminChatKitContext):
     safe_context = build_safe_context(
         account=context.session.account,
@@ -397,6 +472,7 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
         error_code = ""
         context_metadata = {}
         messages = []
+        direct_execution_proposals = []
         started_at = monotonic()
         try:
             configuration_error = live_ai_configuration_error()
@@ -404,6 +480,10 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
                 raise LiveAIConfigurationError(configuration_error)
             await sync_to_async(_consume_rate_limit, thread_sensitive=True)(context.user.id)
             ai_context, provider_input, messages = await sync_to_async(_build_live_ai_input, thread_sensitive=True)(context)
+            direct_execution_proposals = resolve_direct_execution_tool_proposals(
+                latest_user_text=_latest_user_text(messages),
+                conversation_text=_conversation_text(messages),
+            )
             context_metadata = {
                 "final_size_bytes": ai_context["metadata"]["final_size_bytes"],
                 "truncated": ai_context["metadata"]["truncated"],
@@ -427,7 +507,7 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
                     streamable_length = _streamable_visible_length(output, visible_output)
                     visible_delta = visible_output[streamed_visible_length:streamable_length]
                     streamed_visible_length = streamable_length
-                    if visible_delta:
+                    if visible_delta and not direct_execution_proposals:
                         yield ThreadItemUpdatedEvent(
                             item_id=item_id,
                             update=AssistantMessageContentPartTextDelta(content_index=0, delta=visible_delta),
@@ -473,12 +553,10 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
             fallback_used=stream_status != "completed",
         )
         proposals = extract_tool_request_proposals(output) if stream_status == "completed" else []
+        direct_execution_requested = bool(direct_execution_proposals)
         if stream_status == "completed" and not proposals:
-            proposals = resolve_direct_execution_tool_proposals(
-                latest_user_text=_latest_user_text(messages),
-                conversation_text=_conversation_text(messages),
-            )
-        context.item_metadata[item_id] = {
+            proposals = direct_execution_proposals
+        item_metadata = {
             "model": state.model,
             "provider_request_id": state.provider_request_id,
             "latency_ms": state.latency_ms,
@@ -488,6 +566,38 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
             "context": context_metadata,
             "tool_request_handled": True,
         }
+        context.item_metadata[item_id] = item_metadata
+        if direct_execution_requested and proposals:
+            tool_results, execution_started = await sync_to_async(
+                _execute_direct_tool_proposals_for_item,
+                thread_sensitive=True,
+            )(
+                user=context.user,
+                session=context.session,
+                context=context,
+                item_id=item_id,
+                proposals=proposals,
+                metadata=item_metadata,
+                visible_output=visible_output,
+            )
+            final_visible_output = "" if execution_started else visible_output
+            if final_visible_output:
+                yield ThreadItemUpdatedEvent(
+                    item_id=item_id,
+                    update=AssistantMessageContentPartTextDelta(content_index=0, delta=final_visible_output),
+                )
+            yield ThreadItemDoneEvent(
+                item=assistant_item.model_copy(update={"content": [AssistantMessageContent(text=final_visible_output)]})
+            )
+            for result in tool_results:
+                for message_key in ("start_message", "followup_message"):
+                    message = result.get(message_key)
+                    if not message:
+                        continue
+                    tool_item = _message_to_assistant_item(message, thread.id)
+                    yield ThreadItemAddedEvent(item=tool_item)
+                    yield ThreadItemDoneEvent(item=tool_item)
+            return
         yield ThreadItemDoneEvent(
             item=assistant_item.model_copy(update={"content": [AssistantMessageContent(text=visible_output)]})
         )
