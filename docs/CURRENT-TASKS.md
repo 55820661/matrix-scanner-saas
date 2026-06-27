@@ -6,6 +6,21 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: Remove Tool Requests From Admin Chat Screen
+
+Result:
+- Removed the manual `Tool requests` block from the Admin Internal Chat detail page.
+- Kept backend tool request flows unchanged; only the page UI was reduced.
+- Added a regression test to ensure the removed request panel and approve/reject controls no longer render in the chat workspace.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 16 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- The UI cleanup requested for the admin chat screen is complete.
+
 ## Archived Task: C10.11-H1 Diagnostic Duration Fallback
 
 Result:

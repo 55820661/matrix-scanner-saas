@@ -319,66 +319,6 @@
 
     <aside class="chat-sidebar">
       <section>
-        <h2>Tool requests</h2>
-        <div class="body">
-          {% if can_write and session.server %}
-            <form method="post" action="{% url 'admin_chat:tool_request_create' session.id %}">
-              {% csrf_token %}
-              <div class="form-row">
-                <label for="tool_key">Available tool</label>
-                <select id="tool_key" name="tool_key" style="width: 100%;">
-                  {% for tool in available_tools %}
-                    <option value="{{ tool.key }}">{{ tool.key }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="submit-row">
-                <input type="submit" value="Request tool">
-              </div>
-            </form>
-          {% elif not session.server %}
-            <p>Tool requests require a server-scoped chat session.</p>
-          {% endif %}
-          <table id="result_list">
-            <thead>
-              <tr>
-                <th>Tool</th>
-                <th>Reason</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for request in tool_requests %}
-                <tr>
-                  <td>{{ request.tool_definition.key }}</td>
-                  <td>{{ request.params_redacted.reason|default:"-" }}</td>
-                  <td>{{ request.status }}</td>
-                  <td>
-                    {% if can_write and request.status == "suggested" %}
-                      <p class="help">Pending approval. The tool has not run.</p>
-                      <form method="post" action="{% url 'admin_chat:tool_request_approve' session.id request.id %}" style="display: inline-block;">
-                        {% csrf_token %}
-                        <input type="submit" value="Approve">
-                      </form>
-                      <form method="post" action="{% url 'admin_chat:tool_request_reject' session.id request.id %}" style="display: inline-block;">
-                        {% csrf_token %}
-                        <input type="submit" value="Reject">
-                      </form>
-                    {% else %}
-                      {{ request.tool_run.id|default:"-" }}
-                    {% endif %}
-                  </td>
-                </tr>
-              {% empty %}
-                <tr><td colspan="4">No tool requests yet.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section>
         <h2>Tool Builder</h2>
         <div class="body">
           <p>Internal-only command-template proposals. No execution or enablement happens here.</p>

@@ -2,6 +2,30 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-27 - Remove Tool Requests From Admin Chat Screen Start
+
+Intent:
+- Remove the manual `Tool requests` panel from the Admin Internal Chat screen.
+
+Scope:
+- Update the admin chat detail UI so it no longer renders the manual tool-request form or its approval table.
+- Keep backend tool-request flows and policy checks unchanged.
+
+Out of scope:
+- Tool execution behavior, Live AI behavior, Portal, Telegram, migrations, and broader workspace cleanup.
+
+## 2026-06-27 - Remove Tool Requests From Admin Chat Screen Complete
+
+Result:
+- Removed the manual `Tool requests` panel from the Admin Internal Chat detail screen.
+- Left backend tool-request routes and execution logic untouched; the change is UI-only.
+- Added a page-level regression to ensure the removed panel, request button, and approve/reject controls do not render on the chat page.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 16 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-27 - C10.10-H2 Progressive Bundle UX Start
 
 Intent:

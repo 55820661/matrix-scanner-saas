@@ -229,6 +229,16 @@ class LiveAdminChatTests(TestCase):
         )
         self.assertContains(page, 'id="matrix-live-ai-fallback-results"', html=False)
 
+    @override_settings(**LIVE_SETTINGS)
+    def test_admin_chat_page_no_longer_shows_manual_tool_requests_panel(self):
+        page = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+
+        self.assertNotContains(page, "<h2>Tool requests</h2>", html=False)
+        self.assertNotContains(page, "Request tool")
+        self.assertNotContains(page, 'value="Approve"', html=False)
+        self.assertNotContains(page, 'value="Reject"', html=False)
+        self.assertNotContains(page, "No tool requests yet.")
+
     @override_settings(**{**LIVE_SETTINGS, "OPENAI_CHATKIT_DOMAIN_KEY": ""})
     def test_missing_chatkit_domain_key_fails_closed(self):
         page = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
