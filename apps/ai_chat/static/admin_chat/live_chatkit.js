@@ -18,7 +18,8 @@
       const FINAL_STATES = ["succeeded", "partial", "timeout", "failed"];
       let chatkit = null;
       let bundlePollingPromise = null;
-      let lastCompletedBundleExecutionId = "";
+      const completedBundleIds = new Set();
+      const fetchedBundleIds = new Set();
       let fallbackNoticeShownForBundleId = "";
 
       const setBundleIndicator = (running) => {
@@ -95,6 +96,29 @@
         fallbackResults.appendChild(note);
       };
 
+      const syncChatKitUpdates = async (bundleExecutionId) => {
+        if (!chatkit || !bundleExecutionId || fetchedBundleIds.has(bundleExecutionId)) {
+          return true;
+        }
+        if (typeof chatkit.fetchUpdates !== "function") {
+          console.warn("ChatKit fetchUpdates() is unavailable for diagnostic bundle sync.", {
+            bundleExecutionId,
+          });
+          return false;
+        }
+        try {
+          await chatkit.fetchUpdates();
+          fetchedBundleIds.add(bundleExecutionId);
+          return true;
+        } catch (error) {
+          console.warn("ChatKit fetchUpdates() failed for diagnostic bundle sync.", {
+            bundleExecutionId,
+            error,
+          });
+          return false;
+        }
+      };
+
       const chatkitOptions = () => ({
         api: {
           url: livePanel.dataset.apiUrl,
@@ -158,10 +182,13 @@
               if (
                 bundleStatus &&
                 FINAL_STATES.includes(bundleStatus.state) &&
-                bundleStatus.bundle_execution_id !== lastCompletedBundleExecutionId
+                !completedBundleIds.has(bundleStatus.bundle_execution_id)
               ) {
-                lastCompletedBundleExecutionId = bundleStatus.bundle_execution_id;
-                renderFallbackCard(bundleStatus.final_message);
+                completedBundleIds.add(bundleStatus.bundle_execution_id);
+                const updatesSynced = await syncChatKitUpdates(bundleStatus.bundle_execution_id);
+                if (!updatesSynced) {
+                  renderFallbackCard(bundleStatus.final_message);
+                }
               }
               setBundleIndicator(false);
               return;
@@ -173,7 +200,7 @@
             await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
           }
           setBundleIndicator(false);
-          if (activeBundleExecutionId && activeBundleExecutionId !== lastCompletedBundleExecutionId) {
+          if (activeBundleExecutionId && !completedBundleIds.has(activeBundleExecutionId)) {
             renderFallbackNotice(activeBundleExecutionId);
           }
         })();

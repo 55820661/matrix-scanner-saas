@@ -6,6 +6,26 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.10-H5 Use ChatKit Native Updates for Diagnostic Bundles
+
+Result:
+- Switched diagnostic bundle completion to native `chatkit.fetchUpdates()` as the primary ChatKit sync path.
+- Left fallback UI only as a last-resort path when `fetchUpdates()` is unavailable or fails.
+- Preserved final bundle message visibility through the existing ChatKit store/history mapping and stable `chatkit_item_id`.
+- Removed remount/reload as the normal bundle-completion path.
+- No migrations or changes to Portal, Telegram, customer-facing AI, or safety boundaries were made.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 15 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 35 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.10-H5 is complete within the approved scope.
+
 ## Archived Task: C10.10-H4 Reliable Final Bundle Delivery
 
 Result:

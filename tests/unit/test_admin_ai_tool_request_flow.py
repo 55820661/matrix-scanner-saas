@@ -479,6 +479,8 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertIsNotNone(explicit_final_status["final_message"])
         self.assertIn("فحص صحة السيرفر", explicit_final_status["final_message"]["body"])
         self.assertNotIn("{", explicit_final_status["final_message"]["body"])
+        self.assertFalse((AdminChatMessage.objects.exclude(metadata_redacted__state="running").get().metadata_redacted or {}).get("suppress_from_history", False))
+        self.assertTrue((AdminChatMessage.objects.exclude(metadata_redacted__state="running").get().metadata_redacted or {}).get("chatkit_item_id"))
         self.assertEqual(len(populated_ids), len(set(populated_ids)))
         self.assertNotIn("completed successfully", transcript)
         self.assertNotIn("TOOL_REQUEST_PROPOSAL", transcript)
