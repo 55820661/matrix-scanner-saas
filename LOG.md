@@ -2,6 +2,19 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-27 - C10.12-A Admin Chat Workspace Cleanup Start
+
+Intent:
+- Clean up the Admin Internal Chat workspace by moving Tool Builder and Reports forms off the chat page and introducing a cleaner activity-focused sidebar.
+
+Scope:
+- Remove Tool Builder and Reports forms from the chat detail page.
+- Add dedicated admin pages for Tool Builder and Reports while preserving existing creation flows and permissions.
+- Replace the current sidebar request table with a Tool Activity view that can surface relevant chat tool states safely.
+
+Out of scope:
+- New tools, Portal or Telegram changes, migrations, Live AI execution lifecycle changes, or write/remediation capabilities.
+
 ## 2026-06-27 - Remove Tool Requests From Admin Chat Screen Start
 
 Intent:
@@ -2738,3 +2751,25 @@ Verification:
 - `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 15 tests.
 - `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
 - `git diff --check` passed with line-ending warnings only.
+
+## 2026-06-27 - C10.12-A Admin Chat Workspace Cleanup & Tool Activity Tracking Complete
+
+Result:
+- Moved `Tool Builder` and `Reports` out of the admin chat detail page into dedicated internal admin pages tied to the session.
+- Kept the admin chat page focused on selected context, Live Admin AI, and a `Tool Activity` panel only.
+- Added tool activity rows for executed tool requests plus skipped diagnostic-bundle tools sourced from bundle message metadata.
+- Normalized tool activity statuses so terminal chat outcomes show `succeeded` and `failed` correctly even when the linked `ToolRun` has not been refreshed yet.
+- Kept the existing execution flow, ChatKit lifecycle, Portal behavior, Telegram behavior, and report/tool security model unchanged.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 40 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --noinput` passed: 18 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c10_5_chat_split --noinput` passed: 6 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Notes:
+- Running multiple Django test modules in parallel against the same PostgreSQL test database with `--keepdb` caused deadlocks on unique user indexes. Re-running the affected modules sequentially, and for two suites without `--keepdb`, produced clean results.

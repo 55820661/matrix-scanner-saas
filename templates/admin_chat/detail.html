@@ -319,126 +319,32 @@
 
     <aside class="chat-sidebar">
       <section>
-        <h2>Tool Builder</h2>
+        <h2>Tool Activity</h2>
         <div class="body">
-          <p>Internal-only command-template proposals. No execution or enablement happens here.</p>
-          {% if can_write %}
-            <form method="post" action="{% url 'admin_chat:tool_build_create' session.id %}">
-              {% csrf_token %}
-              <div class="form-row">
-                <label for="build_title">Title</label>
-                <input id="build_title" name="title" type="text" style="width: 100%;">
-              </div>
-              <div class="form-row">
-                <label for="desired_tool_key">Tool key</label>
-                <input id="desired_tool_key" name="desired_tool_key" type="text" style="width: 100%;">
-              </div>
-              <div class="form-row">
-                <label for="description">Description</label>
-                <textarea id="description" name="description" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-              </div>
-              <div class="form-row">
-                <label for="command_argv_template">Command argv template, one argument per line</label>
-                <textarea id="command_argv_template" name="command_argv_template" rows="5" style="width: 100%; box-sizing: border-box;"></textarea>
-              </div>
-              <div class="form-row">
-                <label for="allowed_binaries">Allowed binaries, one per line</label>
-                <textarea id="allowed_binaries" name="allowed_binaries" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-              </div>
-              <div class="form-row">
-                <label for="blocked_tokens">Blocked tokens, one per line</label>
-                <textarea id="blocked_tokens" name="blocked_tokens" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-              </div>
-              <div class="form-row">
-                <label for="expected_output_description">Expected output description</label>
-                <textarea id="expected_output_description" name="expected_output_description" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-              </div>
-              <div class="submit-row">
-                <input type="submit" value="Create proposal">
-              </div>
-            </form>
-          {% endif %}
+          <p>
+            <a href="{% url 'admin_chat:tool_builder_page' session.id %}">Tool Builder</a>
+            |
+            <a href="{% url 'admin_chat:reports_page' session.id %}">Reports</a>
+          </p>
           <table id="result_list">
             <thead>
               <tr>
-                <th>Tool key</th>
+                <th>Tool</th>
+                <th>Reason</th>
                 <th>Status</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {% for build_request in tool_build_requests %}
+              {% for row in tool_activity_rows %}
                 <tr>
-                  <td>{{ build_request.desired_tool_key }}</td>
-                  <td>
-                    {% with proposal=build_request.proposals.first %}
-                      {% if proposal %}{{ proposal.status }}{% else %}{{ build_request.status }}{% endif %}
-                    {% endwith %}
-                  </td>
+                  <td>{{ row.tool_label|default:row.tool_key }}</td>
+                  <td>{{ row.reason }}</td>
+                  <td>{{ row.status }}</td>
+                  <td>{{ row.action }}</td>
                 </tr>
               {% empty %}
-                <tr><td colspan="2">No tool builder requests yet.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section>
-        <h2>Reports</h2>
-        <div class="body">
-          {% if can_write %}
-            <form method="post" action="{% url 'admin_chat:report_create' session.id %}">
-              {% csrf_token %}
-              <div class="form-row">
-                <label for="report_type">Immediate report type</label>
-                <select id="report_type" name="report_type" style="width: 100%;">
-                  {% for value, label in chat_report_types %}
-                    <option value="{{ value }}">{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="submit-row">
-                <input type="submit" class="default" value="Create final report">
-              </div>
-            </form>
-            <form method="post" action="{% url 'admin_chat:report_draft_create' session.id %}">
-              {% csrf_token %}
-              <div class="form-row">
-                <label for="draft_report_type">Manual review draft type</label>
-                <select id="draft_report_type" name="report_type" style="width: 100%;">
-                  {% for value, label in chat_report_types %}
-                    <option value="{{ value }}">{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="submit-row">
-                <input type="submit" value="Create manual review draft">
-              </div>
-            </form>
-          {% endif %}
-          <table id="result_list">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Final report</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for draft in report_drafts %}
-                <tr>
-                  <td>{{ draft.report_type }}</td>
-                  <td>{{ draft.status }}</td>
-                  <td>
-                    {% if draft.converted_report %}
-                      <a href="{% url 'admin:reports_report_change' draft.converted_report.id %}">{{ draft.converted_report.title }}</a>
-                    {% else %}
-                      -
-                    {% endif %}
-                  </td>
-                </tr>
-              {% empty %}
-                <tr><td colspan="3">No report entries yet.</td></tr>
+                <tr><td colspan="4">No tool activity yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>

@@ -41,6 +41,7 @@ from .services import (
     reject_tool_request,
     user_can_write_chat,
 )
+from .diagnostic_summaries import normalize_reason_ar, tool_display_label_ar
 
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,97 @@ def _scoped_internal_chat_sessions():
 
 def _elapsed_ms(started_at):
     return max(1, int((monotonic() - started_at) * 1000))
+
+
+def _tool_activity_reason(value):
+    reason = str(value or "").strip()
+    if not reason:
+        return "-"
+    if reason.startswith("[") and reason.endswith("]"):
+        reason = reason[1:-1]
+    return normalize_reason_ar(reason)
+
+
+def _tool_activity_status_for_request(tool_request):
+    if tool_request.status == "succeeded":
+        return "succeeded"
+    if tool_request.status in {"failed", "cancelled"}:
+        return "failed"
+    tool_run = getattr(tool_request, "tool_run", None)
+    if tool_run:
+        if tool_run.status == "succeeded":
+            return "succeeded"
+        if tool_run.status == "timeout":
+            return "timeout"
+        if tool_run.status in {"failed", "rejected", "cancelled"}:
+            return "failed"
+        if tool_run.status in {"queued", "running", "pending"}:
+            return "running"
+    if tool_request.status in {"approved", "queued"}:
+        return "running"
+    return "not_started"
+
+
+def _tool_activity_status_for_skip(reason):
+    normalized = (reason or "").casefold()
+    has_plan = "plan" in normalized or "الخطة" in normalized
+    has_server = "server status" in normalized or "السيرفر" in normalized
+    has_permission = "permission" in normalized or "الصلاحيات" in normalized
+    if sum(bool(flag) for flag in (has_plan, has_server, has_permission)) > 1:
+        return "skipped_permission"
+    if has_server:
+        return "skipped_server"
+    if has_plan:
+        return "skipped_plan"
+    if "not registered" in normalized or "غير مسجل" in normalized:
+        return "not_available"
+    return "skipped_permission"
+
+
+def _tool_activity_rows(session):
+    rows = []
+    tool_requests = session.tool_requests.select_related("tool_definition", "tool_run").order_by("-created_at")
+    for tool_request in tool_requests:
+        reason = (
+            (tool_request.params_redacted or {}).get("reason")
+            or tool_request.error_summary
+            or ""
+        )
+        rows.append(
+            {
+                "tool_key": tool_request.tool_definition.key,
+                "tool_label": tool_display_label_ar(tool_request.tool_definition.key),
+                "reason": _tool_activity_reason(reason),
+                "status": _tool_activity_status_for_request(tool_request),
+                "action": str(tool_request.tool_run_id or "-"),
+                "created_at": tool_request.created_at,
+            }
+        )
+    seen_skips = {(row["tool_key"], row["status"]) for row in rows}
+    bundle_messages = session.messages.filter(metadata_redacted__source="diagnostic_bundle").order_by("-created_at", "-id")
+    for message in bundle_messages:
+        for skipped in (message.metadata_redacted or {}).get("skipped") or []:
+            tool_key = str(skipped.get("tool_key") or "").strip()
+            if not tool_key:
+                continue
+            reason = _tool_activity_reason(skipped.get("reason"))
+            status = _tool_activity_status_for_skip(reason)
+            key = (tool_key, status)
+            if key in seen_skips:
+                continue
+            seen_skips.add(key)
+            rows.append(
+                {
+                    "tool_key": tool_key,
+                    "tool_label": tool_display_label_ar(tool_key),
+                    "reason": reason,
+                    "status": status,
+                    "action": "-",
+                    "created_at": message.created_at,
+                }
+            )
+    rows.sort(key=lambda item: item["created_at"], reverse=True)
+    return rows
 
 
 def _live_ai_failure_log_extra(*, session_id, audit_log_id, status, error_class, model, latency_ms):
@@ -163,10 +255,7 @@ def internal_chat_session_detail(request, session_id):
         {
             "session": session,
             "chat_messages": session.messages.order_by("created_at"),
-            "tool_requests": session.tool_requests.select_related("tool_definition", "tool_run").order_by("-created_at"),
-            "tool_build_requests": session.tool_build_requests.prefetch_related("proposals").order_by("-created_at"),
-            "report_drafts": session.report_drafts.select_related("converted_report").order_by("-created_at"),
-            "available_tools": (session.context_snapshot_redacted or {}).get("available_tools", []),
+            "tool_activity_rows": _tool_activity_rows(session),
             "can_write": user_can_write_chat(request.user, session),
             "chat_report_types": AdminChatReportDraft.DraftType.choices,
             "live_ai_enabled": settings.ADMIN_LIVE_AI_ENABLED,
@@ -177,6 +266,35 @@ def internal_chat_session_detail(request, session_id):
             "live_ai_rate_limit_per_hour": settings.ADMIN_LIVE_AI_RATE_LIMIT_PER_HOUR,
             "live_ai_safe_context_max_bytes": settings.AI_SAFE_CONTEXT_MAX_BYTES,
             "chatkit_domain_key": settings.OPENAI_CHATKIT_DOMAIN_KEY,
+        },
+    )
+
+
+@staff_member_required
+def internal_chat_tool_builder_page(request, session_id):
+    session = get_object_or_404(_scoped_internal_chat_sessions(), id=session_id)
+    return render(
+        request,
+        "admin_chat/tool_builder.html",
+        {
+            "session": session,
+            "can_write": user_can_write_chat(request.user, session),
+            "tool_build_requests": session.tool_build_requests.prefetch_related("proposals").order_by("-created_at"),
+        },
+    )
+
+
+@staff_member_required
+def internal_chat_reports_page(request, session_id):
+    session = get_object_or_404(_scoped_internal_chat_sessions(), id=session_id)
+    return render(
+        request,
+        "admin_chat/reports.html",
+        {
+            "session": session,
+            "can_write": user_can_write_chat(request.user, session),
+            "chat_report_types": AdminChatReportDraft.DraftType.choices,
+            "report_drafts": session.report_drafts.select_related("converted_report").order_by("-created_at"),
         },
     )
 
@@ -429,7 +547,7 @@ def internal_chat_tool_build_create(request, session_id):
         expected_output_description=request.POST.get("expected_output_description", ""),
     )
     messages.success(request, "Tool builder proposal created for internal review.")
-    return redirect("admin_chat:session_detail", session_id=session.id)
+    return redirect("admin_chat:tool_builder_page", session_id=session.id)
 
 
 @require_POST
@@ -442,7 +560,7 @@ def internal_chat_report_create(request, session_id):
         report_type=request.POST.get("report_type", ""),
     )
     messages.success(request, "Chat report created and converted.")
-    return redirect("admin_chat:session_detail", session_id=session.id)
+    return redirect("admin_chat:reports_page", session_id=session.id)
 
 
 @require_POST
@@ -455,4 +573,4 @@ def internal_chat_report_draft_create(request, session_id):
         report_type=request.POST.get("report_type", ""),
     )
     messages.success(request, "Report draft created for manual internal review.")
-    return redirect("admin_chat:session_detail", session_id=session.id)
+    return redirect("admin_chat:reports_page", session_id=session.id)

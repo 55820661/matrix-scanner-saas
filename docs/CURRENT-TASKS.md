@@ -2,9 +2,17 @@
 
 Track active work before and after every requested implementation, repository-changing command, or multi-step operation.
 
-## Current Task: None
+## Current Task: C10.12-A Admin Chat Workspace Cleanup & Tool Activity Tracking
 
-No implementation task is currently active.
+Scope:
+- Move Tool Builder and Reports forms off the Admin Internal Chat page into dedicated admin pages.
+- Keep the chat page focused on Live Admin AI, selected context, and a safe Tool Activity panel.
+- Preserve existing creation flows, permissions, and backend execution behavior.
+
+Immediate next steps:
+- Add dedicated views/routes/templates for Tool Builder and Reports.
+- Replace the current sidebar contents in the chat page with Tool Activity-only content.
+- Add focused tests for the moved UI and safe activity rendering, then verify with Django checks.
 
 ## Archived Task: Remove Tool Requests From Admin Chat Screen
 
@@ -3127,3 +3135,42 @@ Verification:
 Completion status:
 - C10.5-B implementation and verification are complete.
 - Full suite was not run because this hotfix stayed in admin navigation/templates plus focused access assertions, without changing execution, policy, or runtime behavior.
+
+## Current Task - C10.12-A Admin Chat Workspace Cleanup & Tool Activity Tracking
+
+Task:
+- Clean the Admin Internal Chat workspace so the chat page keeps only Live Admin AI, selected context, and tool activity.
+
+Scope:
+- Remove `Tool Builder`, `Reports`, and manual-review forms from the chat sidebar.
+- Move builder/report workflows to dedicated internal admin pages without changing their security model or server-side behavior.
+- Rename and normalize the sidebar into `Tool Activity`.
+- Surface executed, failed, timeout, and skipped diagnostic-bundle tools in the activity table, including skipped bundle tools that never became `ToolRun` rows.
+
+Out of scope:
+- New tools.
+- ToolPolicy or PlanTool behavior changes.
+- Diagnostic bundle lifecycle changes.
+- Portal changes.
+- Telegram changes.
+- Live AI capability expansion.
+- Migrations.
+
+Progress:
+- Added dedicated session-scoped admin pages for `Tool Builder` and `Reports`.
+- Replaced the old chat sidebar forms with a `Tool Activity` panel and navigation links to the dedicated pages.
+- Added activity aggregation from both `AdminChatToolRequest` rows and diagnostic bundle message metadata for skipped tools.
+- Normalized activity statuses to prefer the final chat outcome for succeeded/failed tool requests and to avoid over-classifying combined skip reasons as `skipped_server`.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 40 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --noinput` passed: 18 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c10_5_chat_split --noinput` passed: 6 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Immediate next steps:
+- Review the final diff and commit this sprint as an isolated workspace-cleanup change.

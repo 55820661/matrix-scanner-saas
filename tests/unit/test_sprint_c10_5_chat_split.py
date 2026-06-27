@@ -152,6 +152,7 @@ class SprintC105ChatSplitTests(TestCase):
         )
 
         detail_response = self.client.get(reverse("admin_chat:session_detail", args=[session.id]))
+        builder_page = self.client.get(reverse("admin_chat:tool_builder_page", args=[session.id]))
         response = self.client.post(
             reverse("admin_chat:tool_build_create", args=[session.id]),
             {
@@ -166,7 +167,9 @@ class SprintC105ChatSplitTests(TestCase):
         )
 
         session.refresh_from_db()
-        self.assertContains(detail_response, "Tool Builder")
+        self.assertNotContains(detail_response, "<h2>Tool Builder</h2>", html=False)
+        self.assertContains(detail_response, reverse("admin_chat:tool_builder_page", args=[session.id]))
+        self.assertContains(builder_page, "Tool Builder")
         self.assertEqual(response.status_code, 302)
         self.assertEqual(session.tool_build_requests.count(), 1)
         proposal = session.tool_build_requests.first().proposals.first()
@@ -188,11 +191,13 @@ class SprintC105ChatSplitTests(TestCase):
             reverse("admin_chat:report_create", args=[session.id]),
             {"report_type": AdminChatReportDraft.DraftType.TECHNICAL_INTERNAL},
         )
+        reports_page = self.client.get(reverse("admin_chat:reports_page", args=[session.id]))
 
         draft = session.report_drafts.get()
         self.assertEqual(response.status_code, 302)
         self.assertEqual(draft.status, AdminChatReportDraft.Status.CONVERTED)
         self.assertIsNotNone(draft.converted_report)
+        self.assertContains(reports_page, "Reports")
         rendered = f"{draft.converted_report.summary_redacted} {' '.join(section.body_redacted for section in draft.converted_report.sections.all())}"
         self.assertNotIn("stdout_redacted", rendered)
         self.assertNotIn("result_redacted", rendered)

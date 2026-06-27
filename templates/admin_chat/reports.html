@@ -1,0 +1,104 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}Reports | {{ site_title|default:"Django site admin" }}{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .workspace-panel {
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      border-radius: 6px;
+      background: var(--body-bg, #fff);
+      overflow: hidden;
+    }
+    .workspace-panel h1,
+    .workspace-panel h2 {
+      margin: 0;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--hairline-color, #d4d4d4);
+      background: var(--darkened-bg, #f8f8f8);
+    }
+    .workspace-panel .body {
+      padding: 16px;
+    }
+  </style>
+{% endblock %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin_chat:sessions' %}">Internal Chat</a>
+    &rsaquo; <a href="{% url 'admin_chat:session_detail' session.id %}">{{ session.title_redacted }}</a>
+    &rsaquo; Reports
+  </div>
+{% endblock %}
+
+{% block content %}
+  <section class="workspace-panel">
+    <h1>Reports</h1>
+    <div class="body">
+      {% if can_write %}
+        <form method="post" action="{% url 'admin_chat:report_create' session.id %}">
+          {% csrf_token %}
+          <div class="form-row">
+            <label for="report_type">Immediate report type</label>
+            <select id="report_type" name="report_type" style="width: 100%;">
+              {% for value, label in chat_report_types %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="submit-row">
+            <input type="submit" class="default" value="Create final report">
+          </div>
+        </form>
+        <form method="post" action="{% url 'admin_chat:report_draft_create' session.id %}">
+          {% csrf_token %}
+          <div class="form-row">
+            <label for="draft_report_type">Manual review draft type</label>
+            <select id="draft_report_type" name="report_type" style="width: 100%;">
+              {% for value, label in chat_report_types %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="submit-row">
+            <input type="submit" value="Create manual review draft">
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="workspace-panel" style="margin-top: 16px;">
+    <h2>Existing reports</h2>
+    <div class="body">
+      <table id="result_list">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Final report</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for draft in report_drafts %}
+            <tr>
+              <td>{{ draft.report_type }}</td>
+              <td>{{ draft.status }}</td>
+              <td>
+                {% if draft.converted_report %}
+                  <a href="{% url 'admin:reports_report_change' draft.converted_report.id %}">{{ draft.converted_report.title }}</a>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3">No report entries yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

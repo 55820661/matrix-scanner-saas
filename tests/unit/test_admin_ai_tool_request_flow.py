@@ -617,6 +617,11 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual((final_message.metadata_redacted or {}).get("failed_count"), 0)
         self.assertEqual((final_message.metadata_redacted or {}).get("timeout_count"), 0)
         self.assertEqual((final_message.metadata_redacted or {}).get("total_count"), 5)
+        detail = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+        self.assertContains(detail, "Tool Activity")
+        self.assertContains(detail, "systemd")
+        self.assertContains(detail, "skipped_permission")
+        self.assertContains(detail, "غير متاح")
 
     @override_settings(**LIVE_SETTINGS)
     def test_structured_bundle_summary_includes_duration_when_available(self):
@@ -773,6 +778,10 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertIn("اكتمل الفحص بنجاح", followup.body_redacted)
         self.assertIn("Services check completed successfully", followup.body_redacted)
         self.assertTrue((followup.metadata_redacted or {}).get("chatkit_item_id"))
+        detail = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+        self.assertContains(detail, "Tool Activity")
+        self.assertContains(detail, "services_status")
+        self.assertContains(detail, "succeeded")
 
     @override_settings(**LIVE_SETTINGS)
     def test_tool_failure_adds_failure_explanation(self):
@@ -790,6 +799,8 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual(AgentJob.objects.count(), 1)
         self.assertIn("فشل تنفيذ الفحص", followup.body_redacted)
         self.assertIn("Scanner agent reported", followup.body_redacted)
+        detail = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+        self.assertContains(detail, "failed")
 
     @override_settings(**LIVE_SETTINGS)
     def test_tool_timeout_adds_current_status_explanation(self):

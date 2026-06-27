@@ -1,0 +1,107 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}Tool Builder | {{ site_title|default:"Django site admin" }}{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .workspace-panel {
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      border-radius: 6px;
+      background: var(--body-bg, #fff);
+      overflow: hidden;
+    }
+    .workspace-panel h1,
+    .workspace-panel h2 {
+      margin: 0;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--hairline-color, #d4d4d4);
+      background: var(--darkened-bg, #f8f8f8);
+    }
+    .workspace-panel .body {
+      padding: 16px;
+    }
+  </style>
+{% endblock %}
+
+{% block breadcrumbs %}
+  <div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin_chat:sessions' %}">Internal Chat</a>
+    &rsaquo; <a href="{% url 'admin_chat:session_detail' session.id %}">{{ session.title_redacted }}</a>
+    &rsaquo; Tool Builder
+  </div>
+{% endblock %}
+
+{% block content %}
+  <section class="workspace-panel">
+    <h1>Tool Builder</h1>
+    <div class="body">
+      <p>Internal-only command-template proposals. No execution or enablement happens here.</p>
+      {% if can_write %}
+        <form method="post" action="{% url 'admin_chat:tool_build_create' session.id %}">
+          {% csrf_token %}
+          <div class="form-row">
+            <label for="build_title">Title</label>
+            <input id="build_title" name="title" type="text" style="width: 100%;">
+          </div>
+          <div class="form-row">
+            <label for="desired_tool_key">Tool key</label>
+            <input id="desired_tool_key" name="desired_tool_key" type="text" style="width: 100%;">
+          </div>
+          <div class="form-row">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="command_argv_template">Command argv template, one argument per line</label>
+            <textarea id="command_argv_template" name="command_argv_template" rows="5" style="width: 100%; box-sizing: border-box;"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="allowed_binaries">Allowed binaries, one per line</label>
+            <textarea id="allowed_binaries" name="allowed_binaries" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="blocked_tokens">Blocked tokens, one per line</label>
+            <textarea id="blocked_tokens" name="blocked_tokens" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="expected_output_description">Expected output description</label>
+            <textarea id="expected_output_description" name="expected_output_description" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
+          </div>
+          <div class="submit-row">
+            <input type="submit" value="Create proposal">
+          </div>
+        </form>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="workspace-panel" style="margin-top: 16px;">
+    <h2>Existing requests</h2>
+    <div class="body">
+      <table id="result_list">
+        <thead>
+          <tr>
+            <th>Tool key</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for build_request in tool_build_requests %}
+            <tr>
+              <td>{{ build_request.desired_tool_key }}</td>
+              <td>
+                {% with proposal=build_request.proposals.first %}
+                  {% if proposal %}{{ proposal.status }}{% else %}{{ build_request.status }}{% endif %}
+                {% endwith %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="2">No tool builder requests yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

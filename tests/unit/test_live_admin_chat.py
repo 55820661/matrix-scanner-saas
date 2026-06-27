@@ -159,6 +159,9 @@ class LiveAdminChatTests(TestCase):
         self.assertNotContains(page, LIVE_SETTINGS["OPENAI_API_KEY"])
         self.assertNotContains(page, "getClientSecret")
         self.assertNotContains(page, "chat-launcher")
+        self.assertNotContains(page, "<h2>Tool Builder</h2>", html=False)
+        self.assertNotContains(page, "<h2>Reports</h2>", html=False)
+        self.assertContains(page, "Tool Activity")
 
     @override_settings(**LIVE_SETTINGS)
     def test_chatkit_static_asset_is_discoverable_and_uses_custom_server_options(self):
@@ -238,6 +241,24 @@ class LiveAdminChatTests(TestCase):
         self.assertNotContains(page, 'value="Approve"', html=False)
         self.assertNotContains(page, 'value="Reject"', html=False)
         self.assertNotContains(page, "No tool requests yet.")
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_admin_chat_page_links_to_dedicated_tool_builder_and_reports_pages(self):
+        page = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+
+        self.assertContains(page, reverse("admin_chat:tool_builder_page", args=[self.session.id]))
+        self.assertContains(page, reverse("admin_chat:reports_page", args=[self.session.id]))
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_tool_builder_and_reports_pages_render_outside_chat_workspace(self):
+        builder = self.client.get(reverse("admin_chat:tool_builder_page", args=[self.session.id]))
+        reports = self.client.get(reverse("admin_chat:reports_page", args=[self.session.id]))
+
+        self.assertContains(builder, "Tool Builder")
+        self.assertContains(builder, "Create proposal")
+        self.assertContains(reports, "Reports")
+        self.assertContains(reports, "Create final report")
+        self.assertContains(reports, "Create manual review draft")
 
     @override_settings(**{**LIVE_SETTINGS, "OPENAI_CHATKIT_DOMAIN_KEY": ""})
     def test_missing_chatkit_domain_key_fails_closed(self):
