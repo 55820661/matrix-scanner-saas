@@ -626,6 +626,7 @@ class AdminAIToolRequestFlowTests(TestCase):
             def __init__(self):
                 self.started_at = timezone.now() - timedelta(seconds=4)
                 self.finished_at = timezone.now()
+                self.created_at = self.started_at
 
         summary = build_diagnostic_bundle_summary(
             bundle,
@@ -648,7 +649,57 @@ class AdminAIToolRequestFlowTests(TestCase):
         )
 
         self.assertIn("\u062e\u0644\u0627\u0644 4 \u062b\u0648\u0627\u0646\u064d", summary)
-        self.assertIn("\u062a\u0645 \u062a\u062e\u0637\u064a\u0647", summary)
+        self.assertIn("\u062a\u0645 \u062a\u062e\u0637\u064a\u0647 \u0644\u0623\u0646\u0647 \u063a\u064a\u0631 \u0645\u062a\u0627\u062d", summary)
+        self.assertNotIn("['", summary)
+        self.assertNotIn("{", summary)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_structured_bundle_summary_uses_created_at_fallback_as_approximate_duration(self):
+        bundle = get_diagnostic_bundle("server_health")
+
+        class StubToolRun:
+            def __init__(self):
+                self.started_at = None
+                self.created_at = timezone.now() - timedelta(seconds=19)
+                self.finished_at = timezone.now()
+
+        summary = build_diagnostic_bundle_summary(
+            bundle,
+            [
+                {
+                    "kind": "tool",
+                    "tool_key": "log_sources_discovery_v2",
+                    "state": "succeeded",
+                    "status": ToolRun.Status.SUCCEEDED,
+                    "tool_run": StubToolRun(),
+                    "summary": "Safe summary",
+                }
+            ],
+        )
+
+        self.assertIn("\u062e\u0644\u0627\u0644 \u062d\u0648\u0627\u0644\u064a 19 \u062b\u0627\u0646\u064a\u0629", summary)
+        self.assertNotIn("\u0644\u0645 \u062a\u062a\u0648\u0641\u0631 \u0645\u062f\u0629 \u0627\u0644\u062a\u0646\u0641\u064a\u0630", summary)
+        self.assertNotIn("['", summary)
+        self.assertNotIn("{", summary)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_structured_bundle_summary_reports_missing_duration_when_no_time_fields_exist(self):
+        bundle = get_diagnostic_bundle("server_health")
+
+        summary = build_diagnostic_bundle_summary(
+            bundle,
+            [
+                {
+                    "kind": "tool",
+                    "tool_key": "log_sources_discovery_v2",
+                    "state": "succeeded",
+                    "status": ToolRun.Status.SUCCEEDED,
+                    "summary": "Safe summary",
+                }
+            ],
+        )
+
+        self.assertIn("\u0644\u0645 \u062a\u062a\u0648\u0641\u0631 \u0645\u062f\u0629 \u0627\u0644\u062a\u0646\u0641\u064a\u0630", summary)
         self.assertNotIn("['", summary)
         self.assertNotIn("{", summary)
 

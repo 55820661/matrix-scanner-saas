@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import timedelta
-
 
 TOOL_DISPLAY_LABELS_AR = {
     "log_sources_discovery_v2": "مصادر السجلات",
@@ -48,35 +46,48 @@ def normalize_reason_ar(reason: str) -> str:
     return normalized
 
 
-def _duration_seconds(item: dict) -> int | None:
+def _duration_tuple(item: dict) -> tuple[int | None, bool]:
     started_at = item.get("started_at")
     finished_at = item.get("finished_at")
+    created_at = item.get("created_at")
     if started_at and finished_at:
         duration = finished_at - started_at
-        return int(max(1, round(duration.total_seconds())))
+        return int(max(1, round(duration.total_seconds()))), False
+    if created_at and finished_at:
+        duration = finished_at - created_at
+        return int(max(1, round(duration.total_seconds()))), True
     tool_run = item.get("tool_run")
     if not tool_run:
-        return None
+        return None, False
     started_at = getattr(tool_run, "started_at", None)
     finished_at = getattr(tool_run, "finished_at", None)
-    if not started_at or not finished_at:
-        return None
-    duration = finished_at - started_at
-    seconds = int(max(1, round(duration.total_seconds())))
+    created_at = getattr(tool_run, "created_at", None)
+    if started_at and finished_at:
+        duration = finished_at - started_at
+        return int(max(1, round(duration.total_seconds()))), False
+    if created_at and finished_at:
+        duration = finished_at - created_at
+        return int(max(1, round(duration.total_seconds()))), True
+    return None, False
+
+
+def _duration_seconds(item: dict) -> int | None:
+    seconds, _approximate = _duration_tuple(item)
     return seconds
 
 
 def _duration_phrase_ar(item: dict) -> str:
-    seconds = _duration_seconds(item)
+    seconds, approximate = _duration_tuple(item)
     if seconds is None:
         return "، ولم تتوفر مدة التنفيذ."
+    about = "حوالي " if approximate else ""
     if seconds == 1:
-        return " خلال ثانية واحدة."
+        return f" خلال {about}ثانية واحدة."
     if seconds == 2:
-        return " خلال ثانيتين."
+        return f" خلال {about}ثانيتين."
     if 3 <= seconds <= 10:
-        return f" خلال {seconds} ثوانٍ."
-    return f" خلال {seconds} ثانية."
+        return f" خلال {about}{seconds} ثوانٍ."
+    return f" خلال {about}{seconds} ثانية."
 
 
 def _outcome_line_ar(item: dict) -> str:
@@ -89,7 +100,7 @@ def _outcome_line_ar(item: dict) -> str:
     if state in {"skipped", "failed", "timeout", "not_started"}:
         if _duration_seconds(item) is not None:
             return f"- {label}: {status_label}{_duration_phrase_ar(item)[:-1]}، والسبب: {reason}."
-        return f"- {label}: {status_label} لأن {reason}"
+        return f"- {label}: {status_label} لأنه {reason}"
     return f"- {label}: {status_label}."
 
 

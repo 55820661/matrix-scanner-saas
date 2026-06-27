@@ -6,6 +6,25 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.11-H1 Diagnostic Duration Fallback
+
+Result:
+- Added a duration fallback from `created_at` to `finished_at` when `started_at` is missing in diagnostic summaries.
+- Marked fallback durations as approximate while preserving exact wording for normal `started_at` durations.
+- Preserved the missing-duration fallback when no usable timing fields exist.
+- Adjusted skipped wording to `لأنه غير متاح...` without changing bundle execution, ownership, or stream behavior.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 40 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 15 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.11-H1 implementation and verification are complete within the approved scope.
+
 ## Archived Task: C10.11 Diagnostic Result Quality & Evidence Layer
 
 Result:

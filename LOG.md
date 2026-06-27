@@ -2685,3 +2685,32 @@ Verification:
 - `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
 - `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
 - `git diff --check` passed with line-ending warnings only.
+
+## 2026-06-27 - C10.11-H1 Diagnostic Duration Fallback Start
+
+Intent:
+- Fix diagnostic summary duration wording when `ToolRun.started_at` is null but `created_at` and `finished_at` exist.
+
+Scope:
+- Add a duration fallback from `created_at` to `finished_at` inside the diagnostic summary helper.
+- Adjust skipped wording from `لأن` to `لأنه` for the normalized unavailable reason.
+- Add focused regression coverage for direct duration fallback and missing-time behavior.
+
+Out of scope:
+- ChatKit stream lifecycle, diagnostic bundle ownership, tool execution behavior, policy changes, Portal, Telegram, customer-facing AI, and migrations.
+
+## 2026-06-27 - C10.11-H1 Diagnostic Duration Fallback Complete
+
+Result:
+- Added a duration fallback from `created_at` to `finished_at` in `apps.ai_chat.diagnostic_summaries` when `started_at` is missing.
+- Marked fallback durations as approximate so successful summaries now render wording like `خلال حوالي 19 ثانية`.
+- Preserved the existing `started_at` path and the explicit `لم تتوفر مدة التنفيذ` fallback when no usable time fields exist.
+- Adjusted skipped wording from `لأن` to `لأنه` without changing bundle execution, ownership, or stream lifecycle behavior.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 40 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 15 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `git diff --check` passed with line-ending warnings only.
