@@ -17,6 +17,7 @@ from apps.ai_chat.services import (
     approve_tool_request,
     create_admin_chat_session,
     create_chat_session,
+    execute_diagnostic_bundle_for_item,
     reject_tool_request,
     sync_chat_tool_requests_for_tool_run,
     tool_followup_timeout_for_count,
@@ -135,6 +136,9 @@ class AdminAIToolRequestFlowTests(TestCase):
 
     def live_url(self):
         return reverse("admin_chat:session_live", args=[self.session.id])
+
+    def bundle_status_url(self):
+        return reverse("admin_chat:bundle_status", args=[self.session.id])
 
     def live_payload(self, text="Check services"):
         return {
@@ -388,16 +392,46 @@ class AdminAIToolRequestFlowTests(TestCase):
     @override_settings(**LIVE_SETTINGS)
     def test_broad_server_health_request_runs_bundle_with_combined_messages(self):
         self.create_server_health_tools()
-        streamed = self.post_live_with_provider_text(
-            "يمكنني اقتراح فحص صحة السيرفر.",
-            request_text="افحص حالة السيرفر باستخدام الأدوات المناسبة read-only ونفذ الفحوصات تلقائيًا.",
-            wait_side_effect=[
-                self.success_outcome("اكتمل فحص مصادر السجلات."),
-                self.success_outcome("اكتمل فحص خدمات systemd."),
-                self.success_outcome("اكتمل فحص إعدادات Nginx."),
-                self.timeout_outcome(),
-            ],
+        with patch("apps.ai_chat.services.wait_for_tool_execution_result") as wait_for_result:
+            streamed = self.post_live_with_provider_text(
+                "يمكنني اقتراح فحص صحة السيرفر.",
+                request_text="افحص حالة السيرفر باستخدام الأدوات المناسبة read-only ونفذ الفحوصات تلقائيًا.",
+            )
+        wait_for_result.assert_not_called()
+        running = AdminChatMessage.objects.get(
+            metadata_redacted__source="diagnostic_bundle", metadata_redacted__state="running"
         )
+        self.assertIn("بدأت فحص صحة السيرفر", streamed)
+        self.assertIn("جاري تنفيذ الفحوصات", running.body_redacted)
+        self.assertTrue(self.client.get(self.bundle_status_url()).json()["running"])
+        first_request = AdminChatToolRequest.objects.select_related("message").first()
+        assistant_item_id = (first_request.message.metadata_redacted or {}).get("chatkit_item_id")
+        execute_diagnostic_bundle_for_item(
+            user=self.staff,
+            session=self.session,
+            item_id=assistant_item_id,
+            bundle_slug="server_health",
+        )
+        self.assertEqual(AdminChatToolRequest.objects.count(), 4)
+        self.assertEqual(ToolRun.objects.count(), 4)
+        self.assertEqual(AgentJob.objects.count(), 4)
+        self.assertEqual(
+            AdminChatMessage.objects.filter(
+                metadata_redacted__source="diagnostic_bundle", metadata_redacted__state="running"
+            ).count(),
+            1,
+        )
+
+        tool_runs = list(ToolRun.objects.order_by("id"))
+        for tool_run in tool_runs[:3]:
+            tool_run.status = ToolRun.Status.SUCCEEDED
+            tool_run.result_redacted = {"summary": "اكتمل الفحص بأمان."}
+            tool_run.save(update_fields=["status", "result_redacted", "updated_at"])
+            sync_chat_tool_requests_for_tool_run(tool_run)
+        tool_runs[3].status = ToolRun.Status.TIMEOUT
+        tool_runs[3].save(update_fields=["status", "updated_at"])
+        sync_chat_tool_requests_for_tool_run(tool_runs[3])
+        sync_chat_tool_requests_for_tool_run(tool_runs[3])
         response = self.client.post(
             self.live_url(),
             data=json.dumps({"type": "items.list", "params": {"thread_id": str(self.session.id), "limit": 30, "order": "asc"}}),
@@ -413,17 +447,15 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual(AdminChatToolRequest.objects.count(), 4)
         self.assertEqual(ToolRun.objects.count(), 4)
         self.assertEqual(AgentJob.objects.count(), 4)
-        for tool_run in ToolRun.objects.all():
-            sync_chat_tool_requests_for_tool_run(tool_run)
-        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle", metadata_redacted__state="started").count(), 1)
-        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle").exclude(metadata_redacted__state="started").count(), 1)
+        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle", metadata_redacted__state="running").count(), 1)
+        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle").exclude(metadata_redacted__state="running").count(), 1)
         self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="tool_orchestrator").count(), 0)
         self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="tool_result_summary").count(), 0)
-        self.assertIn("بدأت فحص صحة السيرفر", streamed)
-        self.assertIn("نتائج الفحوصات", streamed)
+        self.assertNotIn("نتائج الفحوصات", streamed)
         self.assertIn("خدمات Gunicorn/Uvicorn", transcript)
         self.assertIn("لم يكتمل خلال المهلة", transcript)
         self.assertIn("فحص صحة السيرفر", response.content.decode())
+        self.assertFalse(self.client.get(self.bundle_status_url()).json()["running"])
         self.assertEqual(len(populated_ids), len(set(populated_ids)))
         self.assertNotIn("completed successfully", transcript)
         self.assertNotIn("TOOL_REQUEST_PROPOSAL", transcript)
@@ -436,10 +468,14 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.post_live_with_provider_text(
             "سأقترح فحص صحة السيرفر.",
             request_text="نفذ فحص صحة السيرفر",
-            wait_outcome=self.success_outcome("اكتمل فحص مصادر السجلات."),
         )
+        tool_run = ToolRun.objects.get()
+        tool_run.status = ToolRun.Status.SUCCEEDED
+        tool_run.result_redacted = {"summary": "اكتمل الفحص بأمان."}
+        tool_run.save(update_fields=["status", "result_redacted", "updated_at"])
+        sync_chat_tool_requests_for_tool_run(tool_run)
         final_message = AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle").exclude(
-            metadata_redacted__state="started"
+            metadata_redacted__state="running"
         ).get()
 
         self.assertEqual(AdminChatToolRequest.objects.count(), 1)

@@ -2,6 +2,35 @@
 
 Operational notes for repository work. Update this file before and after every requested implementation, repository-changing command, or multi-step operation.
 
+## 2026-06-27 - C10.10-H2 Progressive Bundle UX Start
+
+Intent:
+- Make Admin Live AI diagnostic bundles progressive and non-blocking.
+- Show one immediate running message and finalize one combined result after background ToolRuns complete.
+
+Scope:
+- Add stable bundle execution correlation metadata and idempotent running/result messages.
+- Move bundle result aggregation into the existing ToolRun completion sync path.
+- Add automatic history refresh only while a diagnostic bundle is running.
+
+Out of scope:
+- Migrations, write/remediation/shell tools, raw logs or secrets, Portal, Telegram, and customer-facing AI.
+
+## 2026-06-27 - C10.10-H2 Progressive Bundle UX Complete
+
+Result:
+- Removed bundle ToolRun polling from the ChatKit request and return one immediate running message.
+- Added stable execution correlation plus idempotent running/result message IDs.
+- Finalized the combined result from the existing ToolRun completion sync callback after all expected runs terminate.
+- Added a staff-only status endpoint and bounded frontend polling to refresh ChatKit history automatically.
+- Kept individual bundle tool messages suppressed and lowered ignored visible-delete logging to info.
+- No migrations or changes to Portal, Telegram, customer-facing AI, tool safety policy, or write capabilities.
+
+Verification:
+- `python manage.py check` and `makemigrations --check --dry-run` passed with no changes.
+- Required unit modules passed: 34, 13, 9, 8, 8, 5, 7, and 20 tests respectively.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-26 - C10.10 Multi-Tool Diagnostic Bundles Start
 
 Intent:

@@ -6,6 +6,32 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.10-H2 Progressive Bundle UX and Non-Blocking Execution
+
+Result:
+- Diagnostic bundles now queue validated read-only ToolRuns and finish the ChatKit stream after one visible running message.
+- Added stable `bundle_execution_id`, running/result ChatKit IDs, and retry-safe bundle lookup.
+- ToolRun completion now finalizes one combined summary only after every expected bundle run reaches a terminal state.
+- Added a staff-only bundle status endpoint and bounded frontend polling that reloads history once the final result exists.
+- Preserved per-tool message suppression and reduced visible-message delete logging from warning to info.
+- No migrations, Portal, Telegram, customer-facing AI, write/remediation/shell behavior, raw outputs, or secrets were added.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `test_admin_ai_tool_request_flow` passed: 34 tests.
+- `test_live_admin_chat` passed: 13 tests.
+- `test_live_ai_history_hydration` passed: 9 tests.
+- `test_admin_live_ai_governance` passed: 8 tests.
+- `test_admin_ai_agent_behavior` passed: 8 tests.
+- `test_live_ai_failure_finalization` passed: 5 tests.
+- `test_sprint_c8_first_tool_cycle` passed: 7 tests.
+- `test_admin_chat` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.10-H2 is complete within the approved scope.
+
 ## Archived Task: C10.10-H1 Make ChatKit Delete Thread Item Idempotent
 
 Scope:

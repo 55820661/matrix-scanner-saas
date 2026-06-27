@@ -9,7 +9,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from chatkit.server import StreamingResult
 
@@ -28,7 +28,7 @@ from .live_ai import (
     live_ai_configuration_error,
     update_live_ai_request_log,
 )
-from .models import AdminChatReportDraft, AdminChatSession, AdminLiveAIRequestLog
+from .models import AdminChatMessage, AdminChatReportDraft, AdminChatSession, AdminLiveAIRequestLog
 from .services import (
     add_user_message_and_response,
     approve_tool_request,
@@ -177,6 +177,38 @@ def internal_chat_session_detail(request, session_id):
             "live_ai_safe_context_max_bytes": settings.AI_SAFE_CONTEXT_MAX_BYTES,
             "chatkit_domain_key": settings.OPENAI_CHATKIT_DOMAIN_KEY,
         },
+    )
+
+
+@require_GET
+@staff_member_required
+def internal_chat_bundle_status(request, session_id):
+    session = get_object_or_404(_scoped_internal_chat_sessions(), id=session_id)
+    bundle_messages = AdminChatMessage.objects.filter(
+        session=session,
+        metadata_redacted__source="diagnostic_bundle",
+    )
+    result_execution_ids = set(
+        bundle_messages.exclude(metadata_redacted__state="running").values_list(
+            "metadata_redacted__bundle_execution_id", flat=True
+        )
+    )
+    running = bundle_messages.filter(metadata_redacted__state="running").exclude(
+        metadata_redacted__bundle_execution_id__in=result_execution_ids
+    ).exists()
+    latest_result = (
+        bundle_messages
+        .exclude(metadata_redacted__state="running")
+        .order_by("-created_at", "-id")
+        .first()
+    )
+    return JsonResponse(
+        {
+            "running": running,
+            "latest_result_id": str((latest_result.metadata_redacted or {}).get("chatkit_item_id") or "")
+            if latest_result
+            else "",
+        }
     )
 
 

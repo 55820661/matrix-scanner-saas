@@ -199,7 +199,7 @@ class AdminChatKitStore(Store[AdminChatKitContext]):
         if self._is_deletable_placeholder(message):
             message.delete()
             return
-        logger.warning(
+        logger.info(
             "Ignored ChatKit delete_thread_item for visible admin chat message.",
             extra={
                 "admin_chat_session_id": str(session.id),

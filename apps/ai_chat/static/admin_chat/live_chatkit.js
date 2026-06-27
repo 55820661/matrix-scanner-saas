@@ -6,6 +6,28 @@
 
   window.addEventListener("load", async () => {
     try {
+      let bundlePolling = false;
+      const pollBundleUntilComplete = async () => {
+        if (bundlePolling || !livePanel.dataset.bundleStatusUrl) return;
+        bundlePolling = true;
+        let sawRunningBundle = false;
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          const response = await window.fetch(livePanel.dataset.bundleStatusUrl, {
+            credentials: "same-origin",
+            headers: { Accept: "application/json" },
+          });
+          if (!response.ok) break;
+          const status = await response.json();
+          sawRunningBundle = sawRunningBundle || status.running;
+          if (sawRunningBundle && !status.running && status.latest_result_id) {
+            window.location.reload();
+            return;
+          }
+          if (!status.running && !sawRunningBundle) break;
+        }
+        bundlePolling = false;
+      };
       await Promise.race([
         customElements.whenDefined("openai-chatkit"),
         new Promise((_, reject) => setTimeout(() => reject(new Error("ChatKit CDN timeout")), 10000)),
@@ -18,7 +40,11 @@
           fetch: (input, init = {}) => {
             const headers = new Headers(init.headers || {});
             if (csrfInput) headers.set("X-CSRFToken", csrfInput.value);
-            return window.fetch(input, { ...init, headers, credentials: "same-origin" });
+            const response = window.fetch(input, { ...init, headers, credentials: "same-origin" });
+            if ((init.method || "GET").toUpperCase() === "POST") {
+              response.then(() => pollBundleUntilComplete()).catch(() => {});
+            }
+            return response;
           },
         },
         initialThread: livePanel.dataset.threadId,

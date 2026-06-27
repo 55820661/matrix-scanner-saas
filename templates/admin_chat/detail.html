@@ -203,6 +203,7 @@
           class="matrix-live-ai"
           id="matrix-live-ai"
           data-api-url="{% url 'admin_chat:session_live' session.id %}"
+          data-bundle-status-url="{% url 'admin_chat:bundle_status' session.id %}"
           data-domain-key="{{ chatkit_domain_key }}"
           data-thread-id="{{ session.id }}"
         >
