@@ -31,6 +31,37 @@ Verification:
 - Required unit modules passed: 34, 13, 9, 8, 8, 5, 7, and 20 tests respectively.
 - `git diff --check` passed with line-ending warnings only.
 
+## 2026-06-27 - C10.10-H3 Auto-Refresh Running Diagnostic Bundles Start
+
+Intent:
+- Make running diagnostic bundles appear and finalize in Live Admin AI without a manual browser refresh.
+- Replace full-page reload behavior with bounded thread/history refresh while a bundle is still running.
+
+Scope:
+- Rework Live Admin ChatKit frontend polling and running-state indicator behavior.
+- Extend the staff-only bundle status payload only as needed for safe bundle metadata and completion detection.
+- Add focused regression coverage for running-state polling, stop conditions, and duplicate prevention.
+
+Out of scope:
+- Migrations, Portal, Telegram, customer-facing AI, write/remediation/shell actions, raw logs, raw JSON, and secrets.
+
+## 2026-06-27 - C10.10-H3 Auto-Refresh Running Diagnostic Bundles Complete
+
+Result:
+- Replaced full-page reload behavior with bounded diagnostic-bundle polling that remounts ChatKit and rehydrates thread history when the same bundle reaches a final state.
+- Added a visible in-panel running indicator while a diagnostic bundle is still executing.
+- Extended the staff-only bundle status endpoint with safe execution and item identifiers needed for completion detection, without exposing raw outputs, logs, JSON, or secrets.
+- Kept duplicate prevention unchanged by relying on stored `chatkit_item_id` values and the existing idempotent running/result message rules.
+- No migrations or changes to Portal, Telegram, customer-facing AI, write/remediation behavior, or tool scope were made.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 14 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 34 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-26 - C10.10 Multi-Tool Diagnostic Bundles Start
 
 Intent:

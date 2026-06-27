@@ -6,6 +6,26 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.10-H3 Auto-Refresh Running Diagnostic Bundles
+
+Result:
+- Replaced the diagnostic-bundle page reload path with bounded frontend polling that remounts ChatKit and reloads thread history after the same bundle completes.
+- Added a visible running indicator inside the Live Admin AI panel while bundle execution is still in progress.
+- Extended the staff-only bundle status endpoint with safe running/result identifiers needed for completion detection.
+- Preserved existing bundle idempotency rules: no duplicate running/result messages and no individual tool messages inside the bundle transcript.
+- No migrations or changes to Portal, Telegram, customer-facing AI, raw-output exposure, or tool safety scope were made.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 14 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 34 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.10-H3 is complete within the approved scope.
+
 ## Archived Task: C10.10-H2 Progressive Bundle UX and Non-Blocking Execution
 
 Result:

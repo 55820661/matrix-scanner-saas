@@ -178,11 +178,17 @@ class LiveAdminChatTests(TestCase):
         self.assertIn("history: { enabled: true }", source)
         self.assertIn("pollBundleUntilComplete", source)
         self.assertIn("livePanel.dataset.bundleStatusUrl", source)
-        self.assertIn("window.location.reload()", source)
+        self.assertIn("const POLL_INTERVAL_MS = 3000", source)
+        self.assertIn("const MAX_POLL_ATTEMPTS = 40", source)
+        self.assertIn("const refreshChatHistory = async () => {", source)
+        self.assertIn("chatkitBody.replaceChildren(nextChatkit)", source)
+        self.assertIn("matrix-live-ai-bundle-indicator", source)
+        self.assertIn("setBundleIndicator(Boolean(status.running))", source)
         self.assertNotIn("apiURL:", source)
         self.assertNotIn("header: false", source)
         self.assertNotIn("matrix-live-ai-status", source)
         self.assertNotIn("matrix-live-ai-error", source)
+        self.assertNotIn("window.location.reload()", source)
         self.assertNotIn("Live AI ready", source)
         self.assertNotIn("Live AI is temporarily unavailable", source)
         self.assertNotIn("Live AI could not load", source)
@@ -192,6 +198,14 @@ class LiveAdminChatTests(TestCase):
         self.assertNotIn("deterministic fallback remains available", source)
         self.assertNotIn("Live AI UI failed. The deterministic fallback remains available below.", source)
         self.assertNotIn("ChatKit could not load. The deterministic fallback remains available below.", source)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_live_ui_contains_bundle_indicator_and_status_endpoint(self):
+        page = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+
+        self.assertContains(page, 'id="matrix-live-ai-bundle-indicator"', html=False)
+        self.assertContains(page, "جاري تنفيذ الفحوصات")
+        self.assertContains(page, reverse("admin_chat:bundle_status", args=[self.session.id]))
 
     @override_settings(**{**LIVE_SETTINGS, "OPENAI_CHATKIT_DOMAIN_KEY": ""})
     def test_missing_chatkit_domain_key_fails_closed(self):

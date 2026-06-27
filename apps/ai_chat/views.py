@@ -196,18 +196,28 @@ def internal_chat_bundle_status(request, session_id):
     running = bundle_messages.filter(metadata_redacted__state="running").exclude(
         metadata_redacted__bundle_execution_id__in=result_execution_ids
     ).exists()
+    running_message = (
+        bundle_messages.filter(metadata_redacted__state="running")
+        .exclude(metadata_redacted__bundle_execution_id__in=result_execution_ids)
+        .order_by("-created_at", "-id")
+        .first()
+    )
     latest_result = (
         bundle_messages
         .exclude(metadata_redacted__state="running")
         .order_by("-created_at", "-id")
         .first()
     )
+    latest_result_metadata = latest_result.metadata_redacted or {} if latest_result else {}
+    running_metadata = running_message.metadata_redacted or {} if running_message else {}
     return JsonResponse(
         {
             "running": running,
-            "latest_result_id": str((latest_result.metadata_redacted or {}).get("chatkit_item_id") or "")
-            if latest_result
-            else "",
+            "running_execution_id": str(running_metadata.get("bundle_execution_id") or ""),
+            "running_item_id": str(running_metadata.get("chatkit_item_id") or ""),
+            "latest_result_id": str(latest_result_metadata.get("chatkit_item_id") or ""),
+            "latest_result_execution_id": str(latest_result_metadata.get("bundle_execution_id") or ""),
+            "latest_result_state": str(latest_result_metadata.get("state") or ""),
         }
     )
 
