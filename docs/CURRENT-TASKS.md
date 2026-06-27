@@ -3174,3 +3174,37 @@ Verification:
 
 Immediate next steps:
 - Review the final diff and commit this sprint as an isolated workspace-cleanup change.
+
+## Current Task - C10.12-AH1 Admin Chat Live Send CSRF Fix
+
+Task:
+- Fix the broken Live Admin AI send flow after the chat workspace cleanup.
+
+Scope:
+- Ensure the admin chat page always provides a CSRF token source for ChatKit POST requests.
+- Add a focused regression test for the live chat page token wiring.
+
+Out of scope:
+- ChatKit lifecycle changes.
+- Tool execution changes.
+- Portal changes.
+- Telegram changes.
+- Migrations.
+
+Immediate next steps:
+- Patch the admin chat template/JS CSRF wiring.
+- Add a regression test for the live page token source.
+- Run focused verification before declaring the fix complete.
+
+Progress:
+- Added a `data-csrf-token` source to the live admin chat container so ChatKit no longer depends on unrelated sidebar forms.
+- Updated the live ChatKit fetch wrapper to fall back across dataset token, form token, and `csrftoken` cookie.
+- Added regression assertions that the chat page exposes the token source and the static asset uses it.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --noinput` passed: 18 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.12-AH1 is fixed and verified locally.

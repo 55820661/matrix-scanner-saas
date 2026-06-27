@@ -149,6 +149,7 @@ class LiveAdminChatTests(TestCase):
 
         self.assertContains(page, '<openai-chatkit id="matrix-admin-chatkit"', html=False)
         self.assertContains(page, self.live_url())
+        self.assertContains(page, 'data-csrf-token="')
         self.assertNotContains(page, "Deterministic fallback")
         self.assertNotContains(page, 'id="deterministic-fallback"', html=False)
         self.assertNotContains(page, 'id="matrix-live-ai-status"', html=False)
@@ -177,6 +178,9 @@ class LiveAdminChatTests(TestCase):
         self.assertIn("url: livePanel.dataset.apiUrl", source)
         self.assertIn("domainKey: livePanel.dataset.domainKey", source)
         self.assertIn("fetch: (input, init = {})", source)
+        self.assertIn("livePanel.dataset.csrfToken", source)
+        self.assertIn("csrftoken=", source)
+        self.assertIn('headers.set("X-CSRFToken", token)', source)
         self.assertIn("header: { enabled: false }", source)
         self.assertIn("history: { enabled: true }", source)
         self.assertIn("pollBundleUntilComplete", source)

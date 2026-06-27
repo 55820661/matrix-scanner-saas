@@ -13,6 +13,17 @@
         new Promise((_, reject) => setTimeout(() => reject(new Error("ChatKit CDN timeout")), 10000)),
       ]);
       const csrfInput = document.querySelector("[name=csrfmiddlewaretoken]");
+      const csrfTokenFromCookie = () => {
+        const cookie = document.cookie
+          .split(";")
+          .map((item) => item.trim())
+          .find((item) => item.startsWith("csrftoken="));
+        if (!cookie) {
+          return "";
+        }
+        return decodeURIComponent(cookie.slice("csrftoken=".length));
+      };
+      const csrfToken = () => livePanel.dataset.csrfToken || csrfInput?.value || csrfTokenFromCookie();
       const POLL_INTERVAL_MS = 3000;
       const MAX_POLL_ATTEMPTS = 40;
       const FINAL_STATES = ["succeeded", "partial", "timeout", "failed"];
@@ -125,7 +136,8 @@
           domainKey: livePanel.dataset.domainKey,
           fetch: (input, init = {}) => {
             const headers = new Headers(init.headers || {});
-            if (csrfInput) headers.set("X-CSRFToken", csrfInput.value);
+            const token = csrfToken();
+            if (token) headers.set("X-CSRFToken", token);
             return window.fetch(input, { ...init, headers, credentials: "same-origin" });
           },
         },

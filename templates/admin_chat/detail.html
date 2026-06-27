@@ -260,6 +260,7 @@
           data-api-url="{% url 'admin_chat:session_live' session.id %}"
           data-bundle-status-url="{% url 'admin_chat:bundle_status' session.id %}"
           data-bundle-status-template="{% url 'admin_chat:bundle_execution_status' session.id 'BUNDLE_EXECUTION_ID' %}"
+          data-csrf-token="{{ csrf_token }}"
           data-domain-key="{{ chatkit_domain_key }}"
           data-thread-id="{{ session.id }}"
         >

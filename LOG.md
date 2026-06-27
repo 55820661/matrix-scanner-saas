@@ -2773,3 +2773,27 @@ Verification:
 
 Notes:
 - Running multiple Django test modules in parallel against the same PostgreSQL test database with `--keepdb` caused deadlocks on unique user indexes. Re-running the affected modules sequentially, and for two suites without `--keepdb`, produced clean results.
+
+## 2026-06-27 - C10.12-AH1 Admin Chat Live Send CSRF Fix Start
+
+Intent:
+- Restore Live Admin AI message sending after the workspace cleanup removed the last visible form token that `live_chatkit.js` depended on.
+
+Scope:
+- Reintroduce a stable CSRF source for ChatKit POST requests on the admin chat page.
+- Add regression coverage so the live chat page still exposes the token needed by the frontend send flow.
+
+Out of scope:
+- ChatKit lifecycle changes, tool execution changes, Portal, Telegram, migrations, and unrelated UI work.
+
+## 2026-06-27 - C10.12-AH1 Admin Chat Live Send CSRF Fix Complete
+
+Result:
+- Restored a stable CSRF source for ChatKit POST requests by exposing a token directly on the live chat container.
+- Hardened `live_chatkit.js` to read the token from the page dataset first, then from an existing form field, and finally from the `csrftoken` cookie.
+- Added regression coverage so the live chat page and static asset both prove the CSRF wiring exists.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --noinput` passed: 18 tests.
+- `git diff --check` passed with line-ending warnings only.
