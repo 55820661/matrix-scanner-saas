@@ -17,10 +17,8 @@ from apps.accounts.models import Account
 from apps.applications.models import Application
 from apps.core.redaction import redact_json
 from apps.servers.models import Server
-from apps.tools.models import ToolRun
 
 from .chatkit_store import AdminChatKitContext
-from .diagnostic_summaries import normalize_reason_ar, tool_display_label_ar
 from .live_ai import (
     LIVE_AI_SAFE_ERROR_MESSAGE,
     classify_live_ai_exception,
@@ -61,126 +59,6 @@ def _scoped_internal_chat_sessions():
 
 def _elapsed_ms(started_at):
     return max(1, int((monotonic() - started_at) * 1000))
-
-
-def _activity_reason_text(value, *, fallback="-", normalize=False):
-    if isinstance(value, (list, tuple, dict)):
-        return fallback
-    text = " ".join(str(value or "").split())
-    if not text:
-        return fallback
-    if (text.startswith("[") and text.endswith("]")) or (text.startswith("{") and text.endswith("}")):
-        return fallback
-    if text.startswith("['") or text.startswith('["'):
-        return fallback
-    if normalize:
-        return normalize_reason_ar(text)
-    return text[:240]
-
-
-def _activity_status_from_reason(reason):
-    normalized = _activity_reason_text(reason, fallback="", normalize=True)
-    lowered = normalized.casefold()
-    if not normalized:
-        return "not_available"
-    if any(token in lowered for token in ("role", "permission", "صلاح", "غير متاح لهذه الصلاحيات")):
-        return "skipped_permission"
-    if any(token in lowered for token in ("plan", "الخطة")):
-        return "skipped_plan"
-    if any(token in lowered for token in ("server", "السيرفر")):
-        return "skipped_server"
-    return "not_available"
-
-
-def _tool_activity_reason_for_request(tool_request, normalized_status):
-    params_reason = _activity_reason_text((tool_request.params_redacted or {}).get("reason"), fallback="-")
-    tool_run = tool_request.tool_run
-    if normalized_status == "succeeded":
-        return params_reason
-    if normalized_status == "running":
-        return params_reason if params_reason != "-" else "قيد التنفيذ."
-    if normalized_status == "timeout":
-        return "انتهت المهلة قبل اكتمال الفحص."
-    raw_failure = tool_request.error_summary or getattr(tool_run, "error_message", "") or ""
-    if normalized_status in {"skipped_permission", "skipped_plan", "skipped_server", "not_available"}:
-        return _activity_reason_text(raw_failure, fallback=normalize_reason_ar("not available"), normalize=True)
-    if normalized_status == "not_started":
-        return params_reason if params_reason != "-" else "بانتظار المراجعة أو لم يبدأ التنفيذ."
-    if raw_failure:
-        return _activity_reason_text(raw_failure, fallback="تعذر إكمال الفحص بسبب خطأ أثناء التنفيذ.", normalize=True)
-    return params_reason if params_reason != "-" else "تعذر إكمال الفحص بسبب خطأ أثناء التنفيذ."
-
-
-def _normalize_tool_activity_status(tool_request):
-    tool_run = tool_request.tool_run
-    if tool_run:
-        if tool_run.status == ToolRun.Status.SUCCEEDED:
-            return "succeeded"
-        if tool_run.status == ToolRun.Status.TIMEOUT:
-            return "timeout"
-        if tool_run.status in {ToolRun.Status.PENDING, ToolRun.Status.QUEUED, ToolRun.Status.RUNNING}:
-            return "running"
-        if tool_run.status in {ToolRun.Status.FAILED, ToolRun.Status.REJECTED, ToolRun.Status.CANCELLED}:
-            return "failed"
-    if tool_request.status in {
-        tool_request.Status.SUGGESTED,
-        tool_request.Status.APPROVED,
-    }:
-        return "not_started"
-    if tool_request.status == tool_request.Status.QUEUED:
-        return "running"
-    if tool_request.status == tool_request.Status.CANCELLED:
-        return "not_started"
-    if tool_request.status == tool_request.Status.FAILED and not tool_run:
-        return _activity_status_from_reason(tool_request.error_summary)
-    return tool_request.status
-
-
-def _tool_activity_row_for_request(tool_request):
-    normalized_status = _normalize_tool_activity_status(tool_request)
-    return {
-        "tool_key": tool_request.tool_definition.key,
-        "tool_label": tool_display_label_ar(tool_request.tool_definition.key),
-        "reason": _tool_activity_reason_for_request(tool_request, normalized_status),
-        "status": normalized_status,
-        "action": "",
-        "created_at": tool_request.created_at,
-    }
-
-
-def _tool_activity_rows(session):
-    rows = [_tool_activity_row_for_request(item) for item in session.tool_requests.select_related("tool_definition", "tool_run").order_by("-created_at")]
-    bundle_messages = (
-        session.messages.filter(metadata_redacted__source="diagnostic_bundle").order_by("created_at", "id")
-    )
-    bundle_data = {}
-    for message in bundle_messages:
-        metadata = message.metadata_redacted or {}
-        execution_id = str(metadata.get("bundle_execution_id") or "")
-        if execution_id:
-            entry = bundle_data.setdefault(execution_id, {"metadata": {}, "skipped": []})
-            entry["metadata"] = metadata
-            entry["skipped"].extend(metadata.get("skipped") or [])
-    seen_skips = set()
-    for execution_id, entry in bundle_data.items():
-        for skipped in entry["skipped"]:
-            tool_key = str(skipped.get("tool_key") or "")
-            dedupe_key = (execution_id, tool_key)
-            if not tool_key or dedupe_key in seen_skips:
-                continue
-            seen_skips.add(dedupe_key)
-            reason = _activity_reason_text(skipped.get("reason"), fallback="غير متاح.", normalize=True)
-            rows.append(
-                {
-                    "tool_key": tool_key,
-                    "tool_label": tool_display_label_ar(tool_key),
-                    "reason": reason,
-                    "status": _activity_status_from_reason(reason),
-                    "action": "",
-                    "created_at": None,
-                }
-            )
-    return rows
 
 
 def _live_ai_failure_log_extra(*, session_id, audit_log_id, status, error_class, model, latency_ms):
@@ -285,11 +163,12 @@ def internal_chat_session_detail(request, session_id):
         {
             "session": session,
             "chat_messages": session.messages.order_by("created_at"),
-            "tool_activity_rows": _tool_activity_rows(session),
-            "tool_build_request_count": session.tool_build_requests.count(),
-            "report_draft_count": session.report_drafts.count(),
+            "tool_requests": session.tool_requests.select_related("tool_definition", "tool_run").order_by("-created_at"),
+            "tool_build_requests": session.tool_build_requests.prefetch_related("proposals").order_by("-created_at"),
+            "report_drafts": session.report_drafts.select_related("converted_report").order_by("-created_at"),
             "available_tools": (session.context_snapshot_redacted or {}).get("available_tools", []),
             "can_write": user_can_write_chat(request.user, session),
+            "chat_report_types": AdminChatReportDraft.DraftType.choices,
             "live_ai_enabled": settings.ADMIN_LIVE_AI_ENABLED,
             "live_ai_available": settings.ADMIN_LIVE_AI_ENABLED and not live_ai_configuration_error(),
             "live_ai_error": live_ai_configuration_error() if settings.ADMIN_LIVE_AI_ENABLED else "",
@@ -298,35 +177,6 @@ def internal_chat_session_detail(request, session_id):
             "live_ai_rate_limit_per_hour": settings.ADMIN_LIVE_AI_RATE_LIMIT_PER_HOUR,
             "live_ai_safe_context_max_bytes": settings.AI_SAFE_CONTEXT_MAX_BYTES,
             "chatkit_domain_key": settings.OPENAI_CHATKIT_DOMAIN_KEY,
-        },
-    )
-
-
-@staff_member_required
-def internal_chat_tool_builder_page(request, session_id):
-    session = get_object_or_404(_scoped_internal_chat_sessions(), id=session_id)
-    return render(
-        request,
-        "admin_chat/tool_builder.html",
-        {
-            "session": session,
-            "can_write": user_can_write_chat(request.user, session),
-            "tool_build_requests": session.tool_build_requests.prefetch_related("proposals").order_by("-created_at"),
-        },
-    )
-
-
-@staff_member_required
-def internal_chat_reports_page(request, session_id):
-    session = get_object_or_404(_scoped_internal_chat_sessions(), id=session_id)
-    return render(
-        request,
-        "admin_chat/reports.html",
-        {
-            "session": session,
-            "can_write": user_can_write_chat(request.user, session),
-            "chat_report_types": AdminChatReportDraft.DraftType.choices,
-            "report_drafts": session.report_drafts.select_related("converted_report").order_by("-created_at"),
         },
     )
 
@@ -579,7 +429,7 @@ def internal_chat_tool_build_create(request, session_id):
         expected_output_description=request.POST.get("expected_output_description", ""),
     )
     messages.success(request, "Tool builder proposal created for internal review.")
-    return redirect("admin_chat:tool_builder_page", session_id=session.id)
+    return redirect("admin_chat:session_detail", session_id=session.id)
 
 
 @require_POST
@@ -592,7 +442,7 @@ def internal_chat_report_create(request, session_id):
         report_type=request.POST.get("report_type", ""),
     )
     messages.success(request, "Chat report created and converted.")
-    return redirect("admin_chat:reports_page", session_id=session.id)
+    return redirect("admin_chat:session_detail", session_id=session.id)
 
 
 @require_POST
@@ -605,4 +455,4 @@ def internal_chat_report_draft_create(request, session_id):
         report_type=request.POST.get("report_type", ""),
     )
     messages.success(request, "Report draft created for manual internal review.")
-    return redirect("admin_chat:reports_page", session_id=session.id)
+    return redirect("admin_chat:session_detail", session_id=session.id)

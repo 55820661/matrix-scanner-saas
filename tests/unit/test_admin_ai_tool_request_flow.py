@@ -19,7 +19,6 @@ from apps.ai_chat.services import (
     approve_tool_request,
     create_admin_chat_session,
     create_chat_session,
-    create_tool_request,
     execute_diagnostic_bundle_for_item,
     finalize_diagnostic_bundle_if_ready,
     reject_tool_request,
@@ -739,82 +738,6 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual((final_message.metadata_redacted or {}).get("timeout_count"), 1)
         self.assertEqual((final_message.metadata_redacted or {}).get("executed_count"), 1)
         self.assertNotIn("{", final_message.body_redacted)
-
-    @override_settings(**LIVE_SETTINGS)
-    def test_tool_activity_view_shows_terminal_tool_run_statuses(self):
-        succeeded_definition = self.create_tool(key="services_status")
-        failed_definition = self.create_tool(key="nginx_sites_discovery")
-        timeout_definition = self.create_tool(key="gunicorn_uvicorn_services_discovery")
-
-        succeeded_request = create_tool_request(user=self.staff, session=self.session, tool_key=succeeded_definition.key)
-        failed_request = create_tool_request(user=self.staff, session=self.session, tool_key=failed_definition.key)
-        timeout_request = create_tool_request(user=self.staff, session=self.session, tool_key=timeout_definition.key)
-
-        succeeded_run = approve_tool_request(user=self.staff, tool_request=succeeded_request)
-        failed_run = approve_tool_request(user=self.staff, tool_request=failed_request)
-        timeout_run = approve_tool_request(user=self.staff, tool_request=timeout_request)
-
-        succeeded_run.status = ToolRun.Status.SUCCEEDED
-        succeeded_run.finished_at = timezone.now()
-        succeeded_run.save(update_fields=["status", "finished_at", "updated_at"])
-        failed_run.status = ToolRun.Status.FAILED
-        failed_run.error_message = "Scanner agent reported a safe execution failure."
-        failed_run.finished_at = timezone.now()
-        failed_run.save(update_fields=["status", "error_message", "finished_at", "updated_at"])
-        timeout_run.status = ToolRun.Status.TIMEOUT
-        timeout_run.finished_at = timezone.now()
-        timeout_run.save(update_fields=["status", "finished_at", "updated_at"])
-
-        sync_chat_tool_requests_for_tool_run(succeeded_run)
-        sync_chat_tool_requests_for_tool_run(failed_run)
-        sync_chat_tool_requests_for_tool_run(timeout_run)
-
-        response = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
-
-        self.assertContains(response, "Tool Activity")
-        self.assertContains(response, "succeeded")
-        self.assertContains(response, "failed")
-        self.assertContains(response, "timeout")
-        self.assertNotContains(response, "['", html=False)
-        self.assertNotContains(response, '{"', html=False)
-
-    @override_settings(**LIVE_SETTINGS)
-    def test_tool_activity_view_shows_skipped_bundle_tools_without_tool_runs(self):
-        self.create_tool(key="log_sources_discovery_v2")
-        self.create_tool(key="systemd_services_discovery", plan_enabled=False)
-        AdminChatMessage.objects.create(
-            session=self.session,
-            sender_type=AdminChatMessage.SenderType.ASSISTANT,
-            body_redacted="ابدأ الفحص",
-            metadata_redacted={"source": "admin_live_chatkit", "chatkit_item_id": "bundle_seed_activity"},
-        )
-        execute_diagnostic_bundle_for_item(
-            user=self.staff,
-            session=self.session,
-            item_id="bundle_seed_activity",
-            bundle_slug="server_health",
-        )
-        tool_run = ToolRun.objects.get()
-        tool_run.status = ToolRun.Status.SUCCEEDED
-        tool_run.finished_at = timezone.now()
-        tool_run.save(update_fields=["status", "finished_at", "updated_at"])
-        sync_chat_tool_requests_for_tool_run(tool_run)
-        running = AdminChatMessage.objects.get(
-            metadata_redacted__source="diagnostic_bundle",
-            metadata_redacted__state="running",
-        )
-        finalize_diagnostic_bundle_if_ready(
-            (running.metadata_redacted or {}).get("bundle_execution_id"),
-            caller="recovery",
-        )
-
-        response = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
-
-        self.assertContains(response, "systemd")
-        self.assertContains(response, "skipped_permission")
-        self.assertContains(response, "غير متاح لهذه الصلاحيات أو الخطة أو السيرفر")
-        self.assertNotContains(response, "['", html=False)
-        self.assertNotContains(response, '{"', html=False)
 
     @override_settings(**LIVE_SETTINGS)
     def test_bundle_advice_question_does_not_execute(self):
