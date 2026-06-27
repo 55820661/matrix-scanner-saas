@@ -2,6 +2,7 @@
   const livePanel = document.getElementById("matrix-live-ai");
   const chatkitBody = livePanel ? livePanel.querySelector(".matrix-live-ai-body") : null;
   const bundleIndicator = document.getElementById("matrix-live-ai-bundle-indicator");
+  const fallbackResults = document.getElementById("matrix-live-ai-fallback-results");
 
   if (!chatkitBody || !livePanel) return;
 
@@ -14,9 +15,11 @@
       const csrfInput = document.querySelector("[name=csrfmiddlewaretoken]");
       const POLL_INTERVAL_MS = 3000;
       const MAX_POLL_ATTEMPTS = 40;
+      const FINAL_STATES = ["succeeded", "partial", "timeout", "failed"];
       let chatkit = null;
       let bundlePollingPromise = null;
       let lastCompletedBundleExecutionId = "";
+      let fallbackNoticeShownForBundleId = "";
 
       const setBundleIndicator = (running) => {
         if (!bundleIndicator) return;
@@ -36,6 +39,60 @@
           return null;
         }
         return response.json();
+      };
+
+      const bundleExecutionStatusUrl = (bundleExecutionId) => {
+        if (!livePanel.dataset.bundleStatusTemplate || !bundleExecutionId) {
+          return "";
+        }
+        return livePanel.dataset.bundleStatusTemplate.replace("BUNDLE_EXECUTION_ID", encodeURIComponent(bundleExecutionId));
+      };
+
+      const fetchBundleExecutionStatus = async (bundleExecutionId) => {
+        const url = bundleExecutionStatusUrl(bundleExecutionId);
+        if (!url) {
+          return null;
+        }
+        const response = await window.fetch(url, {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        });
+        if (!response.ok) {
+          return null;
+        }
+        return response.json();
+      };
+
+      const hasRenderedFallback = (chatkitItemId) => {
+        if (!fallbackResults || !chatkitItemId) {
+          return false;
+        }
+        return Boolean(fallbackResults.querySelector(`[data-chatkit-item-id="${CSS.escape(chatkitItemId)}"]`));
+      };
+
+      const renderFallbackCard = (payload) => {
+        if (!fallbackResults || !payload || !payload.chatkit_item_id || hasRenderedFallback(payload.chatkit_item_id)) {
+          return;
+        }
+        const card = document.createElement("article");
+        card.className = "matrix-live-ai-fallback-card";
+        card.dataset.chatkitItemId = payload.chatkit_item_id;
+        card.innerHTML = `<strong>Matrix Live Admin AI</strong><div class="body"></div>`;
+        card.querySelector(".body").textContent = payload.body || "";
+        fallbackResults.appendChild(card);
+      };
+
+      const renderFallbackNotice = (bundleExecutionId) => {
+        if (!fallbackResults || !bundleExecutionId || fallbackNoticeShownForBundleId === bundleExecutionId) {
+          return;
+        }
+        fallbackNoticeShownForBundleId = bundleExecutionId;
+        const note = document.createElement("article");
+        note.className = "matrix-live-ai-fallback-note";
+        note.dataset.bundleExecutionId = bundleExecutionId;
+        note.innerHTML =
+          `<strong>Matrix Live Admin AI</strong><div class="body">تعذر تحديث نتيجة الفحص تلقائيًا. يمكنك تحديث الصفحة لعرض آخر حالة.</div>`;
+        fallbackResults.appendChild(note);
       };
 
       const chatkitOptions = () => ({
@@ -80,10 +137,6 @@
         await new Promise((resolve) => window.setTimeout(resolve, 0));
       };
 
-      const refreshChatHistory = async () => {
-        await mountChatKit();
-      };
-
       const pollBundleUntilComplete = async () => {
         if (bundlePollingPromise || !livePanel.dataset.bundleStatusUrl) {
           return bundlePollingPromise;
@@ -99,16 +152,17 @@
               activeBundleExecutionId = status.running_execution_id;
             }
             setBundleIndicator(Boolean(status.running));
-            const finalizedCurrentBundle =
-              activeBundleExecutionId &&
-              !status.running &&
-              status.latest_result_id &&
-              status.latest_result_execution_id === activeBundleExecutionId &&
-              ["succeeded", "partial", "timeout", "failed"].includes(status.latest_result_state) &&
-              status.latest_result_execution_id !== lastCompletedBundleExecutionId;
+            const finalizedCurrentBundle = activeBundleExecutionId && !status.running;
             if (finalizedCurrentBundle) {
-              lastCompletedBundleExecutionId = status.latest_result_execution_id;
-              await refreshChatHistory();
+              const bundleStatus = await fetchBundleExecutionStatus(activeBundleExecutionId).catch(() => null);
+              if (
+                bundleStatus &&
+                FINAL_STATES.includes(bundleStatus.state) &&
+                bundleStatus.bundle_execution_id !== lastCompletedBundleExecutionId
+              ) {
+                lastCompletedBundleExecutionId = bundleStatus.bundle_execution_id;
+                renderFallbackCard(bundleStatus.final_message);
+              }
               setBundleIndicator(false);
               return;
             }
@@ -119,6 +173,9 @@
             await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
           }
           setBundleIndicator(false);
+          if (activeBundleExecutionId && activeBundleExecutionId !== lastCompletedBundleExecutionId) {
+            renderFallbackNotice(activeBundleExecutionId);
+          }
         })();
         try {
           await bundlePollingPromise;

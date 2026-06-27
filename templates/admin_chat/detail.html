@@ -127,6 +127,34 @@
       flex: 1;
       min-height: 520px;
     }
+    .matrix-live-ai-fallback-results {
+      padding: 0 16px 16px;
+      display: grid;
+      gap: 12px;
+    }
+    .matrix-live-ai-fallback-results:empty {
+      display: none;
+    }
+    .matrix-live-ai-fallback-card,
+    .matrix-live-ai-fallback-note {
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #e2e8f0;
+      padding: 12px 14px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+    }
+    .matrix-live-ai-fallback-card strong,
+    .matrix-live-ai-fallback-note strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #f8fafc;
+    }
+    .matrix-live-ai-fallback-card .body,
+    .matrix-live-ai-fallback-note .body {
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
     .matrix-live-ai-bundle-indicator {
       display: none;
       align-items: center;
@@ -231,6 +259,7 @@
           id="matrix-live-ai"
           data-api-url="{% url 'admin_chat:session_live' session.id %}"
           data-bundle-status-url="{% url 'admin_chat:bundle_status' session.id %}"
+          data-bundle-status-template="{% url 'admin_chat:bundle_execution_status' session.id 'BUNDLE_EXECUTION_ID' %}"
           data-domain-key="{{ chatkit_domain_key }}"
           data-thread-id="{{ session.id }}"
         >
@@ -251,6 +280,7 @@
           <div class="matrix-live-ai-body">
             <openai-chatkit id="matrix-admin-chatkit" dir="auto"></openai-chatkit>
           </div>
+          <div class="matrix-live-ai-fallback-results" id="matrix-live-ai-fallback-results"></div>
         </div>
       {% elif live_ai_enabled and live_ai_error %}
         <div class="live-ai-configuration-error">{{ live_ai_error }}</div>

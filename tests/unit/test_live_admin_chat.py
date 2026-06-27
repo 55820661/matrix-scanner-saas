@@ -178,12 +178,17 @@ class LiveAdminChatTests(TestCase):
         self.assertIn("history: { enabled: true }", source)
         self.assertIn("pollBundleUntilComplete", source)
         self.assertIn("livePanel.dataset.bundleStatusUrl", source)
+        page = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+        self.assertContains(page, 'data-bundle-status-template="', html=False)
         self.assertIn("const POLL_INTERVAL_MS = 3000", source)
         self.assertIn("const MAX_POLL_ATTEMPTS = 40", source)
-        self.assertIn("const refreshChatHistory = async () => {", source)
-        self.assertIn("chatkitBody.replaceChildren(nextChatkit)", source)
+        self.assertIn('const FINAL_STATES = ["succeeded", "partial", "timeout", "failed"]', source)
+        self.assertIn("fetchBundleExecutionStatus", source)
+        self.assertIn("renderFallbackCard", source)
+        self.assertIn("renderFallbackNotice", source)
         self.assertIn("matrix-live-ai-bundle-indicator", source)
         self.assertIn("setBundleIndicator(Boolean(status.running))", source)
+        self.assertIn("matrix-live-ai-fallback-results", source)
         self.assertNotIn("apiURL:", source)
         self.assertNotIn("header: false", source)
         self.assertNotIn("matrix-live-ai-status", source)
@@ -206,6 +211,16 @@ class LiveAdminChatTests(TestCase):
         self.assertContains(page, 'id="matrix-live-ai-bundle-indicator"', html=False)
         self.assertContains(page, "جاري تنفيذ الفحوصات")
         self.assertContains(page, reverse("admin_chat:bundle_status", args=[self.session.id]))
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_live_ui_contains_explicit_bundle_status_template_and_fallback_container(self):
+        page = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+
+        self.assertContains(
+            page,
+            reverse("admin_chat:bundle_execution_status", args=[self.session.id, "BUNDLE_EXECUTION_ID"]),
+        )
+        self.assertContains(page, 'id="matrix-live-ai-fallback-results"', html=False)
 
     @override_settings(**{**LIVE_SETTINGS, "OPENAI_CHATKIT_DOMAIN_KEY": ""})
     def test_missing_chatkit_domain_key_fails_closed(self):

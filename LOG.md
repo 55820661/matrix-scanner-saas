@@ -62,6 +62,37 @@ Verification:
 - `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
 - `git diff --check` passed with line-ending warnings only.
 
+## 2026-06-27 - C10.10-H4 Reliable Final Bundle Delivery Start
+
+Intent:
+- Make final diagnostic bundle summaries appear reliably without manual browser refresh.
+- Stop relying on ChatKit remount alone when it does not fetch the new history item in production.
+
+Scope:
+- Add a staff-only bundle execution status endpoint scoped by `session_id` and `bundle_execution_id`.
+- Rework frontend polling to use the explicit bundle endpoint and deliver the final message through a reliable fallback path if ChatKit hydration still misses it.
+- Preserve idempotent bundle running/result messages and safe metadata-only responses.
+
+Out of scope:
+- Migrations, Portal, Telegram, customer-facing AI, write/remediation/shell actions, raw logs, raw JSON, and secrets.
+
+## 2026-06-27 - C10.10-H4 Reliable Final Bundle Delivery Complete
+
+Result:
+- Added a staff-only bundle execution status endpoint scoped by `session_id` and `bundle_execution_id`, returning only safe bundle metadata plus safe running/final message payloads.
+- Switched frontend polling to the explicit bundle execution endpoint instead of relying on ChatKit remount/history refresh to discover the final result.
+- Added a reliable fallback assistant-style card inside the Live Admin AI panel so the final bundle summary appears automatically even when ChatKit does not hydrate the new history item.
+- Added a bounded fallback notice when automatic final delivery still cannot complete within the polling window.
+- Preserved bundle result idempotency, no per-tool bundle messages, no raw logs/JSON/secrets, and no Portal/Telegram/customer-facing changes.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 15 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 35 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `git diff --check` passed with line-ending warnings only.
+
 ## 2026-06-26 - C10.10 Multi-Tool Diagnostic Bundles Start
 
 Intent:

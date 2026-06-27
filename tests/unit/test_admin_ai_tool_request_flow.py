@@ -140,6 +140,9 @@ class AdminAIToolRequestFlowTests(TestCase):
     def bundle_status_url(self):
         return reverse("admin_chat:bundle_status", args=[self.session.id])
 
+    def bundle_execution_status_url(self, bundle_execution_id):
+        return reverse("admin_chat:bundle_execution_status", args=[self.session.id, bundle_execution_id])
+
     def live_payload(self, text="Check services"):
         return {
             "type": "threads.add_user_message",
@@ -407,6 +410,12 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertTrue(initial_status["running"])
         self.assertEqual(initial_status["running_execution_id"], (running.metadata_redacted or {}).get("bundle_execution_id"))
         self.assertEqual(initial_status["running_item_id"], (running.metadata_redacted or {}).get("chatkit_item_id"))
+        explicit_running_status = self.client.get(
+            self.bundle_execution_status_url((running.metadata_redacted or {}).get("bundle_execution_id"))
+        ).json()
+        self.assertEqual(explicit_running_status["state"], "running")
+        self.assertIsNotNone(explicit_running_status["running_message"])
+        self.assertIsNone(explicit_running_status["final_message"])
         first_request = AdminChatToolRequest.objects.select_related("message").first()
         assistant_item_id = (first_request.message.metadata_redacted or {}).get("chatkit_item_id")
         execute_diagnostic_bundle_for_item(
@@ -462,10 +471,43 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertFalse(final_status["running"])
         self.assertEqual(final_status["latest_result_execution_id"], (running.metadata_redacted or {}).get("bundle_execution_id"))
         self.assertEqual(final_status["latest_result_state"], "partial")
+        explicit_final_status = self.client.get(
+            self.bundle_execution_status_url((running.metadata_redacted or {}).get("bundle_execution_id"))
+        ).json()
+        self.assertEqual(explicit_final_status["state"], "partial")
+        self.assertEqual(explicit_final_status["bundle_execution_id"], (running.metadata_redacted or {}).get("bundle_execution_id"))
+        self.assertIsNotNone(explicit_final_status["final_message"])
+        self.assertIn("فحص صحة السيرفر", explicit_final_status["final_message"]["body"])
+        self.assertNotIn("{", explicit_final_status["final_message"]["body"])
         self.assertEqual(len(populated_ids), len(set(populated_ids)))
         self.assertNotIn("completed successfully", transcript)
         self.assertNotIn("TOOL_REQUEST_PROPOSAL", transcript)
         self.assertNotIn("{", transcript)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_bundle_execution_status_endpoint_rejects_other_session_access(self):
+        self.create_server_health_tools()
+        self.post_live_with_provider_text(
+            "سأقترح فحص صحة السيرفر.",
+            request_text="نفذ فحص صحة السيرفر",
+        )
+        running = AdminChatMessage.objects.get(
+            metadata_redacted__source="diagnostic_bundle", metadata_redacted__state="running"
+        )
+        other_session = create_admin_chat_session(
+            user=self.staff,
+            account_id=self.account.id,
+            title="Other bundle session",
+            server_id=self.server.id,
+        )
+        response = self.client.get(
+            reverse(
+                "admin_chat:bundle_execution_status",
+                args=[other_session.id, (running.metadata_redacted or {}).get("bundle_execution_id")],
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
 
     @override_settings(**LIVE_SETTINGS)
     def test_bundle_skips_unavailable_and_disallowed_tools_in_summary(self):

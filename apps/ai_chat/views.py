@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
+from django.http import Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
@@ -218,6 +218,43 @@ def internal_chat_bundle_status(request, session_id):
             "latest_result_id": str(latest_result_metadata.get("chatkit_item_id") or ""),
             "latest_result_execution_id": str(latest_result_metadata.get("bundle_execution_id") or ""),
             "latest_result_state": str(latest_result_metadata.get("state") or ""),
+        }
+    )
+
+
+def _safe_bundle_message_payload(message):
+    if not message:
+        return None
+    metadata = message.metadata_redacted or {}
+    return {
+        "id": message.id,
+        "chatkit_item_id": str(metadata.get("chatkit_item_id") or ""),
+        "body": message.body_redacted or "",
+    }
+
+
+@require_GET
+@staff_member_required
+def internal_chat_bundle_execution_status(request, session_id, bundle_execution_id):
+    session = get_object_or_404(_scoped_internal_chat_sessions(), id=session_id)
+    bundle_messages = AdminChatMessage.objects.filter(
+        session=session,
+        metadata_redacted__source="diagnostic_bundle",
+        metadata_redacted__bundle_execution_id=bundle_execution_id,
+    ).order_by("created_at", "id")
+    running_message = bundle_messages.filter(metadata_redacted__state="running").last()
+    final_message = bundle_messages.exclude(metadata_redacted__state="running").last()
+    if running_message is None and final_message is None:
+        raise Http404("Bundle execution was not found.")
+    final_metadata = final_message.metadata_redacted or {} if final_message else {}
+    running_metadata = running_message.metadata_redacted or {} if running_message else {}
+    return JsonResponse(
+        {
+            "bundle_execution_id": str(bundle_execution_id),
+            "bundle_slug": str(final_metadata.get("bundle_slug") or running_metadata.get("bundle_slug") or ""),
+            "state": str(final_metadata.get("state") or "running"),
+            "running_message": _safe_bundle_message_payload(running_message),
+            "final_message": _safe_bundle_message_payload(final_message),
         }
     )
 

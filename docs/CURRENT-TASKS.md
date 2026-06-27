@@ -6,6 +6,26 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.10-H4 Reliable Final Bundle Delivery
+
+Result:
+- Added an explicit staff-only bundle execution status endpoint keyed by session and `bundle_execution_id`.
+- Switched Live Admin AI bundle polling to the explicit bundle endpoint and stopped relying on ChatKit remount/history refresh for final delivery.
+- Added a fallback assistant-style final summary card inside the Live Admin AI panel so the user sees the completed bundle result automatically without manual refresh.
+- Added a bounded fallback notice when automatic final delivery still cannot complete inside the polling window.
+- Preserved idempotent bundle messages, safe metadata-only responses, and no Portal/Telegram/customer-facing changes.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 15 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 35 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.10-H4 is complete within the approved scope.
+
 ## Archived Task: C10.10-H3 Auto-Refresh Running Diagnostic Bundles
 
 Result:
