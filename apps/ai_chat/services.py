@@ -22,6 +22,12 @@ from apps.tools.services import (
 )
 
 from .diagnostic_bundles import get_diagnostic_bundle
+from .diagnostic_summaries import (
+    bundle_summary_counts,
+    normalize_reason_ar,
+    summarize_diagnostic_bundle_results as build_diagnostic_bundle_summary,
+    tool_display_label_ar,
+)
 from .models import AdminChatDecision, AdminChatMessage, AdminChatReportDraft, AdminChatSession, AdminChatToolRequest
 
 
@@ -1238,39 +1244,27 @@ def execute_ai_tool_request_with_followup(*, user, tool_request, timeout_seconds
     }
 
 
-TOOL_LABELS_AR = {
-    "log_sources_discovery_v2": "مصادر السجلات",
-    "systemd_services_discovery": "خدمات systemd",
-    "nginx_sites_discovery": "إعدادات Nginx",
-    "gunicorn_uvicorn_services_discovery": "خدمات Gunicorn/Uvicorn",
-    "postgres_status_discovery": "حالة PostgreSQL",
-}
-
-
 def _tool_label_ar(tool_key):
-    return TOOL_LABELS_AR.get(tool_key, tool_key)
+    return tool_display_label_ar(tool_key)
 
 
 def _bundle_skip_reason_ar(reason):
-    normalized = _safe_text(reason or "", limit=160)
-    lowered = normalized.casefold()
-    if any(token in lowered for token in ("not available", "غير متاح", "policy", "plan", "role", "server")):
-        return "غير متاح لهذه الصلاحيات أو الخطة أو السيرفر."
-    if any(token in lowered for token in ("permission", "denied", "صلاحية")):
-        return "مرفوض بسبب الصلاحيات الحالية."
-    if normalized:
-        return normalized
-    return "تم تخطي هذا الفحص لعدم توفره."
+    return _safe_text(normalize_reason_ar(reason), limit=160)
 
 
 def _bundle_start_body(bundle, tool_keys):
     lines = [
-        f"بدأت {bundle.label_ar} باستخدام أدوات قراءة فقط.",
-        "سأفحص الآن:",
+        f"\u0628\u062f\u0623\u062a {bundle.label_ar} \u0628\u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0623\u062f\u0648\u0627\u062a \u0642\u0631\u0627\u0621\u0629 \u0641\u0642\u0637.",
+        "\u0633\u0623\u0641\u062d\u0635 \u0627\u0644\u0622\u0646:",
     ]
     if tool_keys:
         lines.extend(f"- {_tool_label_ar(tool_key)}" for tool_key in tool_keys)
-    lines.extend(["", "جاري تنفيذ الفحوصات، وسيتم عرض الملخص الموحد عند اكتمالها."])
+    lines.extend(
+        [
+            "",
+            "\u062c\u0627\u0631\u064a \u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u0641\u062d\u0648\u0635\u0627\u062a\u060c \u0648\u0633\u064a\u062a\u0645 \u0639\u0631\u0636 \u0627\u0644\u0645\u0644\u062e\u0635 \u0627\u0644\u0645\u0648\u062d\u062f \u0639\u0646\u062f \u0627\u0643\u062a\u0645\u0627\u0644\u0647\u0627.",
+        ]
+    )
     return _safe_text("\n".join(lines), limit=MAX_RESPONSE_LENGTH)
 
 
@@ -1311,36 +1305,7 @@ def _bundle_state(outcomes):
 
 
 def summarize_diagnostic_bundle_results(bundle, outcomes, language="ar"):
-    lines = [f"اكتمل {bundle.label_ar}.", "", "نتائج الفحوصات:"]
-    for item in outcomes:
-        label = _tool_label_ar(item.get("tool_key") or "")
-        state = item.get("state") or "unknown"
-        status_label = {
-            "succeeded": "نجح",
-            "failed": "فشل",
-            "timeout": "لم يكتمل خلال المهلة",
-            "not_started": "لم يبدأ",
-            "skipped": "تم تخطيه",
-        }.get(state, state)
-        reason = item.get("reason") or ""
-        suffix = f" - {reason}" if reason else ""
-        lines.append(f"- {label}: {status_label}.{suffix}")
-    succeeded = sum(1 for item in outcomes if item.get("state") == "succeeded")
-    failed = sum(1 for item in outcomes if item.get("state") in {"failed", "timeout", "not_started"})
-    skipped = sum(1 for item in outcomes if item.get("state") == "skipped")
-    lines.extend(["", "الخلاصة العامة:"])
-    if failed:
-        lines.append(
-            f"اكتمل {succeeded} فحص بنجاح، وهناك {failed} فحص لم يكتمل أو فشل. لا توجد صلاحية لاستنتاج حالة نهائية بدون مراجعة الفحوصات الناقصة."
-        )
-    elif skipped:
-        lines.append(
-            f"اكتملت الفحوصات المتاحة بنجاح، وتم تخطي {skipped} فحص غير متاح أو غير مسموح. الحكم النهائي يحتاج استكمال الفحوصات الناقصة."
-        )
-    else:
-        lines.append("لا توجد مؤشرات حرجة من الفحوصات المتاحة، لكن الحكم النهائي يعتمد على اكتمال التغطية والبيانات المتاحة.")
-    lines.extend(["", "الفحص التالي المقترح:", "راجع أي فحص تم تخطيه أو لم يكتمل قبل اتخاذ قرار تشغيلي."])
-    return _safe_text("\n".join(lines), limit=MAX_RESPONSE_LENGTH)
+    return _safe_text(build_diagnostic_bundle_summary(bundle, outcomes, language=language), limit=MAX_RESPONSE_LENGTH)
 
 
 def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
@@ -1472,6 +1437,7 @@ def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
     )
     if not tool_results:
         state = _bundle_state(skipped)
+        counts = bundle_summary_counts(bundle, skipped)
         followup_message = _record_bundle_message(
             session=session,
             body=summarize_diagnostic_bundle_results(bundle, skipped),
@@ -1483,6 +1449,7 @@ def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
                 "tool_request_ids": [],
                 "state": state,
                 "stream_managed": True,
+                **counts,
                 "chatkit_item_id": f"bundle_result_{bundle_execution_id}",
             },
         )
@@ -1552,6 +1519,8 @@ def get_diagnostic_bundle_progress(bundle_execution_id):
                 "status": outcome["status"],
                 "tool_request": request,
                 "tool_run": request.tool_run,
+                "started_at": getattr(request.tool_run, "started_at", None),
+                "finished_at": getattr(request.tool_run, "finished_at", None),
                 "summary": outcome.get("summary") or "",
             }
         )
@@ -1577,6 +1546,7 @@ def _record_diagnostic_bundle_final(progress, outcomes):
     bundle = progress["bundle"]
     bundle_execution_id = progress["bundle_execution_id"]
     state = _bundle_state(outcomes)
+    counts = bundle_summary_counts(bundle, outcomes)
     return _record_bundle_message(
         session=progress["session"],
         body=summarize_diagnostic_bundle_results(bundle, outcomes),
@@ -1588,6 +1558,7 @@ def _record_diagnostic_bundle_final(progress, outcomes):
             "tool_request_ids": [str(request.id) for request in requests],
             "state": state,
             "stream_managed": bool((progress["running_message"].metadata_redacted or {}).get("stream_managed")),
+            **counts,
             "chatkit_item_id": f"bundle_result_{bundle_execution_id}",
         },
     )

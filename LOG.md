@@ -2650,3 +2650,38 @@ Verification:
 
 Remaining:
 - C10.10-H6 is complete within scope.
+
+## 2026-06-27 - C10.11 Diagnostic Result Quality & Evidence Layer Start
+
+Intent:
+- Improve the quality, structure, and evidence metadata of diagnostic bundle final summaries without changing tool scope, bundle ownership, or stream lifecycle behavior.
+
+Scope:
+- Normalize Arabic tool labels, statuses, reasons, durations, completion level, conservative risk assessment, and safe evidence metadata for diagnostic bundle summaries.
+- Keep the existing stream-managed bundle lifecycle intact.
+- Add focused regressions for summary structure, labels, counts, and no raw Python/JSON leakage.
+
+Out of scope:
+- New tools, tool policy changes, Portal or Telegram changes, write/remediation/shell actions, migrations, and lifecycle rewrites.
+
+## 2026-06-27 - C10.11 Diagnostic Result Quality & Evidence Layer Complete
+
+Result:
+- Added `apps.ai_chat.diagnostic_summaries` as the single summary-quality layer for diagnostic bundle labels, statuses, skip reasons, durations, counts, completion level, and conservative next-step language.
+- Switched bundle final summaries to the structured helper and attached safe evidence counts in final bundle metadata.
+- Extended bundle progress/finalization to pass ToolRun timing fields so durations can appear when available.
+- Added focused regression coverage for structured summary sections, safe metadata counts, timeout wording, and no raw Python/JSON leakage.
+- Kept the existing stream-managed diagnostic bundle lifecycle unchanged and made no Portal, Telegram, customer-facing AI, policy, or migration changes.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 38 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 15 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.

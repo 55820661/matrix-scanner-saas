@@ -11,6 +11,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import Account, User
+from apps.ai_chat.diagnostic_bundles import get_diagnostic_bundle
+from apps.ai_chat.diagnostic_summaries import summarize_diagnostic_bundle_results as build_diagnostic_bundle_summary
 from apps.ai_chat.models import AdminChatMessage, AdminChatSession, AdminChatToolRequest, AdminLiveAIRequestLog
 from apps.ai_chat.diagnostic_bundles import resolve_diagnostic_bundle_intent
 from apps.ai_chat.services import (
@@ -526,7 +528,9 @@ class AdminAIToolRequestFlowTests(TestCase):
         tool_run = ToolRun.objects.get()
         tool_run.status = ToolRun.Status.SUCCEEDED
         tool_run.result_redacted = {"summary": "اكتمل الفحص بأمان."}
-        tool_run.save(update_fields=["status", "result_redacted", "updated_at"])
+        tool_run.started_at = timezone.now() - timedelta(seconds=4)
+        tool_run.finished_at = timezone.now()
+        tool_run.save(update_fields=["status", "result_redacted", "started_at", "finished_at", "updated_at"])
 
         with patch("apps.ai_chat.services.finalize_diagnostic_bundle_if_ready") as finalize_bundle:
             sync_chat_tool_requests_for_tool_run(tool_run)
@@ -602,7 +606,87 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertEqual(ToolRun.objects.count(), 1)
         self.assertIn("تم تخطيه", final_message.body_redacted)
         self.assertIn("systemd", final_message.body_redacted)
+        self.assertIn("\u0627\u0644\u0641\u062d\u0648\u0635\u0627\u062a \u0627\u0644\u0645\u0646\u0641\u0630\u0629", final_message.body_redacted)
+        self.assertIn("\u0627\u0644\u0641\u062d\u0648\u0635\u0627\u062a \u0627\u0644\u0645\u062a\u062e\u0637\u0627\u0629 \u0623\u0648 \u063a\u064a\u0631 \u0627\u0644\u0645\u0643\u062a\u0645\u0644\u0629", final_message.body_redacted)
+        self.assertIn("\u0627\u0644\u062a\u0642\u064a\u064a\u0645 \u0627\u0644\u0639\u0627\u0645", final_message.body_redacted)
+        self.assertIn("\u0627\u0644\u062e\u0637\u0648\u0629 \u0627\u0644\u0645\u0642\u062a\u0631\u062d\u0629", final_message.body_redacted)
         self.assertNotIn("['", final_message.body_redacted)
+        self.assertEqual((final_message.metadata_redacted or {}).get("summary_quality"), "structured_v1")
+        self.assertEqual((final_message.metadata_redacted or {}).get("executed_count"), 1)
+        self.assertEqual((final_message.metadata_redacted or {}).get("skipped_count"), 4)
+        self.assertEqual((final_message.metadata_redacted or {}).get("failed_count"), 0)
+        self.assertEqual((final_message.metadata_redacted or {}).get("timeout_count"), 0)
+        self.assertEqual((final_message.metadata_redacted or {}).get("total_count"), 5)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_structured_bundle_summary_includes_duration_when_available(self):
+        bundle = get_diagnostic_bundle("server_health")
+
+        class StubToolRun:
+            def __init__(self):
+                self.started_at = timezone.now() - timedelta(seconds=4)
+                self.finished_at = timezone.now()
+
+        summary = build_diagnostic_bundle_summary(
+            bundle,
+            [
+                {
+                    "kind": "tool",
+                    "tool_key": "log_sources_discovery_v2",
+                    "state": "succeeded",
+                    "status": ToolRun.Status.SUCCEEDED,
+                    "tool_run": StubToolRun(),
+                    "summary": "Safe summary",
+                },
+                {
+                    "kind": "tool",
+                    "tool_key": "systemd_services_discovery",
+                    "state": "skipped",
+                    "reason": "Tool is not available to this role, plan, policy, and server.",
+                },
+            ],
+        )
+
+        self.assertIn("\u062e\u0644\u0627\u0644 4 \u062b\u0648\u0627\u0646\u064d", summary)
+        self.assertIn("\u062a\u0645 \u062a\u062e\u0637\u064a\u0647", summary)
+        self.assertNotIn("['", summary)
+        self.assertNotIn("{", summary)
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_bundle_timeout_uses_normalized_status_and_safe_metadata(self):
+        self.create_tool(key="log_sources_discovery_v2")
+        AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="Ø§Ø¨Ø¯Ø£ Ø§Ù„ÙØ­Øµ",
+            metadata_redacted={"source": "admin_live_chatkit", "chatkit_item_id": "bundle_seed_timeout"},
+        )
+        execute_diagnostic_bundle_for_item(
+            user=self.staff,
+            session=self.session,
+            item_id="bundle_seed_timeout",
+            bundle_slug="server_health",
+        )
+        tool_run = ToolRun.objects.get()
+        tool_run.status = ToolRun.Status.TIMEOUT
+        tool_run.started_at = timezone.now() - timedelta(seconds=31)
+        tool_run.finished_at = timezone.now()
+        tool_run.save(update_fields=["status", "started_at", "finished_at", "updated_at"])
+        sync_chat_tool_requests_for_tool_run(tool_run)
+        running = AdminChatMessage.objects.get(
+            metadata_redacted__source="diagnostic_bundle",
+            metadata_redacted__state="running",
+        )
+        final_message = finalize_diagnostic_bundle_if_ready(
+            (running.metadata_redacted or {}).get("bundle_execution_id"),
+            caller="recovery",
+        )
+
+        self.assertIn("\u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0647\u0644\u0629", final_message.body_redacted)
+        self.assertIn("\u062e\u0644\u0627\u0644 31 \u062b\u0627\u0646\u064a\u0629", final_message.body_redacted)
+        self.assertEqual((final_message.metadata_redacted or {}).get("timeout_count"), 1)
+        self.assertEqual((final_message.metadata_redacted or {}).get("executed_count"), 1)
+        self.assertNotIn("{", final_message.body_redacted)
 
     @override_settings(**LIVE_SETTINGS)
     def test_bundle_advice_question_does_not_execute(self):
