@@ -3068,3 +3068,45 @@ Verification:
 Completion status:
 - C10.5-B implementation and verification are complete.
 - Full suite was not run because this hotfix stayed in admin navigation/templates plus focused access assertions, without changing execution, policy, or runtime behavior.
+## Active Task - C10.10-H6 Single Owner Diagnostic Bundle Lifecycle
+
+Task:
+- Remove the split bundle lifecycle ownership between the Live ChatKit stream and background sync so diagnostic bundles have one authoritative owner.
+
+Scope:
+- Keep stream-managed bundle start, progress, wait, final save, and final stream delivery inside `apps.ai_chat.live_ai`.
+- Prevent background tool-run sync from finalizing stream-managed bundles or emitting per-tool bundle messages.
+- Keep frontend polling and `fetchUpdates()` as recovery only, not the normal final-delivery path.
+- Add focused regressions for stream-managed metadata, no duplicate summaries, and recovery-only frontend assumptions.
+
+Out of scope:
+- Portal, Telegram, customer-facing AI, remediation/write/shell actions, migrations, and non-bundle chat behavior.
+
+Immediate next steps:
+- Add single-owner guards in `apps.ai_chat.services`.
+- Tighten `apps.ai_chat.live_ai` bundle completion behavior and metadata.
+- Update bundle/live UI regressions and run the required verification suite.
+
+Progress:
+- Added single-owner bundle guards in `apps.ai_chat.services` using `stream_managed` metadata.
+- Moved normal-path final bundle delivery to the live ChatKit stream and kept recovery finalization explicit through the status endpoints.
+- Prevented background sync from emitting per-tool bundle summaries or finalizing stream-managed bundles.
+- Preserved polling and `fetchUpdates()` as recovery-only behavior in the frontend script.
+- Updated focused regressions for stream-managed metadata, stream final delivery, and recovery finalization behavior.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 15 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 36 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.10-H6 implementation and verification are complete.
+- Two suites initially hit PostgreSQL deadlocks when run in parallel against the shared keepdb database; rerunning them sequentially passed without code changes.

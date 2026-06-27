@@ -1251,6 +1251,18 @@ def _tool_label_ar(tool_key):
     return TOOL_LABELS_AR.get(tool_key, tool_key)
 
 
+def _bundle_skip_reason_ar(reason):
+    normalized = _safe_text(reason or "", limit=160)
+    lowered = normalized.casefold()
+    if any(token in lowered for token in ("not available", "غير متاح", "policy", "plan", "role", "server")):
+        return "غير متاح لهذه الصلاحيات أو الخطة أو السيرفر."
+    if any(token in lowered for token in ("permission", "denied", "صلاحية")):
+        return "مرفوض بسبب الصلاحيات الحالية."
+    if normalized:
+        return normalized
+    return "تم تخطي هذا الفحص لعدم توفره."
+
+
 def _bundle_start_body(bundle, tool_keys):
     lines = [
         f"بدأت {bundle.label_ar} باستخدام أدوات قراءة فقط.",
@@ -1334,7 +1346,13 @@ def summarize_diagnostic_bundle_results(bundle, outcomes, language="ar"):
 def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
     bundle = get_diagnostic_bundle(bundle_slug)
     if not bundle:
-        return {"start_message": None, "followup_message": None, "results": [], "execution_started": False}
+        return {
+            "start_message": None,
+            "followup_message": None,
+            "results": [],
+            "execution_started": False,
+            "bundle_execution_id": "",
+        }
     message = AdminChatMessage.objects.get(metadata_redacted__chatkit_item_id=item_id)
     bundle_execution_id = f"{session.id}_{message.id}"
     existing_result = AdminChatMessage.objects.filter(
@@ -1353,7 +1371,8 @@ def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
             "start_message": existing_running,
             "followup_message": existing_result,
             "results": [],
-            "execution_started": True,
+            "execution_started": bool(existing_running and not existing_result),
+            "bundle_execution_id": bundle_execution_id,
         }
     available_tool_keys = []
     skipped = []
@@ -1361,7 +1380,14 @@ def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
         try:
             _validate_ai_tool_definition(user, session, tool_key)
         except (PermissionDenied, ValidationError) as exc:
-            skipped.append({"kind": "skip", "tool_key": tool_key, "state": "skipped", "reason": _safe_text(str(exc), limit=160)})
+            skipped.append(
+                {
+                    "kind": "skip",
+                    "tool_key": tool_key,
+                    "state": "skipped",
+                    "reason": _bundle_skip_reason_ar(str(exc)),
+                }
+            )
             continue
         available_tool_keys.append(tool_key)
     start_message = _record_bundle_message(
@@ -1376,6 +1402,7 @@ def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
             "tool_request_ids": [],
             "skipped": skipped,
             "state": "running",
+            "stream_managed": True,
             "chatkit_item_id": f"bundle_running_{bundle_execution_id}",
         },
     )
@@ -1400,6 +1427,7 @@ def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
                         "source": "live_ai_diagnostic_bundle",
                         "bundle_slug": bundle.slug,
                         "bundle_execution_id": bundle_execution_id,
+                        "stream_managed": True,
                     }
                 ),
                 status=AdminChatToolRequest.Status.SUGGESTED,
@@ -1418,7 +1446,14 @@ def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
                 }
             )
         except (PermissionDenied, ValidationError, ToolPolicyDenied, ValueError) as exc:
-            skipped.append({"kind": "skip", "tool_key": tool_key, "state": "skipped", "reason": _safe_text(str(exc), limit=160)})
+            skipped.append(
+                {
+                    "kind": "skip",
+                    "tool_key": tool_key,
+                    "state": "skipped",
+                    "reason": _bundle_skip_reason_ar(str(exc)),
+                }
+            )
     start_message = _record_bundle_message(
         session=session,
         body=_bundle_start_body(bundle, available_tool_keys),
@@ -1431,6 +1466,7 @@ def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
             "tool_request_ids": [str(item["tool_request"].id) for item in tool_results if item.get("tool_request")],
             "skipped": skipped,
             "state": "running",
+            "stream_managed": True,
             "chatkit_item_id": f"bundle_running_{bundle_execution_id}",
         },
     )
@@ -1446,27 +1482,32 @@ def execute_diagnostic_bundle_for_item(*, user, session, item_id, bundle_slug):
                 "tool_run_ids": [],
                 "tool_request_ids": [],
                 "state": state,
+                "stream_managed": True,
                 "chatkit_item_id": f"bundle_result_{bundle_execution_id}",
             },
         )
     else:
         followup_message = None
-        finalize_diagnostic_bundle_if_ready(bundle_execution_id)
     return {
         "start_message": start_message,
         "followup_message": followup_message,
         "results": tool_results + skipped,
         "execution_started": bool(tool_results),
+        "bundle_execution_id": bundle_execution_id,
     }
 
 
-def finalize_diagnostic_bundle_if_ready(bundle_execution_id):
-    requests = list(
+def _diagnostic_bundle_requests(bundle_execution_id):
+    return list(
         AdminChatToolRequest.objects.filter(
             params_redacted__source="live_ai_diagnostic_bundle",
             params_redacted__bundle_execution_id=bundle_execution_id,
         ).select_related("session", "tool_definition", "tool_run")
     )
+
+
+def get_diagnostic_bundle_progress(bundle_execution_id):
+    requests = _diagnostic_bundle_requests(bundle_execution_id)
     if not requests:
         return None
     terminal_statuses = {
@@ -1476,8 +1517,6 @@ def finalize_diagnostic_bundle_if_ready(bundle_execution_id):
         ToolRun.Status.TIMEOUT,
         ToolRun.Status.CANCELLED,
     }
-    if any(not request.tool_run or request.tool_run.status not in terminal_statuses for request in requests):
-        return None
     session = requests[0].session
     running_message = AdminChatMessage.objects.filter(
         session=session,
@@ -1492,16 +1531,23 @@ def finalize_diagnostic_bundle_if_ready(bundle_execution_id):
     if not bundle:
         return None
     expected_tool_keys = set(metadata.get("tool_keys") or [])
-    request_tool_keys = {request.tool_definition.key for request in requests}
-    if request_tool_keys != expected_tool_keys:
-        return None
     outcomes = []
+    pending_tool_keys = []
+    completed_tool_keys = []
+    request_tool_keys = set()
     for request in requests:
+        tool_key = request.tool_definition.key
+        request_tool_keys.add(tool_key)
+        if not request.tool_run or request.tool_run.status not in terminal_statuses:
+            pending_tool_keys.append(tool_key)
+            continue
         outcome = _terminal_tool_outcome(request.tool_run)
+        if outcome["state"] == "succeeded":
+            completed_tool_keys.append(tool_key)
         outcomes.append(
             {
                 "kind": "tool",
-                "tool_key": request.tool_definition.key,
+                "tool_key": tool_key,
                 "state": outcome["state"],
                 "status": outcome["status"],
                 "tool_request": request,
@@ -1509,21 +1555,71 @@ def finalize_diagnostic_bundle_if_ready(bundle_execution_id):
                 "summary": outcome.get("summary") or "",
             }
         )
-    outcomes.extend(metadata.get("skipped") or [])
+    return {
+        "session": session,
+        "bundle": bundle,
+        "bundle_execution_id": bundle_execution_id,
+        "running_message": running_message,
+        "stream_managed": bool(metadata.get("stream_managed")),
+        "requests": requests,
+        "outcomes": outcomes,
+        "skipped": metadata.get("skipped") or [],
+        "pending_tool_keys": pending_tool_keys,
+        "completed_tool_keys": completed_tool_keys,
+        "expected_tool_keys": expected_tool_keys,
+        "request_tool_keys": request_tool_keys,
+        "all_terminal": request_tool_keys == expected_tool_keys and not pending_tool_keys,
+    }
+
+
+def _record_diagnostic_bundle_final(progress, outcomes):
+    requests = progress["requests"]
+    bundle = progress["bundle"]
+    bundle_execution_id = progress["bundle_execution_id"]
     state = _bundle_state(outcomes)
     return _record_bundle_message(
-        session=session,
+        session=progress["session"],
         body=summarize_diagnostic_bundle_results(bundle, outcomes),
         metadata={
             "source": "diagnostic_bundle",
             "bundle_slug": bundle.slug,
             "bundle_execution_id": bundle_execution_id,
-            "tool_run_ids": [str(request.tool_run_id) for request in requests],
+            "tool_run_ids": [str(request.tool_run_id) for request in requests if request.tool_run_id],
             "tool_request_ids": [str(request.id) for request in requests],
             "state": state,
+            "stream_managed": bool((progress["running_message"].metadata_redacted or {}).get("stream_managed")),
             "chatkit_item_id": f"bundle_result_{bundle_execution_id}",
         },
     )
+
+
+def finalize_diagnostic_bundle_if_ready(bundle_execution_id, *, caller="background"):
+    progress = get_diagnostic_bundle_progress(bundle_execution_id)
+    if not progress or not progress["all_terminal"]:
+        return None
+    if progress.get("stream_managed") and caller not in {"stream", "recovery"}:
+        return None
+    outcomes = list(progress["outcomes"]) + list(progress["skipped"])
+    return _record_diagnostic_bundle_final(progress, outcomes)
+
+
+def finalize_diagnostic_bundle_with_timeout(bundle_execution_id):
+    progress = get_diagnostic_bundle_progress(bundle_execution_id)
+    if not progress:
+        return None
+    outcomes = list(progress["outcomes"])
+    for tool_key in progress["pending_tool_keys"]:
+        outcomes.append(
+            {
+                "kind": "tool",
+                "tool_key": tool_key,
+                "state": "timeout",
+                "status": "running",
+                "summary": "لم يكتمل الفحص خلال المهلة المحددة داخل جلسة Live AI.",
+            }
+        )
+    outcomes.extend(progress["skipped"])
+    return _record_diagnostic_bundle_final(progress, outcomes)
 
 
 def reject_tool_request(*, user, tool_request):
@@ -1574,6 +1670,8 @@ def sync_chat_tool_requests_for_tool_run(tool_run):
         tool_request.save(update_fields=update_fields)
         request_metadata = tool_request.params_redacted or {}
         if request_metadata.get("source") == "live_ai_diagnostic_bundle":
+            if request_metadata.get("stream_managed") is True:
+                continue
             finalize_diagnostic_bundle_if_ready(request_metadata.get("bundle_execution_id"))
             continue
         existing_summary = AdminChatMessage.objects.filter(

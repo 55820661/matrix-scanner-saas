@@ -17,6 +17,7 @@ from chatkit.types import (
     AssistantMessageContent,
     AssistantMessageContentPartTextDelta,
     AssistantMessageItem,
+    ProgressUpdateEvent,
     ThreadItemAddedEvent,
     ThreadItemDoneEvent,
     ThreadItemUpdatedEvent,
@@ -32,6 +33,9 @@ from apps.ai_chat.services import (
     create_ai_tool_requests_from_proposals,
     execute_diagnostic_bundle_for_item,
     extract_tool_request_proposals,
+    finalize_diagnostic_bundle_if_ready,
+    finalize_diagnostic_bundle_with_timeout,
+    get_diagnostic_bundle_progress,
     resolve_direct_execution_tool_proposals,
     strip_tool_request_proposals,
 )
@@ -113,6 +117,9 @@ DIAGNOSTIC_INTENT_TERMS = (
 
 LIVE_AI_SAFE_ERROR_MESSAGE = "Live AI is temporarily unavailable. Please try again."
 TOOL_REQUEST_PROPOSAL_START = "<TOOL_REQUEST_PROPOSAL"
+BUNDLE_STREAM_MAX_WAIT_SECONDS = 90
+BUNDLE_STREAM_POLL_INTERVAL_SECONDS = 2
+BUNDLE_PROGRESS_UPDATE_INTERVAL_SECONDS = 5
 
 
 class LiveAIConfigurationError(RuntimeError):
@@ -462,6 +469,29 @@ def _execute_diagnostic_bundle_for_item(*, user, session, context, item_id, bund
     return result
 
 
+def _bundle_progress_text(progress):
+    completed = [_tool_label(item) for item in progress.get("completed_tool_keys") or []]
+    pending = [_tool_label(item) for item in progress.get("pending_tool_keys") or []]
+    if completed and pending:
+        completed_label = completed[-1]
+        pending_text = "، ".join(pending[:2])
+        if len(pending) > 2:
+            pending_text = f"{pending_text}، وغيرها"
+        return f"اكتمل فحص {completed_label}، وجاري انتظار باقي الفحوصات: {pending_text}."
+    if pending:
+        pending_text = "، ".join(pending[:2])
+        if len(pending) > 2:
+            pending_text = f"{pending_text}، وغيرها"
+        return f"جاري تنفيذ الفحوصات: {pending_text}."
+    return "جاري تجميع الملخص النهائي..."
+
+
+def _tool_label(tool_key):
+    from apps.ai_chat.services import _tool_label_ar
+
+    return _tool_label_ar(tool_key)
+
+
 def _build_live_ai_input(context: AdminChatKitContext):
     safe_context = build_safe_context(
         account=context.session.account,
@@ -626,11 +656,42 @@ class LiveAdminChatKitServer(ChatKitServer[AdminChatKitContext]):
             yield ThreadItemDoneEvent(
                 item=assistant_item.model_copy(update={"content": [AssistantMessageContent(text=final_visible_output)]})
             )
-            for message_key in ("start_message", "followup_message"):
-                message = bundle_result.get(message_key)
-                if not message:
-                    continue
-                bundle_item = _message_to_assistant_item(message, thread.id)
+            start_message = bundle_result.get("start_message")
+            if start_message:
+                bundle_item = _message_to_assistant_item(start_message, thread.id)
+                yield ThreadItemAddedEvent(item=bundle_item)
+                yield ThreadItemDoneEvent(item=bundle_item)
+            if bundle_result.get("execution_started"):
+                yield ProgressUpdateEvent(text="جاري تنفيذ الفحوصات...")
+                deadline = monotonic() + BUNDLE_STREAM_MAX_WAIT_SECONDS
+                last_progress_at = monotonic()
+                final_message = None
+                while monotonic() < deadline:
+                    progress = await sync_to_async(get_diagnostic_bundle_progress, thread_sensitive=True)(
+                        bundle_result.get("bundle_execution_id")
+                    )
+                    if progress and progress.get("all_terminal"):
+                        final_message = await sync_to_async(finalize_diagnostic_bundle_if_ready, thread_sensitive=True)(
+                            bundle_result.get("bundle_execution_id"),
+                            caller="stream",
+                        )
+                        break
+                    if monotonic() - last_progress_at >= BUNDLE_PROGRESS_UPDATE_INTERVAL_SECONDS:
+                        yield ProgressUpdateEvent(text=_bundle_progress_text(progress or {}))
+                        last_progress_at = monotonic()
+                    await asyncio.sleep(BUNDLE_STREAM_POLL_INTERVAL_SECONDS)
+                if final_message is None:
+                    final_message = await sync_to_async(finalize_diagnostic_bundle_with_timeout, thread_sensitive=True)(
+                        bundle_result.get("bundle_execution_id")
+                    )
+                if final_message:
+                    bundle_item = _message_to_assistant_item(final_message, thread.id)
+                    yield ThreadItemAddedEvent(item=bundle_item)
+                    yield ThreadItemDoneEvent(item=bundle_item)
+                return
+            followup_message = bundle_result.get("followup_message")
+            if followup_message:
+                bundle_item = _message_to_assistant_item(followup_message, thread.id)
                 yield ThreadItemAddedEvent(item=bundle_item)
                 yield ThreadItemDoneEvent(item=bundle_item)
             return

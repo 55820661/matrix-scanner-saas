@@ -37,6 +37,7 @@ from .services import (
     create_chat_report_draft,
     create_tool_build_request_from_chat,
     create_tool_request,
+    finalize_diagnostic_bundle_if_ready,
     reject_tool_request,
     user_can_write_chat,
 )
@@ -184,6 +185,17 @@ def internal_chat_session_detail(request, session_id):
 @staff_member_required
 def internal_chat_bundle_status(request, session_id):
     session = get_object_or_404(_scoped_internal_chat_sessions(), id=session_id)
+    running_bundle_ids = list(
+        AdminChatMessage.objects.filter(
+            session=session,
+            metadata_redacted__source="diagnostic_bundle",
+            metadata_redacted__state="running",
+        )
+        .order_by("-created_at", "-id")
+        .values_list("metadata_redacted__bundle_execution_id", flat=True)
+    )
+    for bundle_execution_id in running_bundle_ids:
+        _recover_bundle_final_if_ready(bundle_execution_id)
     bundle_messages = AdminChatMessage.objects.filter(
         session=session,
         metadata_redacted__source="diagnostic_bundle",
@@ -233,10 +245,17 @@ def _safe_bundle_message_payload(message):
     }
 
 
+def _recover_bundle_final_if_ready(bundle_execution_id):
+    if not bundle_execution_id:
+        return None
+    return finalize_diagnostic_bundle_if_ready(bundle_execution_id, caller="recovery")
+
+
 @require_GET
 @staff_member_required
 def internal_chat_bundle_execution_status(request, session_id, bundle_execution_id):
     session = get_object_or_404(_scoped_internal_chat_sessions(), id=session_id)
+    _recover_bundle_final_if_ready(bundle_execution_id)
     bundle_messages = AdminChatMessage.objects.filter(
         session=session,
         metadata_redacted__source="diagnostic_bundle",

@@ -126,11 +126,7 @@
           fetch: (input, init = {}) => {
             const headers = new Headers(init.headers || {});
             if (csrfInput) headers.set("X-CSRFToken", csrfInput.value);
-            const response = window.fetch(input, { ...init, headers, credentials: "same-origin" });
-            if ((init.method || "GET").toUpperCase() === "POST") {
-              response.then(() => pollBundleUntilComplete()).catch(() => {});
-            }
-            return response;
+            return window.fetch(input, { ...init, headers, credentials: "same-origin" });
           },
         },
         initialThread: livePanel.dataset.threadId,

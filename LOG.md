@@ -2611,3 +2611,42 @@ Verification:
 
 Remaining:
 - C10.9-H3 is complete within scope.
+## 2026-06-27 - C10.10-H6 Single Owner Diagnostic Bundle Lifecycle Start
+
+Intent:
+- Eliminate the split ownership between Live ChatKit stream delivery and background bundle finalization so diagnostic bundle results arrive once, in-order, and without refresh dependence.
+
+Scope:
+- Make stream-managed diagnostic bundles owned by `apps.ai_chat.live_ai` only.
+- Prevent `sync_chat_tool_requests_for_tool_run` from finalizing or emitting per-tool chat summaries for stream-managed bundles.
+- Keep ChatKit polling and `fetchUpdates()` as recovery-only behavior.
+- Tighten bundle metadata, idempotent final summary persistence, and focused regression coverage.
+
+Out of scope:
+- Portal or Telegram AI changes.
+- Write/remediation/shell actions.
+- Migrations, dependency changes, or customer-facing AI behavior.
+
+Result:
+- Moved stream-managed diagnostic bundle ownership fully to `apps.ai_chat.live_ai` for the normal path.
+- Prevented `sync_chat_tool_requests_for_tool_run` from finalizing stream-managed bundles or emitting per-tool bundle result chat messages.
+- Added explicit `stream_managed` bundle metadata and caller-gated bundle finalization for `stream` and recovery-only callers.
+- Kept ChatKit polling and `fetchUpdates()` as recovery-only behavior; the normal path now receives the final bundle summary directly inside the same stream.
+- Added recovery finalization through bundle status endpoints so refresh/disconnect recovery can still finalize once without reintroducing background races.
+- Added focused regressions for stream-managed bundle metadata, no background finalization, and final summary delivery through the live stream.
+
+Verification:
+- `python manage.py check` passed.
+- `python manage.py makemigrations --check --dry-run` passed with no changes.
+- `python manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 15 tests.
+- `python manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 36 tests.
+- `python manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `python manage.py test tests.unit.test_admin_live_ai_governance --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_admin_ai_agent_behavior --keepdb --noinput` passed: 8 tests.
+- `python manage.py test tests.unit.test_live_ai_failure_finalization --keepdb --noinput` passed: 5 tests.
+- `python manage.py test tests.unit.test_sprint_c8_first_tool_cycle --keepdb --noinput` passed: 7 tests.
+- `python manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Remaining:
+- C10.10-H6 is complete within scope.

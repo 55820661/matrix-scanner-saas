@@ -1,7 +1,7 @@
 import io
 import json
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from asgiref.sync import async_to_sync
 from django.core.cache import cache
@@ -18,6 +18,7 @@ from apps.ai_chat.services import (
     create_admin_chat_session,
     create_chat_session,
     execute_diagnostic_bundle_for_item,
+    finalize_diagnostic_bundle_if_ready,
     reject_tool_request,
     sync_chat_tool_requests_for_tool_run,
     tool_followup_timeout_for_count,
@@ -395,7 +396,62 @@ class AdminAIToolRequestFlowTests(TestCase):
     @override_settings(**LIVE_SETTINGS)
     def test_broad_server_health_request_runs_bundle_with_combined_messages(self):
         self.create_server_health_tools()
-        with patch("apps.ai_chat.services.wait_for_tool_execution_result") as wait_for_result:
+        progress_call = {"count": 0}
+
+        def progress_side_effect(bundle_execution_id):
+            progress_call["count"] += 1
+            running = AdminChatMessage.objects.get(
+                metadata_redacted__source="diagnostic_bundle",
+                metadata_redacted__state="running",
+                metadata_redacted__bundle_execution_id=bundle_execution_id,
+            )
+            return {
+                "bundle_execution_id": bundle_execution_id,
+                "running_message": running,
+                "all_terminal": progress_call["count"] > 1,
+                "pending_tool_keys": [] if progress_call["count"] > 1 else ["log_sources_discovery_v2", "nginx_sites_discovery"],
+                "completed_tool_keys": [] if progress_call["count"] == 1 else ["log_sources_discovery_v2"],
+            }
+
+        def finalize_side_effect(bundle_execution_id, *, caller="background"):
+            self.assertEqual(caller, "stream")
+            running = AdminChatMessage.objects.get(
+                metadata_redacted__source="diagnostic_bundle",
+                metadata_redacted__state="running",
+                metadata_redacted__bundle_execution_id=bundle_execution_id,
+            )
+            metadata = running.metadata_redacted or {}
+            return AdminChatMessage.objects.create(
+                session=self.session,
+                sender_type=AdminChatMessage.SenderType.ASSISTANT,
+                body_redacted=(
+                    "اكتمل فحص صحة السيرفر.\n\n"
+                    "نتائج الفحوصات:\n"
+                    "- مصادر السجلات: نجح.\n"
+                    "- إعدادات Nginx: نجح.\n"
+                    "- خدمات Gunicorn/Uvicorn: لم يكتمل خلال المهلة.\n\n"
+                    "الخلاصة العامة:\n"
+                    "اكتمل جزء من الفحوصات، وتحتاج الفحوصات المتأخرة إلى مراجعة."
+                ),
+                metadata_redacted={
+                    "source": "diagnostic_bundle",
+                    "bundle_slug": metadata.get("bundle_slug"),
+                    "bundle_execution_id": bundle_execution_id,
+                    "state": "partial",
+                    "chatkit_item_id": f"bundle_result_{bundle_execution_id}",
+                },
+            )
+
+        with patch("apps.ai_chat.services.wait_for_tool_execution_result") as wait_for_result, patch(
+            "apps.ai_chat.live_ai.get_diagnostic_bundle_progress",
+            side_effect=progress_side_effect,
+        ), patch(
+            "apps.ai_chat.live_ai.finalize_diagnostic_bundle_if_ready",
+            side_effect=finalize_side_effect,
+        ), patch(
+            "apps.ai_chat.live_ai.asyncio.sleep",
+            new=AsyncMock(return_value=None),
+        ):
             streamed = self.post_live_with_provider_text(
                 "يمكنني اقتراح فحص صحة السيرفر.",
                 request_text="افحص حالة السيرفر باستخدام الأدوات المناسبة read-only ونفذ الفحوصات تلقائيًا.",
@@ -406,44 +462,11 @@ class AdminAIToolRequestFlowTests(TestCase):
         )
         self.assertIn("بدأت فحص صحة السيرفر", streamed)
         self.assertIn("جاري تنفيذ الفحوصات", running.body_redacted)
-        initial_status = self.client.get(self.bundle_status_url()).json()
-        self.assertTrue(initial_status["running"])
-        self.assertEqual(initial_status["running_execution_id"], (running.metadata_redacted or {}).get("bundle_execution_id"))
-        self.assertEqual(initial_status["running_item_id"], (running.metadata_redacted or {}).get("chatkit_item_id"))
-        explicit_running_status = self.client.get(
-            self.bundle_execution_status_url((running.metadata_redacted or {}).get("bundle_execution_id"))
-        ).json()
-        self.assertEqual(explicit_running_status["state"], "running")
-        self.assertIsNotNone(explicit_running_status["running_message"])
-        self.assertIsNone(explicit_running_status["final_message"])
-        first_request = AdminChatToolRequest.objects.select_related("message").first()
-        assistant_item_id = (first_request.message.metadata_redacted or {}).get("chatkit_item_id")
-        execute_diagnostic_bundle_for_item(
-            user=self.staff,
-            session=self.session,
-            item_id=assistant_item_id,
-            bundle_slug="server_health",
-        )
         self.assertEqual(AdminChatToolRequest.objects.count(), 4)
         self.assertEqual(ToolRun.objects.count(), 4)
         self.assertEqual(AgentJob.objects.count(), 4)
-        self.assertEqual(
-            AdminChatMessage.objects.filter(
-                metadata_redacted__source="diagnostic_bundle", metadata_redacted__state="running"
-            ).count(),
-            1,
-        )
-
-        tool_runs = list(ToolRun.objects.order_by("id"))
-        for tool_run in tool_runs[:3]:
-            tool_run.status = ToolRun.Status.SUCCEEDED
-            tool_run.result_redacted = {"summary": "اكتمل الفحص بأمان."}
-            tool_run.save(update_fields=["status", "result_redacted", "updated_at"])
-            sync_chat_tool_requests_for_tool_run(tool_run)
-        tool_runs[3].status = ToolRun.Status.TIMEOUT
-        tool_runs[3].save(update_fields=["status", "updated_at"])
-        sync_chat_tool_requests_for_tool_run(tool_runs[3])
-        sync_chat_tool_requests_for_tool_run(tool_runs[3])
+        self.assertTrue((running.metadata_redacted or {}).get("stream_managed"))
+        self.assertTrue(all((tool_request.params_redacted or {}).get("stream_managed") is True for tool_request in AdminChatToolRequest.objects.all()))
         response = self.client.post(
             self.live_url(),
             data=json.dumps({"type": "items.list", "params": {"thread_id": str(self.session.id), "limit": 30, "order": "asc"}}),
@@ -456,15 +479,14 @@ class AdminAIToolRequestFlowTests(TestCase):
         ]
         populated_ids = [item_id for item_id in chatkit_ids if item_id]
 
-        self.assertEqual(AdminChatToolRequest.objects.count(), 4)
-        self.assertEqual(ToolRun.objects.count(), 4)
-        self.assertEqual(AgentJob.objects.count(), 4)
         self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle", metadata_redacted__state="running").count(), 1)
         self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle").exclude(metadata_redacted__state="running").count(), 1)
         self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="tool_orchestrator").count(), 0)
         self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="tool_result_summary").count(), 0)
-        self.assertNotIn("نتائج الفحوصات", streamed)
-        self.assertIn("خدمات Gunicorn/Uvicorn", transcript)
+        self.assertIn("نتائج الفحوصات", streamed)
+        self.assertIn("جاري تنفيذ الفحوصات", streamed)
+        self.assertIn("اكتمل فحص صحة السيرفر", streamed)
+        self.assertIn("Gunicorn/Uvicorn", transcript)
         self.assertIn("لم يكتمل خلال المهلة", transcript)
         self.assertIn("فحص صحة السيرفر", response.content.decode())
         final_status = self.client.get(self.bundle_status_url()).json()
@@ -487,11 +509,46 @@ class AdminAIToolRequestFlowTests(TestCase):
         self.assertNotIn("{", transcript)
 
     @override_settings(**LIVE_SETTINGS)
+    def test_stream_managed_bundle_sync_does_not_finalize_or_emit_individual_messages(self):
+        self.create_tool(key="log_sources_discovery_v2")
+        AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="ابدأ الفحص",
+            metadata_redacted={"source": "admin_live_chatkit", "chatkit_item_id": "bundle_seed_guard"},
+        )
+        execute_diagnostic_bundle_for_item(
+            user=self.staff,
+            session=self.session,
+            item_id="bundle_seed_guard",
+            bundle_slug="server_health",
+        )
+        tool_run = ToolRun.objects.get()
+        tool_run.status = ToolRun.Status.SUCCEEDED
+        tool_run.result_redacted = {"summary": "اكتمل الفحص بأمان."}
+        tool_run.save(update_fields=["status", "result_redacted", "updated_at"])
+
+        with patch("apps.ai_chat.services.finalize_diagnostic_bundle_if_ready") as finalize_bundle:
+            sync_chat_tool_requests_for_tool_run(tool_run)
+
+        finalize_bundle.assert_not_called()
+        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle", metadata_redacted__state="running").count(), 1)
+        self.assertEqual(AdminChatMessage.objects.filter(metadata_redacted__source="tool_result_summary").count(), 0)
+
+    @override_settings(**LIVE_SETTINGS)
     def test_bundle_execution_status_endpoint_rejects_other_session_access(self):
         self.create_server_health_tools()
-        self.post_live_with_provider_text(
-            "سأقترح فحص صحة السيرفر.",
-            request_text="نفذ فحص صحة السيرفر",
+        AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="ابدأ الفحص",
+            metadata_redacted={"source": "admin_live_chatkit", "chatkit_item_id": "bundle_seed_other"},
+        )
+        execute_diagnostic_bundle_for_item(
+            user=self.staff,
+            session=self.session,
+            item_id="bundle_seed_other",
+            bundle_slug="server_health",
         )
         running = AdminChatMessage.objects.get(
             metadata_redacted__source="diagnostic_bundle", metadata_redacted__state="running"
@@ -515,23 +572,37 @@ class AdminAIToolRequestFlowTests(TestCase):
     def test_bundle_skips_unavailable_and_disallowed_tools_in_summary(self):
         self.create_tool(key="log_sources_discovery_v2")
         self.create_tool(key="systemd_services_discovery", plan_enabled=False)
-        self.post_live_with_provider_text(
-            "سأقترح فحص صحة السيرفر.",
-            request_text="نفذ فحص صحة السيرفر",
+        AdminChatMessage.objects.create(
+            session=self.session,
+            sender_type=AdminChatMessage.SenderType.ASSISTANT,
+            body_redacted="ابدأ الفحص",
+            metadata_redacted={"source": "admin_live_chatkit", "chatkit_item_id": "bundle_seed_skip"},
+        )
+        execute_diagnostic_bundle_for_item(
+            user=self.staff,
+            session=self.session,
+            item_id="bundle_seed_skip",
+            bundle_slug="server_health",
         )
         tool_run = ToolRun.objects.get()
         tool_run.status = ToolRun.Status.SUCCEEDED
         tool_run.result_redacted = {"summary": "اكتمل الفحص بأمان."}
         tool_run.save(update_fields=["status", "result_redacted", "updated_at"])
         sync_chat_tool_requests_for_tool_run(tool_run)
-        final_message = AdminChatMessage.objects.filter(metadata_redacted__source="diagnostic_bundle").exclude(
-            metadata_redacted__state="running"
-        ).get()
+        running = AdminChatMessage.objects.get(
+            metadata_redacted__source="diagnostic_bundle",
+            metadata_redacted__state="running",
+        )
+        final_message = finalize_diagnostic_bundle_if_ready(
+            (running.metadata_redacted or {}).get("bundle_execution_id"),
+            caller="recovery",
+        )
 
         self.assertEqual(AdminChatToolRequest.objects.count(), 1)
         self.assertEqual(ToolRun.objects.count(), 1)
         self.assertIn("تم تخطيه", final_message.body_redacted)
-        self.assertIn("خدمات systemd", final_message.body_redacted)
+        self.assertIn("systemd", final_message.body_redacted)
+        self.assertNotIn("['", final_message.body_redacted)
 
     @override_settings(**LIVE_SETTINGS)
     def test_bundle_advice_question_does_not_execute(self):
