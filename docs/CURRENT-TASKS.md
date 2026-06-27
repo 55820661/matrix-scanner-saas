@@ -6,6 +6,26 @@ Track active work before and after every requested implementation, repository-ch
 
 No implementation task is currently active.
 
+## Archived Task: C10.12-A Admin Chat Workspace Cleanup & Tool Activity Tracking
+
+Result:
+- Cleaned the Admin Internal Chat page so it now centers on Live Admin AI, selected context, Tool Activity, and links out to Tool Builder and Reports.
+- Added a read-only Tool Activity view-model that shows succeeded, failed, timeout, running, not-started, and skipped diagnostic bundle tools without raw JSON or Python list leakage.
+- Included skipped diagnostic bundle tools in Tool Activity even when they never produced a `ToolRun`, using session bundle metadata.
+- Moved Tool Builder and Reports forms to dedicated pages outside the chat view while keeping the existing execution and security model unchanged.
+
+Verification:
+- `.\.venv\Scripts\python.exe manage.py check` passed.
+- `.\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run` passed with no changes detected.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_ai_tool_request_flow --keepdb --noinput` passed: 42 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_admin_chat --keepdb --noinput` passed: 17 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_live_ai_history_hydration --keepdb --noinput` passed: 9 tests.
+- `.\.venv\Scripts\python.exe manage.py test tests.unit.test_admin_chat --keepdb --noinput` passed: 20 tests.
+- `git diff --check` passed with line-ending warnings only.
+
+Completion status:
+- C10.12-A implementation and verification are complete within the approved scope.
+
 ## Archived Task: C10.11-H1 Diagnostic Duration Fallback
 
 Result:

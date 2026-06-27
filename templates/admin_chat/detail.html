@@ -35,19 +35,25 @@
       background: var(--darkened-bg, #f8f8f8);
     }
     .chat-shell .meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
       padding: 12px 16px;
       border-bottom: 1px solid var(--hairline-color, #d4d4d4);
       background: var(--body-bg, #fff);
     }
     .chat-shell .meta span {
-      padding: 5px 8px;
+      display: block;
+      padding: 10px 12px;
       border: 1px solid var(--hairline-color, #d4d4d4);
-      border-radius: 999px;
+      border-radius: 6px;
       background: var(--darkened-bg, #f8f8f8);
       color: var(--body-quiet-color, #666);
+    }
+    .chat-shell .meta strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--body-fg, #111);
     }
     .chat-thread {
       padding: 16px;
@@ -89,6 +95,36 @@
     }
     .chat-sidebar .body {
       padding: 14px 16px 16px;
+    }
+    .workspace-links {
+      display: grid;
+      gap: 10px;
+    }
+    .workspace-link {
+      display: block;
+      padding: 12px 14px;
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      border-radius: 6px;
+      background: var(--darkened-bg, #f8f8f8);
+      color: inherit;
+      text-decoration: none;
+    }
+    .workspace-link strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+    .workspace-link span {
+      color: var(--body-quiet-color, #666);
+      font-size: 12px;
+    }
+    .status-chip {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--hairline-color, #d4d4d4);
+      background: var(--darkened-bg, #f8f8f8);
+      font-size: 12px;
+      white-space: nowrap;
     }
     .chat-sidebar .submit-row {
       margin: 0;
@@ -223,6 +259,9 @@
       .chat-thread {
         max-height: none;
       }
+      .chat-shell .meta {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 {% endblock %}
@@ -242,10 +281,10 @@
         <h1 style="margin: 0;">{{ session.title_redacted|default:"Internal chat session" }}</h1>
       </header>
       <div class="meta">
-        <span>Account: {{ session.account.name }}</span>
-        {% if session.server %}<span>Server: {{ session.server.name }}</span>{% endif %}
-        {% if session.application %}<span>Application: {{ session.application.name }}</span>{% endif %}
-        <span>Status: {{ session.status }}</span>
+        <span><strong>Selected account</strong>{{ session.account.name }}</span>
+        <span><strong>Selected server</strong>{{ session.server.name|default:"-" }}</span>
+        <span><strong>Selected application</strong>{{ session.application.name|default:"-" }}</span>
+        <span><strong>Session status</strong>{{ session.status }}</span>
       </div>
       <div class="live-ai-governance" aria-label="Live AI governance status">
         <span>Live AI: {{ live_ai_status }}</span>
@@ -319,26 +358,8 @@
 
     <aside class="chat-sidebar">
       <section>
-        <h2>Tool requests</h2>
+        <h2>Tool Activity</h2>
         <div class="body">
-          {% if can_write and session.server %}
-            <form method="post" action="{% url 'admin_chat:tool_request_create' session.id %}">
-              {% csrf_token %}
-              <div class="form-row">
-                <label for="tool_key">Available tool</label>
-                <select id="tool_key" name="tool_key" style="width: 100%;">
-                  {% for tool in available_tools %}
-                    <option value="{{ tool.key }}">{{ tool.key }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="submit-row">
-                <input type="submit" value="Request tool">
-              </div>
-            </form>
-          {% elif not session.server %}
-            <p>Tool requests require a server-scoped chat session.</p>
-          {% endif %}
           <table id="result_list">
             <thead>
               <tr>
@@ -349,29 +370,15 @@
               </tr>
             </thead>
             <tbody>
-              {% for request in tool_requests %}
+              {% for item in tool_activity_rows %}
                 <tr>
-                  <td>{{ request.tool_definition.key }}</td>
-                  <td>{{ request.params_redacted.reason|default:"-" }}</td>
-                  <td>{{ request.status }}</td>
-                  <td>
-                    {% if can_write and request.status == "suggested" %}
-                      <p class="help">Pending approval. The tool has not run.</p>
-                      <form method="post" action="{% url 'admin_chat:tool_request_approve' session.id request.id %}" style="display: inline-block;">
-                        {% csrf_token %}
-                        <input type="submit" value="Approve">
-                      </form>
-                      <form method="post" action="{% url 'admin_chat:tool_request_reject' session.id request.id %}" style="display: inline-block;">
-                        {% csrf_token %}
-                        <input type="submit" value="Reject">
-                      </form>
-                    {% else %}
-                      {{ request.tool_run.id|default:"-" }}
-                    {% endif %}
-                  </td>
+                  <td>{{ item.tool_label|default:item.tool_key }}</td>
+                  <td>{{ item.reason }}</td>
+                  <td><span class="status-chip">{{ item.status }}</span></td>
+                  <td>{{ item.action|default:"-" }}</td>
                 </tr>
               {% empty %}
-                <tr><td colspan="4">No tool requests yet.</td></tr>
+                <tr><td colspan="4">No tool activity yet.</td></tr>
               {% endfor %}
             </tbody>
           </table>
@@ -379,129 +386,18 @@
       </section>
 
       <section>
-        <h2>Tool Builder</h2>
+        <h2>Workspace Links</h2>
         <div class="body">
-          <p>Internal-only command-template proposals. No execution or enablement happens here.</p>
-          {% if can_write %}
-            <form method="post" action="{% url 'admin_chat:tool_build_create' session.id %}">
-              {% csrf_token %}
-              <div class="form-row">
-                <label for="build_title">Title</label>
-                <input id="build_title" name="title" type="text" style="width: 100%;">
-              </div>
-              <div class="form-row">
-                <label for="desired_tool_key">Tool key</label>
-                <input id="desired_tool_key" name="desired_tool_key" type="text" style="width: 100%;">
-              </div>
-              <div class="form-row">
-                <label for="description">Description</label>
-                <textarea id="description" name="description" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-              </div>
-              <div class="form-row">
-                <label for="command_argv_template">Command argv template, one argument per line</label>
-                <textarea id="command_argv_template" name="command_argv_template" rows="5" style="width: 100%; box-sizing: border-box;"></textarea>
-              </div>
-              <div class="form-row">
-                <label for="allowed_binaries">Allowed binaries, one per line</label>
-                <textarea id="allowed_binaries" name="allowed_binaries" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-              </div>
-              <div class="form-row">
-                <label for="blocked_tokens">Blocked tokens, one per line</label>
-                <textarea id="blocked_tokens" name="blocked_tokens" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-              </div>
-              <div class="form-row">
-                <label for="expected_output_description">Expected output description</label>
-                <textarea id="expected_output_description" name="expected_output_description" rows="3" style="width: 100%; box-sizing: border-box;"></textarea>
-              </div>
-              <div class="submit-row">
-                <input type="submit" value="Create proposal">
-              </div>
-            </form>
-          {% endif %}
-          <table id="result_list">
-            <thead>
-              <tr>
-                <th>Tool key</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for build_request in tool_build_requests %}
-                <tr>
-                  <td>{{ build_request.desired_tool_key }}</td>
-                  <td>
-                    {% with proposal=build_request.proposals.first %}
-                      {% if proposal %}{{ proposal.status }}{% else %}{{ build_request.status }}{% endif %}
-                    {% endwith %}
-                  </td>
-                </tr>
-              {% empty %}
-                <tr><td colspan="2">No tool builder requests yet.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section>
-        <h2>Reports</h2>
-        <div class="body">
-          {% if can_write %}
-            <form method="post" action="{% url 'admin_chat:report_create' session.id %}">
-              {% csrf_token %}
-              <div class="form-row">
-                <label for="report_type">Immediate report type</label>
-                <select id="report_type" name="report_type" style="width: 100%;">
-                  {% for value, label in chat_report_types %}
-                    <option value="{{ value }}">{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="submit-row">
-                <input type="submit" class="default" value="Create final report">
-              </div>
-            </form>
-            <form method="post" action="{% url 'admin_chat:report_draft_create' session.id %}">
-              {% csrf_token %}
-              <div class="form-row">
-                <label for="draft_report_type">Manual review draft type</label>
-                <select id="draft_report_type" name="report_type" style="width: 100%;">
-                  {% for value, label in chat_report_types %}
-                    <option value="{{ value }}">{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div class="submit-row">
-                <input type="submit" value="Create manual review draft">
-              </div>
-            </form>
-          {% endif %}
-          <table id="result_list">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Final report</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for draft in report_drafts %}
-                <tr>
-                  <td>{{ draft.report_type }}</td>
-                  <td>{{ draft.status }}</td>
-                  <td>
-                    {% if draft.converted_report %}
-                      <a href="{% url 'admin:reports_report_change' draft.converted_report.id %}">{{ draft.converted_report.title }}</a>
-                    {% else %}
-                      -
-                    {% endif %}
-                  </td>
-                </tr>
-              {% empty %}
-                <tr><td colspan="3">No report entries yet.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
+          <div class="workspace-links">
+            <a class="workspace-link" href="{% url 'admin_chat:tool_builder_page' session.id %}">
+              <strong>Tool Builder</strong>
+              <span>{{ tool_build_request_count }} request{{ tool_build_request_count|pluralize }} tracked for this session.</span>
+            </a>
+            <a class="workspace-link" href="{% url 'admin_chat:reports_page' session.id %}">
+              <strong>Reports</strong>
+              <span>{{ report_draft_count }} report draft{{ report_draft_count|pluralize }} tracked for this session.</span>
+            </a>
+          </div>
         </div>
       </section>
     </aside>

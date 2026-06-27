@@ -10,6 +10,8 @@ urlpatterns = [
     path("", views.internal_chat_sessions, name="sessions"),
     path("start/", views.internal_chat_session_start, name="session_start"),
     path("<int:session_id>/", views.internal_chat_session_detail, name="session_detail"),
+    path("<int:session_id>/tool-builder/", views.internal_chat_tool_builder_page, name="tool_builder_page"),
+    path("<int:session_id>/reports/", views.internal_chat_reports_page, name="reports_page"),
     path("<int:session_id>/live/", views.internal_chat_live, name="session_live"),
     path("<int:session_id>/live/bundle-status/", views.internal_chat_bundle_status, name="bundle_status"),
     path(

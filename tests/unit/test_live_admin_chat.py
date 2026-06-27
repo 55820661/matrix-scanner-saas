@@ -161,6 +161,32 @@ class LiveAdminChatTests(TestCase):
         self.assertNotContains(page, "chat-launcher")
 
     @override_settings(**LIVE_SETTINGS)
+    def test_chat_workspace_shows_selected_context_and_tool_activity_without_embedded_builder_or_reports(self):
+        page = self.client.get(reverse("admin_chat:session_detail", args=[self.session.id]))
+
+        self.assertContains(page, "Selected account")
+        self.assertContains(page, "Selected server")
+        self.assertContains(page, "Tool Activity")
+        self.assertContains(page, reverse("admin_chat:tool_builder_page", args=[self.session.id]))
+        self.assertContains(page, reverse("admin_chat:reports_page", args=[self.session.id]))
+        self.assertNotContains(page, "<h2>Tool Builder</h2>", html=False)
+        self.assertNotContains(page, "<h2>Reports</h2>", html=False)
+        self.assertNotContains(page, "Create proposal")
+        self.assertNotContains(page, "Create final report")
+        self.assertNotContains(page, "Create manual review draft")
+
+    @override_settings(**LIVE_SETTINGS)
+    def test_tool_builder_and_reports_pages_render_outside_chat_workspace(self):
+        builder = self.client.get(reverse("admin_chat:tool_builder_page", args=[self.session.id]))
+        reports = self.client.get(reverse("admin_chat:reports_page", args=[self.session.id]))
+
+        self.assertContains(builder, "Tool Builder")
+        self.assertContains(builder, "Create proposal")
+        self.assertContains(reports, "Reports")
+        self.assertContains(reports, "Create final report")
+        self.assertContains(reports, "Create manual review draft")
+
+    @override_settings(**LIVE_SETTINGS)
     def test_chatkit_static_asset_is_discoverable_and_uses_custom_server_options(self):
         asset_path = finders.find("admin_chat/live_chatkit.js")
 
